@@ -1,0 +1,768 @@
+--!strict
+--[[
+	Config
+	ReplicatedStorage/Shared/Config
+
+	SINGLE SOURCE OF TRUTH for every tunable number in Steal a Cryptid.
+	Designers tune this file. Logic lives elsewhere and reads from here.
+
+	Rules for this file:
+	  * No game logic, no services, no requires of other game modules.
+	  * Pure data + a few tiny pure helper functions at the bottom.
+	  * Every number a designer might want to change belongs HERE, not inline.
+
+	Conventions:
+	  * All money values are in Cash (the only soft currency).
+	  * All durations are in SECONDS unless the key says otherwise.
+	  * All distances are in STUDS.
+	  * Rarity weights are expressed as percentages that sum to 100 for
+	    readability; the roll code normalizes, so they do not have to.
+]]
+
+local Config = {}
+
+-- =========================================================================
+-- VERSION / DEBUG
+-- =========================================================================
+
+Config.Version = "0.1.0-step0"
+
+Config.Debug = {
+	-- Master switch for verbose server logging.
+	Verbose = true,
+	-- Prints a roll-distribution simulation on server start (Step 3).
+	RunOddsSimulationOnStart = false,
+	SimulationRolls = 10000,
+	-- Gives new profiles a pile of cash for testing. MUST be false at launch.
+	GrantTestCash = false,
+	TestCashAmount = 100000,
+}
+
+-- =========================================================================
+-- RARITY
+-- Order matters: index 1 is the most common. "Rare and above" for the heat
+-- bonus means every rarity at HeatBonusMinIndex or higher.
+-- =========================================================================
+
+Config.RarityOrder = {
+	"Common",
+	"Uncommon",
+	"Rare",
+	"Epic",
+	"Legendary",
+	"Mythic",
+	"Secret",
+}
+
+-- Rarities at this index or greater get the Heat weight multiplier.
+Config.HeatBonusMinRarityIndex = 3 -- Rare
+
+Config.Rarities = {
+	Common = {
+		Index = 1,
+		DisplayName = "Common",
+		Color = Color3.fromRGB(175, 180, 186),
+		IncomePerSecond = 1,
+		-- Chat / banner announcement threshold handled by AnnounceOnHatch.
+		AnnounceOnHatch = false,
+	},
+	Uncommon = {
+		Index = 2,
+		DisplayName = "Uncommon",
+		Color = Color3.fromRGB(94, 196, 118),
+		IncomePerSecond = 4,
+		AnnounceOnHatch = false,
+	},
+	Rare = {
+		Index = 3,
+		DisplayName = "Rare",
+		Color = Color3.fromRGB(78, 154, 241),
+		IncomePerSecond = 15,
+		AnnounceOnHatch = false,
+	},
+	Epic = {
+		Index = 4,
+		DisplayName = "Epic",
+		Color = Color3.fromRGB(167, 105, 240),
+		IncomePerSecond = 60,
+		AnnounceOnHatch = false,
+	},
+	Legendary = {
+		Index = 5,
+		DisplayName = "Legendary",
+		Color = Color3.fromRGB(246, 178, 59),
+		IncomePerSecond = 250,
+		AnnounceOnHatch = true,
+	},
+	Mythic = {
+		Index = 6,
+		DisplayName = "Mythic",
+		Color = Color3.fromRGB(240, 74, 106),
+		IncomePerSecond = 1200,
+		AnnounceOnHatch = true,
+	},
+	Secret = {
+		Index = 7,
+		DisplayName = "???",
+		Color = Color3.fromRGB(22, 22, 26),
+		IncomePerSecond = 6000,
+		AnnounceOnHatch = true,
+		-- Secret cryptids never render clearly.
+		NeverRenderClearly = true,
+	},
+}
+
+-- Rebirth requires owning at least one creature of this rarity or higher.
+Config.RebirthMinRarityIndex = 3 -- Rare
+
+-- =========================================================================
+-- CREATURES (30)
+-- Id must be stable forever: it is what gets written into player profiles.
+-- Only real folklore cryptids (public domain) for Common..Legendary.
+-- Mythic and Secret are originals owned by this game.
+-- PlaceholderColor / PlaceholderSize drive the part-based art until the
+-- art pass replaces them with meshes.
+-- =========================================================================
+
+Config.Creatures = {
+	-- ---------------- Common (6) ----------------
+	{ Id = "jackalope",       Name = "Jackalope",            Rarity = "Common",    PlaceholderColor = Color3.fromRGB(168, 129,  92), PlaceholderSize = Vector3.new(2.0, 2.4, 3.0) },
+	{ Id = "hodag",           Name = "Hodag",                Rarity = "Common",    PlaceholderColor = Color3.fromRGB( 92,  86,  70), PlaceholderSize = Vector3.new(3.0, 2.2, 4.0) },
+	{ Id = "drop_bear",       Name = "Drop Bear",            Rarity = "Common",    PlaceholderColor = Color3.fromRGB(120, 102,  84), PlaceholderSize = Vector3.new(2.6, 3.0, 2.6) },
+	{ Id = "snallygaster",    Name = "Snallygaster",         Rarity = "Common",    PlaceholderColor = Color3.fromRGB(104, 112, 104), PlaceholderSize = Vector3.new(4.0, 2.4, 3.2) },
+	{ Id = "gremlin",         Name = "Gremlin",              Rarity = "Common",    PlaceholderColor = Color3.fromRGB(122, 150,  96), PlaceholderSize = Vector3.new(1.8, 2.2, 1.8) },
+	{ Id = "wolpertinger",    Name = "Wolpertinger",         Rarity = "Common",    PlaceholderColor = Color3.fromRGB(148, 120,  88), PlaceholderSize = Vector3.new(2.0, 2.2, 2.8) },
+
+	-- ---------------- Uncommon (6) ----------------
+	{ Id = "chupacabra",      Name = "Chupacabra",           Rarity = "Uncommon",  PlaceholderColor = Color3.fromRGB( 84,  72,  72), PlaceholderSize = Vector3.new(2.4, 2.8, 4.0) },
+	{ Id = "nightcrawler",    Name = "Fresno Nightcrawler",  Rarity = "Uncommon",  PlaceholderColor = Color3.fromRGB(226, 226, 230), PlaceholderSize = Vector3.new(1.6, 4.0, 1.6) },
+	{ Id = "loveland_frog",   Name = "Loveland Frog",        Rarity = "Uncommon",  PlaceholderColor = Color3.fromRGB( 96, 158, 104), PlaceholderSize = Vector3.new(2.2, 3.0, 2.2) },
+	{ Id = "goatman",         Name = "Goatman",              Rarity = "Uncommon",  PlaceholderColor = Color3.fromRGB(110,  92,  78), PlaceholderSize = Vector3.new(2.6, 4.2, 2.2) },
+	{ Id = "bray_road",       Name = "Beast of Bray Road",   Rarity = "Uncommon",  PlaceholderColor = Color3.fromRGB( 88,  66,  50), PlaceholderSize = Vector3.new(2.8, 3.6, 4.2) },
+	{ Id = "squonk",          Name = "Squonk",               Rarity = "Uncommon",  PlaceholderColor = Color3.fromRGB(140, 128, 148), PlaceholderSize = Vector3.new(2.4, 2.4, 3.0) },
+
+	-- ---------------- Rare (5) ----------------
+	{ Id = "yeti",            Name = "Yeti",                 Rarity = "Rare",      PlaceholderColor = Color3.fromRGB(232, 238, 245), PlaceholderSize = Vector3.new(3.4, 5.0, 3.0) },
+	{ Id = "ogopogo",         Name = "Ogopogo",              Rarity = "Rare",      PlaceholderColor = Color3.fromRGB( 54, 110, 118), PlaceholderSize = Vector3.new(2.4, 2.4, 7.0) },
+	{ Id = "dover_demon",     Name = "Dover Demon",          Rarity = "Rare",      PlaceholderColor = Color3.fromRGB(216, 196, 168), PlaceholderSize = Vector3.new(2.0, 3.2, 2.0) },
+	{ Id = "flatwoods",       Name = "Flatwoods Monster",    Rarity = "Rare",      PlaceholderColor = Color3.fromRGB( 76, 168, 132), PlaceholderSize = Vector3.new(2.6, 5.4, 2.0) },
+	{ Id = "jersey_devil",    Name = "Jersey Devil",         Rarity = "Rare",      PlaceholderColor = Color3.fromRGB(102,  70,  86), PlaceholderSize = Vector3.new(4.4, 3.4, 3.0) },
+
+	-- ---------------- Epic (5) ----------------
+	{ Id = "mothman",         Name = "Mothman",              Rarity = "Epic",      PlaceholderColor = Color3.fromRGB( 62,  54,  74), PlaceholderSize = Vector3.new(5.0, 4.2, 2.4) },
+	{ Id = "bigfoot",         Name = "Bigfoot",              Rarity = "Epic",      PlaceholderColor = Color3.fromRGB( 74,  58,  44), PlaceholderSize = Vector3.new(3.6, 5.6, 3.0) },
+	{ Id = "thunderbird",     Name = "Thunderbird",          Rarity = "Epic",      PlaceholderColor = Color3.fromRGB( 58,  70, 104), PlaceholderSize = Vector3.new(7.0, 3.0, 3.4) },
+	{ Id = "bunyip",          Name = "Bunyip",               Rarity = "Epic",      PlaceholderColor = Color3.fromRGB( 70,  90,  72), PlaceholderSize = Vector3.new(3.6, 3.2, 5.4) },
+	{ Id = "death_worm",      Name = "Mongolian Death Worm", Rarity = "Epic",      PlaceholderColor = Color3.fromRGB(180,  70,  64), PlaceholderSize = Vector3.new(2.2, 2.2, 6.4) },
+
+	-- ---------------- Legendary (4) ----------------
+	{ Id = "nessie",          Name = "Nessie",               Rarity = "Legendary", PlaceholderColor = Color3.fromRGB( 46,  96,  90), PlaceholderSize = Vector3.new(3.0, 4.6, 9.0) },
+	{ Id = "kraken",          Name = "Kraken",               Rarity = "Legendary", PlaceholderColor = Color3.fromRGB( 92,  48,  74), PlaceholderSize = Vector3.new(6.0, 4.0, 6.0) },
+	{ Id = "ningen",          Name = "Ningen",               Rarity = "Legendary", PlaceholderColor = Color3.fromRGB(240, 242, 246), PlaceholderSize = Vector3.new(3.4, 6.0, 3.0) },
+	{ Id = "mokele_mbembe",   Name = "Mokele-Mbembe",        Rarity = "Legendary", PlaceholderColor = Color3.fromRGB( 84,  94,  62), PlaceholderSize = Vector3.new(3.4, 6.4, 8.0) },
+
+	-- ---------------- Mythic (3) — originals ----------------
+	{ Id = "the_static",      Name = "The Static",           Rarity = "Mythic",    PlaceholderColor = Color3.fromRGB(198, 198, 204), PlaceholderSize = Vector3.new(3.2, 5.2, 3.2) },
+	{ Id = "the_signal",      Name = "The Signal",           Rarity = "Mythic",    PlaceholderColor = Color3.fromRGB( 96, 214, 226), PlaceholderSize = Vector3.new(2.8, 6.0, 2.8) },
+	{ Id = "the_hollow",      Name = "The Hollow",           Rarity = "Mythic",    PlaceholderColor = Color3.fromRGB( 28,  26,  34), PlaceholderSize = Vector3.new(3.6, 5.6, 3.6) },
+
+	-- ---------------- Secret (1) — original, never renders clearly ----------
+	{ Id = "redacted",        Name = "[REDACTED]",           Rarity = "Secret",    PlaceholderColor = Color3.fromRGB( 18,  18,  20), PlaceholderSize = Vector3.new(3.4, 5.4, 3.4) },
+}
+
+-- =========================================================================
+-- MUTATIONS (wired up in a later step; the data lives here from day one so
+-- profiles can carry a Mutation field without a migration)
+-- =========================================================================
+
+Config.MutationsEnabled = false
+
+Config.MutationOrder = { "Shiny", "Radioactive", "Spectral" }
+
+Config.Mutations = {
+	Shiny       = { DisplayName = "Shiny",       IncomeMultiplier = 1.5, Chance = 0.0400, Color = Color3.fromRGB(255, 226, 128) },
+	Radioactive = { DisplayName = "Radioactive", IncomeMultiplier = 3.0, Chance = 0.0100, Color = Color3.fromRGB(140, 255,  90) },
+	Spectral    = { DisplayName = "Spectral",    IncomeMultiplier = 5.0, Chance = 0.0025, Color = Color3.fromRGB(150, 210, 255) },
+}
+
+-- =========================================================================
+-- EGGS
+-- Weights are percentages. They do not need to sum to 100 (the roller
+-- normalizes) but they are written to for readability.
+-- RequiredRebirths gates the higher tiers.
+-- =========================================================================
+
+Config.EggOrder = { "forest", "swamp", "mountain", "deepsea", "sky", "void" }
+
+Config.Eggs = {
+	forest = {
+		Id = "forest",
+		Name = "Forest Egg",
+		Price = 100,
+		RequiredRebirths = 0,
+		Color = Color3.fromRGB(104, 138,  92),
+		HatchTimeHint = "Any time",
+		Weights = { Common = 55.00, Uncommon = 27.00, Rare = 12.00, Epic =  4.50, Legendary =  1.20, Mythic = 0.25, Secret = 0.05 },
+	},
+	swamp = {
+		Id = "swamp",
+		Name = "Swamp Egg",
+		Price = 1000,
+		RequiredRebirths = 0,
+		Color = Color3.fromRGB( 86, 104,  70),
+		Weights = { Common = 40.00, Uncommon = 33.00, Rare = 18.00, Epic =  7.00, Legendary =  1.60, Mythic = 0.35, Secret = 0.05 },
+	},
+	mountain = {
+		Id = "mountain",
+		Name = "Mountain Egg",
+		Price = 10000,
+		RequiredRebirths = 0,
+		Color = Color3.fromRGB(128, 134, 146),
+		Weights = { Common = 25.00, Uncommon = 32.00, Rare = 26.00, Epic = 13.00, Legendary =  3.20, Mythic = 0.72, Secret = 0.08 },
+	},
+	deepsea = {
+		Id = "deepsea",
+		Name = "Deep Sea Egg",
+		Price = 100000,
+		RequiredRebirths = 0,
+		Color = Color3.fromRGB( 48,  86, 112),
+		Weights = { Common = 12.00, Uncommon = 25.00, Rare = 32.00, Epic = 22.00, Legendary =  7.50, Mythic = 1.35, Secret = 0.15 },
+	},
+	sky = {
+		Id = "sky",
+		Name = "Sky Egg",
+		Price = 1000000,
+		RequiredRebirths = 1,
+		Color = Color3.fromRGB(158, 186, 216),
+		Weights = { Common =  4.00, Uncommon = 14.00, Rare = 30.00, Epic = 33.00, Legendary = 15.00, Mythic = 3.70, Secret = 0.30 },
+	},
+	void = {
+		Id = "void",
+		Name = "Void Egg",
+		Price = 25000000,
+		RequiredRebirths = 3,
+		Color = Color3.fromRGB( 42,  32,  56),
+		Weights = { Common =  0.00, Uncommon =  4.00, Rare = 16.00, Epic = 34.00, Legendary = 32.00, Mythic = 12.50, Secret = 1.50 },
+	},
+}
+
+-- =========================================================================
+-- HEAT (Hook 1 — patience odds)
+-- =========================================================================
+
+Config.Heat = {
+	Max = 100,
+	-- Seconds for a nest to go 0 -> Max with no modifiers.
+	SecondsToMax = 600, -- 10 minutes
+	-- Server tick rate for heat accrual.
+	TickInterval = 1,
+	-- At full heat, Rare+ weights are multiplied by (1 + Multiplier).
+	-- 1 + 3*(h/100)  ->  x4 at h = 100.
+	MultiplierAtMax = 3.0,
+	-- A stolen egg keeps its heat.
+	ThiefKeepsHeat = true,
+}
+
+-- =========================================================================
+-- LUCK
+-- Luck is a percentage bonus applied on top of the heat multiplier to
+-- Rare+ weights. Sources stack additively.
+-- =========================================================================
+
+Config.Luck = {
+	PerRebirthPercent = 10,   -- +10% luck per rebirth
+	VipPercent = 10,          -- VIP gamepass
+	PotionPercent = 50,       -- Luck Potion dev product
+	PotionDuration = 900,     -- 15 minutes
+	CodexPageCompletePercent = 5, -- per completed rarity page (Step 7)
+	MaxPercent = 500,         -- hard cap so nothing runs away
+}
+
+-- =========================================================================
+-- PLOT / NESTS
+-- =========================================================================
+
+Config.Plot = {
+	Count = 10,               -- plots in the ring
+	RingRadius = 260,         -- studs from hub centre to plot centre
+	Size = Vector3.new(80, 1, 80),
+	-- Nests
+	StartingNests = 6,
+	MaxNests = 12,
+	NestGridColumns = 3,
+	NestSpacing = 16,
+	-- Owner perks
+	OwnerWalkSpeedBonus = 0.15, -- +15% on your own plot
+	BaseWalkSpeed = 16,
+	-- Door / lock
+	LockDuration = 60,
+	LockCooldown = 300,
+	ExtendedLockDuration = 180, -- Extended Lock gamepass
+	EmergencyLockBonus = 120,   -- Emergency Lock dev product adds this
+	-- Vault
+	BaseVaultCap = 25000,
+	-- Claim / release
+	ReleaseOnLeave = true,
+}
+
+-- =========================================================================
+-- INCOME / COLLECTION
+-- =========================================================================
+
+Config.Income = {
+	TickInterval = 1,
+	-- Sanity cap: server refuses any single collect larger than this.
+	-- Recomputed against owned creatures; this is the absolute backstop.
+	AbsoluteMaxSingleCollect = 500000000,
+	CollectTouchCooldown = 0.25,
+	AutoCollectInterval = 5, -- Auto Collect gamepass
+	-- Offline earnings are OFF for now; revisit after launch economy data.
+	OfflineEarningsEnabled = false,
+}
+
+-- =========================================================================
+-- STEALING (Hook: the whole point)
+-- =========================================================================
+
+Config.Steal = {
+	PromptHoldDuration = 3,
+	CarrySpeedMultiplier = 0.75,      -- -25% walk speed while carrying
+	StealCooldown = 30,               -- per thief, after a successful steal
+	SameItemImmunity = 120,           -- an item can't be stolen twice within 2 min
+	UnclaimedReturnTime = 60,         -- dropped/unclaimed items fly home
+	NewPlayerSpawnLock = 300,         -- 5 minutes of protection for new joiners
+	CarryOffset = Vector3.new(0, 3.5, 0),
+	-- Interaction distance enforced server-side on every steal remote.
+	MaxInteractDistance = 12,
+}
+
+Config.Bat = {
+	Name = "Bat",
+	Cooldown = 0.5,
+	StunDuration = 1.0,
+	KnockbackVelocity = 60,
+	Range = 8,
+	-- The Bat only disarms thieves; it does no damage.
+	Damage = 0,
+}
+
+-- =========================================================================
+-- SIGHTINGS (Hook 2 — Step 7)
+-- =========================================================================
+
+Config.Sightings = {
+	Enabled = false, -- turned on in Step 7
+	MinInterval = 360,  -- 6 minutes
+	MaxInterval = 600,  -- 10 minutes
+	Duration = 90,
+	CaptureHoldDuration = 5,
+	-- Base spawn odds; shifted rarer as the server fills up.
+	BaseWeights = { Rare = 60, Epic = 30, Legendary = 9, Mythic = 1 },
+	-- Per player online, shift this fraction of Rare weight into Epic+.
+	RarerPerPlayer = 0.03,
+	MaxPlayersForScaling = 20,
+	-- The Wilds spawn ring
+	WildsInnerRadius = 340,
+	WildsOuterRadius = 520,
+	-- VHS effect radius around the sighting.
+	VhsRadius = 120,
+	VhsTint = Color3.fromRGB(196, 214, 196),
+	VhsFovWobble = 2.5,
+}
+
+-- =========================================================================
+-- CODEX (Hook 3 — Step 7)
+-- =========================================================================
+
+Config.Codex = {
+	Enabled = false,
+	CameraToolName = "Field Camera",
+	PhotoCooldown = 2,
+	MaxPhotoDistance = 60,
+	-- Completing every creature in a rarity page grants permanent luck.
+	PageCompleteLuckPercent = 5,
+	SurvivesRebirth = true,
+}
+
+-- =========================================================================
+-- REBIRTH
+-- =========================================================================
+
+Config.Rebirth = {
+	BaseCost = 50000,
+	CostGrowth = 2.2,           -- cost = BaseCost * Growth ^ rebirths
+	IncomeBonusPerRebirth = 0.25, -- +25% income
+	LuckBonusPerRebirth = 10,     -- +10% luck (percentage points)
+	-- Kept across a rebirth:
+	Keeps = { "Codex", "GamePasses", "Rebirths", "Stats", "PurchaseHistory" },
+	-- Wiped:
+	Resets = { "Cash", "Nests", "Upgrades" },
+	-- Cosmetic nest glow per rebirth count (cycles).
+	NestGlowColors = {
+		Color3.fromRGB(255, 214, 140),
+		Color3.fromRGB(140, 226, 255),
+		Color3.fromRGB(196, 140, 255),
+		Color3.fromRGB(140, 255, 178),
+		Color3.fromRGB(255, 140, 178),
+		Color3.fromRGB(255, 120,  80),
+	},
+}
+
+-- =========================================================================
+-- UPGRADE SHOP
+-- Each upgrade is a list of levels. Level 1 is the starting state and always
+-- costs 0. Costs are absolute (not cumulative deltas).
+-- =========================================================================
+
+Config.UpgradeOrder = { "NestSlots", "IncubationSpeed", "VaultSize", "LockDuration", "WalkSpeed" }
+
+Config.Upgrades = {
+	NestSlots = {
+		DisplayName = "Nest Slots",
+		Description = "More nests means more eggs cooking at once.",
+		Levels = {
+			{ Cost = 0,        Value = 6 },
+			{ Cost = 5000,     Value = 7 },
+			{ Cost = 25000,    Value = 8 },
+			{ Cost = 120000,   Value = 9 },
+			{ Cost = 600000,   Value = 10 },
+			{ Cost = 3000000,  Value = 11 },
+			{ Cost = 15000000, Value = 12 },
+		},
+	},
+	IncubationSpeed = {
+		DisplayName = "Incubation Speed",
+		Description = "Heat builds faster. Value is a multiplier on heat gain.",
+		Levels = {
+			{ Cost = 0,        Value = 1.00 },
+			{ Cost = 7500,     Value = 1.15 },
+			{ Cost = 40000,    Value = 1.30 },
+			{ Cost = 200000,   Value = 1.50 },
+			{ Cost = 1000000,  Value = 1.75 },
+			{ Cost = 6000000,  Value = 2.00 },
+		},
+	},
+	VaultSize = {
+		DisplayName = "Vault Size",
+		Description = "How much uncollected cash a creature can hold.",
+		Levels = {
+			{ Cost = 0,        Value = 25000 },
+			{ Cost = 10000,    Value = 75000 },
+			{ Cost = 60000,    Value = 250000 },
+			{ Cost = 350000,   Value = 1000000 },
+			{ Cost = 2000000,  Value = 5000000 },
+			{ Cost = 12000000, Value = 25000000 },
+		},
+	},
+	LockDuration = {
+		DisplayName = "Lock Duration",
+		Description = "How long your door stays locked, in seconds.",
+		Levels = {
+			{ Cost = 0,        Value = 60 },
+			{ Cost = 15000,    Value = 75 },
+			{ Cost = 80000,    Value = 90 },
+			{ Cost = 450000,   Value = 110 },
+			{ Cost = 2500000,  Value = 135 },
+		},
+	},
+	WalkSpeed = {
+		DisplayName = "Walk Speed",
+		Description = "Move faster everywhere. Value is studs/second.",
+		Levels = {
+			{ Cost = 0,        Value = 16 },
+			{ Cost = 12000,    Value = 18 },
+			{ Cost = 65000,    Value = 20 },
+			{ Cost = 380000,   Value = 22 },
+			{ Cost = 2200000,  Value = 24 },
+		},
+	},
+}
+
+-- =========================================================================
+-- MONETIZATION
+-- Every Id is 0 until the real asset is created in the Creator Dashboard.
+-- Code MUST treat an Id of 0 as "not configured" and skip it gracefully.
+-- =========================================================================
+
+Config.GamePassOrder = { "DoubleCash", "ExtraNests", "AutoCollect", "Vip", "ExtendedLock" }
+
+Config.GamePasses = {
+	DoubleCash   = { Id = 0, DisplayName = "2x Cash",       RobuxHint = 399, Description = "All cryptid income doubled, forever." },
+	ExtraNests   = { Id = 0, DisplayName = "+4 Nests",      RobuxHint = 299, Description = "Four extra nest slots on top of your upgrades.", BonusNests = 4 },
+	AutoCollect  = { Id = 0, DisplayName = "Auto Collect",  RobuxHint = 149, Description = "Cash collects itself. No more running laps." },
+	Vip          = { Id = 0, DisplayName = "VIP",           RobuxHint = 599, Description = "Chat tag, +10% luck, gold nests." },
+	ExtendedLock = { Id = 0, DisplayName = "Extended Lock", RobuxHint = 199, Description = "Your base lock lasts 3 minutes instead of 1." },
+}
+
+Config.DoubleCashMultiplier = 2
+
+Config.DevProductOrder = {
+	"CashSmall", "CashMedium", "CashLarge",
+	"LuckPotion", "NestWarmer", "MaxHeat", "EmergencyLock", "EggBundle",
+}
+
+Config.DevProducts = {
+	CashSmall     = { Id = 0, DisplayName = "Pocket Change", RobuxHint =  99, Kind = "Cash",  Amount = 25000 },
+	CashMedium    = { Id = 0, DisplayName = "Stash",         RobuxHint = 399, Kind = "Cash",  Amount = 300000 },
+	CashLarge     = { Id = 0, DisplayName = "Hoard",         RobuxHint = 999, Kind = "Cash",  Amount = 5000000 },
+	LuckPotion    = { Id = 0, DisplayName = "Luck Potion",   RobuxHint =  49, Kind = "Buff",  Buff = "Luck",       Duration = 900 },
+	NestWarmer    = { Id = 0, DisplayName = "Nest Warmer",   RobuxHint =  29, Kind = "Buff",  Buff = "HeatRate",   Duration = 600, Multiplier = 2 },
+	MaxHeat       = { Id = 0, DisplayName = "Max Heat",      RobuxHint =  99, Kind = "Instant", Effect = "MaxHeatOneEgg" },
+	EmergencyLock = { Id = 0, DisplayName = "Emergency Lock",RobuxHint =  49, Kind = "Instant", Effect = "ExtendLock" },
+	EggBundle     = { Id = 0, DisplayName = "3-Egg Bundle",  RobuxHint =  79, Kind = "Instant", Effect = "GrantEggs", EggId = "forest", Count = 3 },
+}
+
+-- =========================================================================
+-- DATA / PERSISTENCE
+-- =========================================================================
+
+Config.Data = {
+	StoreName = "StealACryptid",
+	-- Bump this to wipe live data. Only do this before launch.
+	StoreScope = "v1",
+	AutosaveInterval = 60,
+	LoadRetryCount = 5,
+	LoadRetryBaseDelay = 1,     -- seconds; doubles each retry
+	SessionLockStaleAfter = 1800,
+	BindToCloseTimeout = 25,
+}
+
+-- =========================================================================
+-- REMOTES
+-- Every remote name in the game is declared here so nothing is a magic
+-- string, and every one carries its own server-side rate limit.
+-- Kind: "Event" (client -> server fire) or "Function" (client -> server invoke)
+-- MaxPerMinute: hard server-side rate limit per player.
+-- =========================================================================
+
+Config.Remotes = {
+	-- Server -> client pushes (no rate limit needed, server owns them)
+	ProfileUpdated    = { Kind = "Event",    Direction = "ServerToClient" },
+	Notify            = { Kind = "Event",    Direction = "ServerToClient" },
+	SightingBanner    = { Kind = "Event",    Direction = "ServerToClient" },
+	StealAlarm        = { Kind = "Event",    Direction = "ServerToClient" },
+	GlobalAnnounce    = { Kind = "Event",    Direction = "ServerToClient" },
+
+	-- Client -> server intents (all validated + rate limited server-side)
+	BuyEgg            = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 60 },
+	HatchEgg          = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 60 },
+	CollectCash       = { Kind = "Event",    Direction = "ClientToServer", MaxPerMinute = 240 },
+	BuyUpgrade        = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
+	DoRebirth         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 6 },
+	ToggleLock        = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
+	BeginSteal        = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 40 },
+	ClaimCarried      = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 40 },
+	BeginCapture      = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
+	TakePhoto         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
+	PromptPurchase    = { Kind = "Event",    Direction = "ClientToServer", MaxPerMinute = 30 },
+}
+
+-- Generic backstop: any single player firing more than this many remotes
+-- per minute in total is throttled and logged.
+Config.RemoteGlobalMaxPerMinute = 600
+
+-- =========================================================================
+-- INTERACTION (ProximityPrompts everywhere, so mobile works for free)
+-- =========================================================================
+
+Config.Prompts = {
+	MaxActivationDistance = 12,   -- must match the server distance check
+	ServerDistanceSlack = 4,      -- server allows MaxActivationDistance + slack
+	BuyHold = 0.5,
+	HatchHold = 0.5,
+	StealHold = 3,
+	CaptureHold = 5,
+	RequiresLineOfSight = false,
+}
+
+-- =========================================================================
+-- COLLECTIONSERVICE TAGS
+-- =========================================================================
+
+Config.Tags = {
+	Plot = "SAC_Plot",
+	Nest = "SAC_Nest",
+	Egg = "SAC_Egg",
+	Creature = "SAC_Creature",
+	CarriedItem = "SAC_CarriedItem",
+	PlotPad = "SAC_PlotPad",
+	Door = "SAC_Door",
+	ShopBooth = "SAC_ShopBooth",
+	WildCryptid = "SAC_WildCryptid",
+}
+
+-- =========================================================================
+-- ATMOSPHERE (cozy-spooky night woods)
+-- =========================================================================
+
+Config.Atmosphere = {
+	ClockTime = 0.5,             -- just past midnight
+	Brightness = 1.2,
+	OutdoorAmbient = Color3.fromRGB(46, 52, 66),
+	Ambient = Color3.fromRGB(28, 30, 40),
+	FogColor = Color3.fromRGB(38, 44, 56),
+	FogStart = 60,
+	FogEnd = 480,
+	AtmosphereDensity = 0.42,
+	AtmosphereHaze = 2.2,
+	LanternColor = Color3.fromRGB(255, 196, 128),
+	LanternRange = 28,
+	LanternBrightness = 2.4,
+}
+
+-- =========================================================================
+-- UI
+-- =========================================================================
+
+Config.UI = {
+	NotificationDuration = 4,
+	MaxNotifications = 4,
+	BannerDuration = 8,
+	-- Bottom bar buttons, in order.
+	BottomButtons = { "Eggs", "Upgrades", "Rebirth", "Codex", "Robux" },
+	-- Cash abbreviation suffixes.
+	NumberSuffixes = { "", "K", "M", "B", "T", "Qa", "Qi" },
+}
+
+-- =========================================================================
+-- PERFORMANCE
+-- =========================================================================
+
+Config.Performance = {
+	StreamingEnabled = true,
+	StreamingTargetRadius = 512,
+	StreamingMinRadius = 128,
+	MaxCreaturePartsEach = 12,
+}
+
+-- =========================================================================
+-- DERIVED LOOKUPS (built once at require time)
+-- =========================================================================
+
+local creaturesById: { [string]: any } = {}
+local creaturesByRarity: { [string]: { any } } = {}
+
+for _, rarity in ipairs(Config.RarityOrder) do
+	creaturesByRarity[rarity] = {}
+end
+
+for _, creature in ipairs(Config.Creatures) do
+	assert(creaturesById[creature.Id] == nil, "Duplicate creature Id: " .. creature.Id)
+	assert(Config.Rarities[creature.Rarity] ~= nil, "Unknown rarity on " .. creature.Id)
+	creaturesById[creature.Id] = creature
+	table.insert(creaturesByRarity[creature.Rarity], creature)
+end
+
+Config.CreaturesById = creaturesById
+Config.CreaturesByRarity = creaturesByRarity
+
+-- =========================================================================
+-- PURE HELPERS
+-- No side effects, no services. Safe to call from client or server.
+-- =========================================================================
+
+--- Returns the rarity's position in RarityOrder, or 0 if unknown.
+function Config.GetRarityIndex(rarity: string): number
+	local entry = Config.Rarities[rarity]
+	return entry and entry.Index or 0
+end
+
+--- True if this rarity gets the Heat / Luck weight bonus.
+function Config.IsBoostedRarity(rarity: string): boolean
+	return Config.GetRarityIndex(rarity) >= Config.HeatBonusMinRarityIndex
+end
+
+--- The multiplier applied to Rare+ weights at a given heat and luck.
+--- heat: 0..Config.Heat.Max      luckPercent: additive percent, e.g. 25
+function Config.GetBoostMultiplier(heat: number, luckPercent: number?): number
+	local h = math.clamp(heat or 0, 0, Config.Heat.Max)
+	local heatPart = 1 + Config.Heat.MultiplierAtMax * (h / Config.Heat.Max)
+	local luck = math.clamp(luckPercent or 0, 0, Config.Luck.MaxPercent)
+	return heatPart * (1 + luck / 100)
+end
+
+--- Builds the normalized rarity chance table for an egg at a given heat/luck.
+--- Returns { [rarity] = probability } summing to 1.
+function Config.GetRarityChances(eggId: string, heat: number, luckPercent: number?): { [string]: number }
+	local egg = Config.Eggs[eggId]
+	assert(egg, "Unknown egg id: " .. tostring(eggId))
+
+	local boost = Config.GetBoostMultiplier(heat, luckPercent)
+	local weighted: { [string]: number } = {}
+	local total = 0
+
+	for _, rarity in ipairs(Config.RarityOrder) do
+		local w = egg.Weights[rarity] or 0
+		if Config.IsBoostedRarity(rarity) then
+			w = w * boost
+		end
+		weighted[rarity] = w
+		total += w
+	end
+
+	local chances: { [string]: number } = {}
+	if total <= 0 then
+		-- Degenerate config; fall back to all-Common so nothing errors live.
+		for _, rarity in ipairs(Config.RarityOrder) do
+			chances[rarity] = rarity == "Common" and 1 or 0
+		end
+		return chances
+	end
+
+	for rarity, w in pairs(weighted) do
+		chances[rarity] = w / total
+	end
+	return chances
+end
+
+--- Cost of the player's next rebirth.
+function Config.GetRebirthCost(currentRebirths: number): number
+	return math.floor(Config.Rebirth.BaseCost * (Config.Rebirth.CostGrowth ^ math.max(0, currentRebirths)))
+end
+
+--- Value of an upgrade at a given level (1-indexed, clamped).
+function Config.GetUpgradeValue(upgradeId: string, level: number): number
+	local up = Config.Upgrades[upgradeId]
+	assert(up, "Unknown upgrade: " .. tostring(upgradeId))
+	local lv = math.clamp(math.floor(level or 1), 1, #up.Levels)
+	return up.Levels[lv].Value
+end
+
+--- Cost to go from `level` to `level + 1`, or nil if already maxed.
+function Config.GetUpgradeNextCost(upgradeId: string, level: number): number?
+	local up = Config.Upgrades[upgradeId]
+	assert(up, "Unknown upgrade: " .. tostring(upgradeId))
+	local nextLevel = math.floor(level or 1) + 1
+	if nextLevel > #up.Levels then
+		return nil
+	end
+	return up.Levels[nextLevel].Cost
+end
+
+--- Formats cash for UI: 1234567 -> "1.23M"
+function Config.FormatNumber(n: number): string
+	local negative = n < 0
+	n = math.abs(n)
+	local suffixes = Config.UI.NumberSuffixes
+	local tier = 1
+	while n >= 1000 and tier < #suffixes do
+		n /= 1000
+		tier += 1
+	end
+	local text
+	if tier == 1 then
+		text = string.format("%d", math.floor(n))
+	elseif n < 10 then
+		text = string.format("%.2f%s", n, suffixes[tier])
+	elseif n < 100 then
+		text = string.format("%.1f%s", n, suffixes[tier])
+	else
+		text = string.format("%d%s", math.floor(n), suffixes[tier])
+	end
+	return (negative and "-" or "") .. text
+end
+
+table.freeze(Config.RarityOrder)
+table.freeze(Config.EggOrder)
+
+return Config

@@ -1,0 +1,13 @@
+# Built place files
+*.rbxlx
+*.rbxl
+
+# Studio lock files
+*.rbxlx.lock
+*.rbxl.lock
+
+# Rojo
+sourcemap.json
+
+# Scratch
+/scratch/

@@ -1,0 +1,50 @@
+{
+  "name": "StealACryptid",
+  "tree": {
+    "$className": "DataModel",
+    "$ignoreUnknownInstances": true,
+
+    "ReplicatedStorage": {
+      "$ignoreUnknownInstances": true,
+      "Shared": {
+        "$path": "src/shared",
+        "$ignoreUnknownInstances": true
+      }
+    },
+
+    "ServerScriptService": {
+      "$ignoreUnknownInstances": true,
+      "Server": {
+        "$path": "src/server",
+        "$ignoreUnknownInstances": true
+      }
+    },
+
+    "StarterPlayer": {
+      "$ignoreUnknownInstances": true,
+      "StarterPlayerScripts": {
+        "$ignoreUnknownInstances": true,
+        "Client": {
+          "$path": "src/client",
+          "$ignoreUnknownInstances": true
+        }
+      }
+    },
+
+    "StarterGui": {
+      "$ignoreUnknownInstances": true
+    },
+
+    "Workspace": {
+      "$ignoreUnknownInstances": true
+    },
+
+    "Lighting": {
+      "$ignoreUnknownInstances": true
+    },
+
+    "SoundService": {
+      "$ignoreUnknownInstances": true
+    }
+  }
+}
