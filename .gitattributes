@@ -1,0 +1,10 @@
+# Keep everything LF in the working tree. Studio is fine with LF, and the
+# repo<->Studio byte-identity check depends on line endings not being
+# rewritten on checkout.
+* text=auto eol=lf
+*.rbxm  binary
+*.rbxl  binary
+*.rbxlx binary
+*.png   binary
+*.jpg   binary
+*.ogg   binary
