@@ -355,6 +355,11 @@ end
 --- but only after the Offline Earnings popup is dealt with.
 local function autoOpenOnce()
 	task.wait(Config.Retention.Daily.AutoOpenDelay)
+	-- A brand-new player is in the tutorial: don't cover it. The HUD Daily
+	-- button's "!" still says there's a reward waiting.
+	if Players.LocalPlayer:GetAttribute("TutorialActive") == true then
+		return
+	end
 	local deadline = os.clock() + 120
 	while os.clock() < deadline do
 		local s = state

@@ -1223,9 +1223,9 @@ Config.Art = {
 	},
 	Eggs = {
 		forest = { Mesh = "rbxassetid://128755161420008", Texture = "rbxassetid://113316397783775", Height = 3.4, Yaw = 0 },
-		swamp = { Mesh = "rbxassetid://109419354523171", Texture = "rbxassetid://118733378237954", Height = 3.4, Yaw = 0 },
+		swamp = { Mesh = "rbxassetid://117946403371475", Texture = "rbxassetid://94687691990628", Height = 3.4, Yaw = 0 },
 		mountain = { Mesh = "rbxassetid://120477806906855", Texture = "rbxassetid://85325511736961", Height = 3.4, Yaw = 0 },
-		deepsea = { Mesh = "rbxassetid://80467682038434", Texture = "rbxassetid://134360886378072", Height = 3.4, Yaw = 0 },
+		deepsea = { Mesh = "rbxassetid://87607024621959", Texture = "rbxassetid://94220551670754", Height = 3.4, Yaw = 0 },
 		sky = { Mesh = "rbxassetid://128991196430590", Texture = "rbxassetid://80597578119558", Height = 3.4, Yaw = 0 },
 		void = { Mesh = "rbxassetid://107844197297365", Texture = "rbxassetid://92962855209984", Height = 3.4, Yaw = 0 },
 	},
@@ -1246,7 +1246,7 @@ Config.Art = {
 		LogBench = { Mesh = "rbxassetid://101656690216689", Texture = "rbxassetid://120458372602051", Height = 2.5, Yaw = 0 },
 		Crate = { Mesh = "rbxassetid://126832556889214", Texture = "rbxassetid://137093063646573", Height = 3, Yaw = 0 },
 		Nest = { Mesh = "rbxassetid://84706038882341", Texture = "rbxassetid://97704595335257", Height = 1.6, Yaw = 0 },
-		Totem = { Mesh = "rbxassetid://90477829662382", Texture = "rbxassetid://98173743902039", Height = 14, Yaw = 0 },
+		Totem = { Mesh = "rbxassetid://80341899594440", Texture = "rbxassetid://136490453925914", Height = 14, Yaw = 0 },
 		Signpost = { Mesh = "rbxassetid://105253205156519", Texture = "rbxassetid://133934530233307", Height = 7, Yaw = 0 },
 	},
 	-- Every creature mesh is drawn this much bigger than its Height above

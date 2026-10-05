@@ -81,6 +81,12 @@ MapBuilder.LastStats = nil :: BuildStats?
 local TAU = math.pi * 2
 local TERRAIN_DEPTH = 12   -- base ground slab thickness below y = 0 (3 voxels)
 local PAINT_DEPTH = 4      -- one voxel: repaints the top layer without reshaping it
+-- Terrain voxels are 4 studs, CENTRED on multiples of 4 (they span 4k-2 ..
+-- 4k+2). A fill whose top is at y = 0 half-fills the voxel centred on 0,
+-- which renders as a surface at y = 2 (measured). So every fill is shifted
+-- down by VOXEL_OFFSET: the solid ground ends at y = -2 and its surface
+-- lands exactly on y = 0, where the camps, hub and props expect it.
+local VOXEL_OFFSET = 2
 local MOUND_HEIGHT = 0.5   -- nest mound thickness
 -- Items stand on a nest's ItemAnchor, 1.1 above the deck (as before the art pass).
 local ITEM_HEIGHT_ABOVE_DECK = 1.1
@@ -685,10 +691,10 @@ local function buildTerrain(rng: Random): number
 	end
 
 	-- Base slab of grass, top surface exactly at y = 0.
-	terrain:FillBlock(CFrame.new(0, -TERRAIN_DEPTH / 2, 0), Vector3.new(m.GroundSize, TERRAIN_DEPTH, m.GroundSize), Enum.Material.Grass)
+	terrain:FillBlock(CFrame.new(0, -TERRAIN_DEPTH / 2 - VOXEL_OFFSET, 0), Vector3.new(m.GroundSize, TERRAIN_DEPTH, m.GroundSize), Enum.Material.Grass)
 
 	local function paintDisc(x: number, z: number, radius: number, material: Enum.Material)
-		terrain:FillCylinder(CFrame.new(x, -PAINT_DEPTH / 2, z), PAINT_DEPTH, radius, material)
+		terrain:FillCylinder(CFrame.new(x, -PAINT_DEPTH / 2 - VOXEL_OFFSET, z), PAINT_DEPTH, radius, material)
 	end
 	local function paintStrip(a: Vector3, b: Vector3, width: number, material: Enum.Material)
 		local from, to = Vector3.new(a.X, 0, a.Z), Vector3.new(b.X, 0, b.Z)
@@ -696,7 +702,7 @@ local function buildTerrain(rng: Random): number
 		if length < 0.1 then
 			return
 		end
-		terrain:FillBlock(CFrame.lookAt((from + to) / 2, to) * CFrame.new(0, -PAINT_DEPTH / 2, 0),
+		terrain:FillBlock(CFrame.lookAt((from + to) / 2, to) * CFrame.new(0, -PAINT_DEPTH / 2 - VOXEL_OFFSET, 0),
 			Vector3.new(width, PAINT_DEPTH, length), material)
 		paintDisc(to.X, to.Z, width / 2, material) -- rounded end
 	end
@@ -731,7 +737,7 @@ local function buildTerrain(rng: Random): number
 			local c = Vector3.new(center.X + ox, cap - radius, center.Z + oz)
 			local footprint = math.sqrt(radius * radius - (radius - cap) ^ 2)
 			if clearOfTrails and Vector3.new(c.X, 0, c.Z).Magnitude - footprint >= m.WildsInnerRadius - 12 then
-				terrain:FillBall(c, radius, material)
+				terrain:FillBall(c - Vector3.new(0, VOXEL_OFFSET, 0), radius, material)
 				table.insert(hillBalls, { Center = c, Radius = radius })
 			end
 		end
@@ -743,7 +749,7 @@ local function buildTerrain(rng: Random): number
 		local radius = m.EdgeBermRadius * rng:NextNumber(0.85, 1.15)
 		local cap = math.min(m.EdgeBermCap * rng:NextNumber(0.7, 1.2), radius)
 		local c = dirAt(angle) * m.EdgeBermDistance + Vector3.new(0, cap - radius, 0)
-		terrain:FillBall(c, radius, Enum.Material.Grass)
+		terrain:FillBall(c - Vector3.new(0, VOXEL_OFFSET, 0), radius, Enum.Material.Grass)
 		table.insert(hillBalls, { Center = c, Radius = radius })
 	end
 
@@ -757,7 +763,7 @@ local function buildTerrain(rng: Random): number
 	-- Bare earth under each plot (stops grass blades poking through the deck).
 	local p = Config.Plot
 	for i = 1, p.Count do
-		terrain:FillBlock(MapBuilder.GetPlotCFrame(i) * CFrame.new(0, -PAINT_DEPTH / 2, 0),
+		terrain:FillBlock(MapBuilder.GetPlotCFrame(i) * CFrame.new(0, -PAINT_DEPTH / 2 - VOXEL_OFFSET, 0),
 			Vector3.new(p.Size.X + 6, PAINT_DEPTH, p.Size.Z + 6), Enum.Material.Ground)
 	end
 
@@ -770,6 +776,14 @@ local function buildTerrain(rng: Random): number
 		local dir = dirAt(angle)
 		paintStrip(dir * trailFrom(), dir * trailTo(), m.TrailWidth, Enum.Material.Ground)
 	end
+
+	-- Rotated fills (plot paint, paths) smear up into the voxel above the
+	-- ground, which piled dirt on top of the camp decks and buried the home
+	-- pads (nobody could claim an egg). Empty every voxel from the one centred
+	-- on y = 0 upward (y -2 .. 10) across the flat middle of the map, so the
+	-- surface there is exactly y = 0. Hills only start beyond
+	-- WildsInnerRadius - 12, so this never touches them.
+	terrain:FillCylinder(CFrame.new(0, 4, 0), 12, m.WildsInnerRadius - 14, Enum.Material.Air)
 
 	return (os.clock() - started) * 1000
 end

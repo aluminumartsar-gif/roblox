@@ -757,6 +757,8 @@ end
 
 function TutorialController.Run()
 	running = true
+	-- Other screens (Daily Rewards) don't pop up over the tutorial.
+	localPlayer:SetAttribute("TutorialActive", true)
 	runCollectBase = cashCollects
 	local panel = buildPanel()
 	local guide = buildGuide()
@@ -792,6 +794,7 @@ function TutorialController.Run()
 		}):Play()
 		task.delay(0.35, function()
 			running = false
+			localPlayer:SetAttribute("TutorialActive", nil)
 			panel.gui:Destroy()
 			guide.anchor:Destroy()
 			local attachment = guide.rootAttachment
