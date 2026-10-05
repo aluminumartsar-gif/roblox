@@ -744,7 +744,8 @@ Config.Prompts = {
 	MaxActivationDistance = 12,   -- must match the server distance check
 	ServerDistanceSlack = 4,      -- server allows MaxActivationDistance + slack
 	ShopOpenHold = 0,             -- opening a shop panel is a tap
-	BeltBuyHold = 0.4,            -- buying an egg off the belt
+	BeltBuyHold = 0,              -- buying off the belt is a tap: a hold gets cut off when a
+	                              -- different moving egg becomes the nearest
 	HatchHold = 0.5,
 	StealHold = 3,
 	CaptureHold = 5,

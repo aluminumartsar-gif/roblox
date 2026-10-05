@@ -309,8 +309,14 @@ hand."
 - [x] Tested solo: buy → carry → knock loose → grab → claim at pad; locked
       Sky egg; fast travel; odds 100k rolls match the board. Owner's save
       snapshotted before and restored after
-- [ ] Two-player check: a real bat hit knocking an egg loose, the other
-      player grabbing it, two players racing for the same egg
+- [x] Two-player check (Player1 + Player2): real bat hit knocks the egg
+      loose, Player2 grabs it and claims it at their own pad
+- [x] Found in the 2-player test and fixed: Roblox rejected Buy taps away
+      from the start burrow (it checks prompts against the server's copy,
+      which never moved) → prompt moved to a server-moved BuyAnchor; holds
+      were cut off as the nearest egg changed → buying is now a tap
+- [ ] Re-test after the fix: buying anywhere round the belt, two players
+      racing for one egg, grabbing a dropped egg with the bat in hand
 
 ## Step 7.5 — Retention features `[ ]` (owner request)
 

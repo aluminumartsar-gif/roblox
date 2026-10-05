@@ -189,7 +189,8 @@ LocalScript, plain `.luau` = ModuleScript.
   never moves it; it only stores `SpawnTime`. `Shared/BeltPath` turns age
   into a position, used by `EggBeltController` (drawing, every frame) and by
   the server (reach checks). Change the path in BeltPath only, so both sides
-  stay in step. The same trick moves the slats.
+  stay in step. The same trick moves the slats. Exception: the Buy prompt
+  lives on an invisible `BuyAnchor` the server also moves (see gotchas).
 - A bought egg is a StealService carry with `Source = "Belt"` (no owner, no
   timer while held, left hand). Anything that treats carries as "stolen"
   must check `carry.Source` — e.g. locking is only refused for stolen items.
@@ -283,6 +284,13 @@ testing), and bump `Config.Data.StoreScope` before launch to start clean.
   (MCP or command bar) keeps every module it has required, so after Config
   changes it sees the old Config. Require clones, or swap in a fresh copy of
   `Shared` as `tools/place-settings.luau` does. Play tests are unaffected.
+- **Roblox checks prompt triggers on the server** against where the SERVER
+  thinks the prompt's part is (solo Play doesn't enforce this — only a
+  Clients and Servers test shows it). A prompt on a part that only clients
+  move silently stops working. Belt eggs keep their prompt on a BuyAnchor
+  the server moves 10x a second.
+- **Holds on moving prompts get cut off** when another prompt becomes the
+  nearest mid-hold. Moving targets use a tap (`BeltBuyHold = 0`).
 - **Prompts on moving belt eggs:** drive them in tests with
   `prompt:InputHoldBegin()` / `InputHoldEnd()` from the Client datamodel
   while standing at the belt edge; simulated E key presses didn't complete

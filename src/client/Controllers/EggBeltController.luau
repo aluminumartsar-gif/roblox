@@ -40,6 +40,7 @@ type EggView = {
 	spawnTime: number,
 	eggId: string,
 	phase: string,
+	anchor: BasePart?, -- invisible part with the Buy prompt (the server moves it too)
 	prompt: ProximityPrompt?,
 	price: TextLabel?,
 }
@@ -93,12 +94,14 @@ local function track(model: Instance)
 	end
 	local shell = model.PrimaryPart
 	local label = shell and shell:FindFirstChild("Label")
+	local anchor = model:FindFirstChild("BuyAnchor") :: BasePart?
 	local view: EggView = {
 		model = model,
 		spawnTime = spawnTime,
 		eggId = eggId,
 		phase = BeltPath.Phase(Workspace:GetServerTimeNow() - spawnTime),
-		prompt = shell and shell:FindFirstChild("BuyPrompt") :: ProximityPrompt?,
+		anchor = anchor,
+		prompt = anchor and anchor:FindFirstChild("BuyPrompt") :: ProximityPrompt?,
 		price = label and label:FindFirstChild("Price") :: TextLabel?,
 	}
 	views[model] = view
@@ -155,7 +158,14 @@ local function step()
 			end
 			refreshView(view)
 		end
-		model:PivotTo(BeltPath.EggCFrame(math.min(age, BeltPath.Lifetime())) * CFrame.Angles(0, age * SPIN_SPEED, 0))
+		local pivot = BeltPath.EggCFrame(math.min(age, BeltPath.Lifetime()))
+		model:PivotTo(pivot * CFrame.Angles(0, age * SPIN_SPEED, 0))
+		-- Keep the prompt smooth here too (the server's 10Hz updates would
+		-- make it stutter).
+		local anchor = view.anchor
+		if anchor then
+			anchor.CFrame = pivot * CFrame.new(0, anchor.Size.Y / 2, 0)
+		end
 	end
 end
 

@@ -170,7 +170,7 @@ sinks into a second burrow at the end. An arch over the gap between the
 burrows is the way in to the campfire; an odds board beside it shows each
 egg's chance.
 
-- **First come, first served.** Hold the egg's Buy prompt (0.4s) while it
+- **First come, first served.** Tap the egg's Buy prompt (E / tap) while it
   rides past. The first player to finish gets it; it leaves the belt.
 - **Carry it home.** The egg goes in your left hand (you walk a little
   slower). It only becomes yours when you step on your camp's pad — then it

@@ -12,10 +12,12 @@
 	goes in their hand (StealService.CarryBought). It only becomes theirs
 	when they reach their camp's pad — a bat hit knocks it loose for anyone.
 
-	Motion costs no network traffic. The server places each egg once and
-	never moves it; it stores only the spawn time. Clients slide their own
-	view of it along the path (Shared/BeltPath + EggBeltController), and the
-	server uses the same path maths for reach checks.
+	The visible egg costs no network traffic: the server places it once and
+	stores only its spawn time, and clients slide their own view of it along
+	the path (Shared/BeltPath + EggBeltController). The Buy prompt sits on an
+	invisible BuyAnchor that the server DOES move (10x a second), because
+	Roblox rejects a prompt trigger if the server thinks the prompt is out of
+	reach. The server's own reach check uses the exact path maths.
 
 	A purchase is checked in order: egg still for sale and riding, hold
 	really lasted, save loaded, rebirth requirement, hands free, not
@@ -53,6 +55,7 @@ type BeltEgg = {
 	EggId: string,
 	SpawnTime: number, -- workspace:GetServerTimeNow() when it started rising
 	Model: Model,
+	Anchor: BasePart, -- invisible part carrying the Buy prompt; the server moves it
 	Sold: boolean,
 }
 
@@ -128,7 +131,8 @@ function EggBeltService.Buy(player: Player, egg: BeltEgg, began: number?): Remot
 	if eggs[egg.Id] ~= egg or egg.Sold then
 		return { Ok = false, Message = "Too slow — someone else got it!" }
 	end
-	if began == nil or os.clock() - began < Config.Prompts.BeltBuyHold - Config.Steal.HoldTolerance then
+	local hold = Config.Prompts.BeltBuyHold
+	if hold > 0 and (began == nil or os.clock() - began < hold - Config.Steal.HoldTolerance) then
 		return { Ok = false } -- fired without a real hold
 	end
 	local age = serverNow() - egg.SpawnTime
@@ -176,7 +180,7 @@ function EggBeltService.Buy(player: Player, egg: BeltEgg, began: number?): Remot
 	return { Ok = true, Message = string.format("Got a %s! Carry it to your camp's pad — watch out for bats.", def.Name) }
 end
 
-local function wirePrompt(egg: BeltEgg, shell: BasePart)
+local function wirePrompt(egg: BeltEgg, anchor: BasePart)
 	local def = Config.Eggs[egg.EggId]
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "BuyPrompt"
@@ -185,7 +189,7 @@ local function wirePrompt(egg: BeltEgg, shell: BasePart)
 	prompt.HoldDuration = Config.Prompts.BeltBuyHold
 	prompt.MaxActivationDistance = Config.Prompts.MaxActivationDistance
 	prompt.RequiresLineOfSight = Config.Prompts.RequiresLineOfSight
-	prompt.Parent = shell
+	prompt.Parent = anchor
 
 	local starts: { [Player]: number } = {}
 	prompt.PromptButtonHoldBegan:Connect(function(player)
@@ -231,9 +235,22 @@ local function spawnEgg(eggId: string, spawnTime: number): BeltEgg
 	model:SetAttribute("BeltEggId", nextId)
 	model:SetAttribute("EggId", eggId)
 	model:SetAttribute("SpawnTime", spawnTime)
-	-- The server's copy stays at the burrow; each client moves its own view.
+	-- The visible egg stays at the burrow on the server; each client moves
+	-- its own view. Only the invisible BuyAnchor is moved here, because
+	-- Roblox checks a prompt trigger against where the server thinks the
+	-- prompt is.
 	model:PivotTo(BeltPath.EggCFrame(0))
 	local shell = model.PrimaryPart :: BasePart
+	local anchor = Instance.new("Part")
+	anchor.Name = "BuyAnchor"
+	anchor.Size = ItemVisuals.EggSize
+	anchor.Transparency = 1
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanQuery = false
+	anchor.CanTouch = false
+	anchor.CFrame = BeltPath.EggCFrame(math.max(0, serverNow() - spawnTime)) * CFrame.new(0, EGG_CENTRE_HEIGHT, 0)
+	anchor.Parent = model
 
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Label"
@@ -259,8 +276,8 @@ local function spawnEgg(eggId: string, spawnTime: number): BeltEgg
 		sparkle.Parent = shell
 	end
 
-	local egg: BeltEgg = { Id = nextId, EggId = eggId, SpawnTime = spawnTime, Model = model, Sold = false }
-	wirePrompt(egg, shell)
+	local egg: BeltEgg = { Id = nextId, EggId = eggId, SpawnTime = spawnTime, Model = model, Anchor = anchor, Sold = false }
+	wirePrompt(egg, anchor)
 	CollectionService:AddTag(model, Config.Tags.BeltEgg)
 	model.Parent = beltFolder
 	eggs[egg.Id] = egg
@@ -323,6 +340,9 @@ function EggBeltService.Start()
 			for _, egg in pairs(eggs) do
 				if t - egg.SpawnTime > lifetime + 0.5 then
 					remove(egg)
+				else
+					egg.Anchor.CFrame = BeltPath.EggCFrame(math.min(t - egg.SpawnTime, lifetime))
+						* CFrame.new(0, EGG_CENTRE_HEIGHT, 0)
 				end
 			end
 		end
