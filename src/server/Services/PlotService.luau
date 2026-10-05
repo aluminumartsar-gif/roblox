@@ -46,6 +46,7 @@ local Notifier = require(Modules:WaitForChild("Notifier"))
 local DataService = require(Services:WaitForChild("DataService"))
 local WorldService = require(Services:WaitForChild("WorldService"))
 local MovementService = require(Services:WaitForChild("MovementService"))
+local BoostService = require(Services:WaitForChild("BoostService"))
 
 export type PlotRecord = {
 	Index: number,
@@ -159,7 +160,8 @@ function PlotService.RefreshNests(player: Player)
 	if not plot or not data then
 		return
 	end
-	local activeCount = Config.GetUpgradeValue("NestSlots", data.Upgrades.NestSlots)
+	local activeCount = BoostService.GetNestCapacity(player)
+	player:SetAttribute("NestCapacity", activeCount)
 	local glowColors = Config.Rebirth.NestGlowColors
 	local glow = glowColors[(data.Rebirths % #glowColors) + 1]
 	for i, nest in ipairs(plot.Nests) do

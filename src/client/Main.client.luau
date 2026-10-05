@@ -27,7 +27,8 @@ local CONTROLLER_ORDER: { string } = {
 	"NotificationController",
 	"HudController",
 	"PlotController",
-	-- Step 3: "EggShopController",
+	"EggShopController",
+	"NestVisualsController",
 	-- Step 4: "StealController",
 	-- Step 7: "SightingController", "CodexController",
 }

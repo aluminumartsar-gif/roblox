@@ -102,23 +102,35 @@ and released the save lock.
 
 ---
 
-## Step 3 — Eggs, heat, hatching, income `[ ]`
+## Step 3 — Eggs, heat, hatching, income `[x]`
 
-- [ ] Egg Shop purchase flow: buy → placed in an empty nest → blocked with a
-      message if none free
-- [ ] Heat accrual (0→100 over 10 min), modified by the Incubation Speed
-      upgrade and Nest Warmer
-- [ ] Hatch prompt → server-side weighted roll using
-      `Config.GetRarityChances(eggId, heat, luck)`
-- [ ] Creature spawns in the nest (part-based placeholder + billboard name)
-- [ ] Income accrual into a per-creature vault, capped by the Vault Size
-      upgrade
-- [ ] Touch to collect, with the sanity cap
-- [ ] **10,000-roll simulation** printing the rarity distribution at heat 0 and
-      heat 100, to sanity-check the odds
+- [x] Egg Shop: counter prompt opens a panel (price, rebirth lock, Legendary+
+      odds at heat 0 vs max). `BuyEgg` checks egg id, rebirths, standing at
+      the counter, free nest (before charging), cash — then places the egg.
+      No free nest = refused, not charged.
+- [x] Heat 0→100 over 10 min, × Incubation Speed upgrade × Nest Warmer buff
+      (`BoostService`). Shown to everyone on the egg's label + glow.
+- [x] Hatch prompt (owner only, distance re-checked) → `EggRoller` roll with
+      the egg's heat and the owner's luck → creature in the same nest.
+      Legendary+ hatches announced server-wide.
+- [x] Placeholder creatures (body + head + eyes in Config colour/size);
+      [REDACTED] flickers and scrambles its name.
+- [x] Income into a per-creature vault, capped by the Vault Size upgrade
+- [x] Touch to collect: owner only, distance-checked, pays the server's own
+      vault value (can't exceed what was earned)
+- [x] `BoostService` centralises luck / income / heat rate / nest capacity /
+      vault cap, with game-pass effects pre-wired for Step 6
+- [x] **10,000-roll simulation** (`SAC_Debug:Invoke("simulate")`): every egg
+      at heat 0 and max heat. Worst deviation 2.74σ across 84 cells —
+      consistent with Config. Impossible outcomes never rolled.
 
-**Test:** buy → wait → hatch → collect. Simulation output matches the intended
-table.
+**Tested:** buy refused when far from shop / bogus id / locked / too poor;
+6 eggs bought into 6 nests, 7th refused and not charged; heat rate exact
+(3.5% in 21s); shop panel opens from the prompt and closes on walking away;
+hatch via the real prompt; collect by walking into a creature paid exactly
+the vault; leave + rejoin restored all creatures and vaults; Mythic hatch
+announced to the server; Secret visuals verified. Debug creatures removed
+from the owner's save afterwards.
 
 ---
 
@@ -190,6 +202,9 @@ Dashboard and paste the IDs into `Config`.
       CLAUDE.md §2
 - [ ] Performance check — part counts, StreamingEnabled, memory over time
 - [ ] Art pass: replace placeholder creatures with generated meshes
+- [ ] **Wipe test data before launch:** Studio play tests write to the same
+      DataStore as the live game. Bump `Config.Data.StoreScope` (e.g. "v1" →
+      "live1") so launch starts from clean saves.
 - [ ] Launch checklist: icon, thumbnails, description, Creator Dashboard
       monetization
 
@@ -234,6 +249,27 @@ Things only the owner can do. Ticked when done.
 ---
 
 ## Open questions for the owner
+
+### 2. Vault cap vs. top-tier income *(balance, before Step 5)*
+
+The vault cap is per creature and starts at $25K (Vault Size upgrade). Time
+for one creature to fill it at base income:
+
+| Rarity    | Income | Fills $25K in |
+|-----------|-------:|--------------:|
+| Common    | $1/s   | ~7 hours      |
+| Rare      | $15/s  | ~28 min       |
+| Epic      | $60/s  | ~7 min        |
+| Legendary | $250/s | ~100 s        |
+| Mythic    | $1.2K/s| ~21 s         |
+| Secret    | $6K/s  | ~4 s          |
+
+So a Mythic or Secret owner loses most of that income unless they stand next
+to it constantly — the jackpot creature feels capped instead of exciting.
+Options: (a) leave it and let the Vault Size upgrade (up to $25M) carry it;
+(b) scale each creature's cap by rarity, e.g. cap = max(Vault Size, income ×
+10 min). Claude leans **(b)** — Vault Size stays meaningful for the common
+middle, and a Secret still pays out like a Secret.
 
 ### 1. Spawn lock: first join only, or every join? *(needed before Step 4)*
 

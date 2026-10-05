@@ -200,7 +200,10 @@ local function renderNests(label: TextLabel, snapshot: { [string]: any }?)
 			used += 1
 		end
 	end
-	local capacity = Config.GetUpgradeValue("NestSlots", snapshot.Upgrades.NestSlots or 1)
+	-- Capacity comes from the server (it includes passes); fall back to the
+	-- upgrade value until the attribute arrives.
+	local capacity = localPlayer:GetAttribute("NestCapacity")
+		or Config.GetUpgradeValue("NestSlots", snapshot.Upgrades.NestSlots or 1)
 	label.Text = string.format("Nests %d/%d", used, capacity)
 end
 

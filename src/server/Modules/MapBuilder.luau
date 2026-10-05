@@ -256,6 +256,18 @@ local function buildCabin(name: string, cf: CFrame, signText: string, shopId: st
 	counter:SetAttribute("ShopId", shopId)
 	CollectionService:AddTag(counter, Config.Tags.ShopBooth)
 
+	-- Opens the shop panel on the client (EggShopController). Buying itself
+	-- goes through a remote that re-checks you're at this counter.
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "ShopPrompt"
+	prompt.ActionText = "Browse"
+	prompt.ObjectText = signText
+	prompt.HoldDuration = Config.Prompts.ShopOpenHold
+	prompt.MaxActivationDistance = Config.Prompts.MaxActivationDistance
+	prompt.RequiresLineOfSight = Config.Prompts.RequiresLineOfSight
+	prompt:SetAttribute("ShopId", shopId)
+	prompt.Parent = counter
+
 	local sign = block({
 		Name = "Sign",
 		Size = Vector3.new(16, 3.5, 0.5),

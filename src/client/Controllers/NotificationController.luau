@@ -21,12 +21,13 @@ local KIND_COLORS: { [string]: Color3 } = {
 	Success = Color3.fromRGB(38, 110, 70),
 	Warning = Color3.fromRGB(150, 110, 30),
 	Error = Color3.fromRGB(150, 40, 48),
+	Announce = Color3.fromRGB(150, 110, 30),
 }
 
 local container: Frame? = nil
 local sequence = 0
 
-function NotificationController.Show(text: string, kind: string?)
+function NotificationController.Show(text: string, kind: string?, color: Color3?)
 	if not container or text == "" then
 		return
 	end
@@ -51,7 +52,12 @@ function NotificationController.Show(text: string, kind: string?)
 	label.LayoutOrder = sequence
 	label.AutomaticSize = Enum.AutomaticSize.X
 	label.Size = UDim2.fromOffset(0, 32)
-	label.BackgroundColor3 = KIND_COLORS[kind or "Info"] or KIND_COLORS.Info
+	label.BackgroundColor3 = color or KIND_COLORS[kind or "Info"] or KIND_COLORS.Info
+	if kind == "Announce" then
+		label.Font = Enum.Font.GothamBlack
+		label.TextSize = 19
+		label.Size = UDim2.fromOffset(0, 38)
+	end
 	label.BackgroundTransparency = 0.1
 	label.TextColor3 = Color3.new(1, 1, 1)
 	label.Font = Enum.Font.GothamMedium
@@ -100,11 +106,22 @@ function NotificationController.Start()
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	container = frame
 
-	local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Notify") :: RemoteEvent
-	remote.OnClientEvent:Connect(function(text, kind)
+	local remotes = ReplicatedStorage:WaitForChild("Remotes")
+	local notify = remotes:WaitForChild("Notify") :: RemoteEvent
+	notify.OnClientEvent:Connect(function(text, kind)
 		if typeof(text) == "string" then
 			NotificationController.Show(text, if typeof(kind) == "string" then kind else "Info")
 		end
+	end)
+
+	-- Server-wide announcements (big hatches), tinted by rarity.
+	local announce = remotes:WaitForChild("GlobalAnnounce") :: RemoteEvent
+	announce.OnClientEvent:Connect(function(text, rarity)
+		if typeof(text) ~= "string" then
+			return
+		end
+		local rarityDef = typeof(rarity) == "string" and Config.Rarities[rarity]
+		NotificationController.Show(text, "Announce", if rarityDef then rarityDef.Color else nil)
 	end)
 end
 

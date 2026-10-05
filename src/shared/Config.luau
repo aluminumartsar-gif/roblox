@@ -25,7 +25,7 @@ local Config = {}
 -- VERSION / DEBUG
 -- =========================================================================
 
-Config.Version = "0.3.0-step2"
+Config.Version = "0.4.0-step3"
 
 Config.Debug = {
 	-- Master switch for verbose server logging.
@@ -279,13 +279,24 @@ Config.Heat = {
 -- Rare+ weights. Sources stack additively.
 -- =========================================================================
 
+-- This is the only place luck amounts are defined; BoostService adds them up.
 Config.Luck = {
 	PerRebirthPercent = 10,   -- +10% luck per rebirth
 	VipPercent = 10,          -- VIP gamepass
-	PotionPercent = 50,       -- Luck Potion dev product
-	PotionDuration = 900,     -- 15 minutes
+	PotionPercent = 50,       -- Luck Potion dev product (duration: DevProducts.LuckPotion)
 	CodexPageCompletePercent = 5, -- per completed rarity page (Step 7)
 	MaxPercent = 500,         -- hard cap so nothing runs away
+}
+
+-- =========================================================================
+-- SHOPS
+-- =========================================================================
+
+Config.Shop = {
+	-- Buying needs you standing at the shop counter, within this many studs.
+	-- (Generous, because the counter is wide; the shop panel closes if you
+	-- wander further than this.)
+	InteractDistance = 22,
 }
 
 -- =========================================================================
@@ -422,8 +433,8 @@ Config.Codex = {
 	CameraToolName = "Field Camera",
 	PhotoCooldown = 2,
 	MaxPhotoDistance = 60,
-	-- Completing every creature in a rarity page grants permanent luck.
-	PageCompleteLuckPercent = 5,
+	-- Completing every creature in a rarity page grants permanent luck:
+	-- the amount is Config.Luck.CodexPageCompletePercent.
 	SurvivesRebirth = true,
 }
 
@@ -435,7 +446,7 @@ Config.Rebirth = {
 	BaseCost = 50000,
 	CostGrowth = 2.2,           -- cost = BaseCost * Growth ^ rebirths
 	IncomeBonusPerRebirth = 0.25, -- +25% income
-	LuckBonusPerRebirth = 10,     -- +10% luck (percentage points)
+	-- Luck per rebirth: Config.Luck.PerRebirthPercent.
 	-- Kept across a rebirth:
 	Keeps = { "Codex", "GamePasses", "Rebirths", "Stats", "PurchaseHistory" },
 	-- Wiped:
@@ -592,9 +603,9 @@ Config.Remotes = {
 	GlobalAnnounce    = { Kind = "Event",    Direction = "ServerToClient" },
 
 	-- Client -> server intents (all validated + rate limited server-side)
+	-- (Hatching is a ProximityPrompt and collecting is a touch; both are
+	-- handled server-side, so neither needs a remote.)
 	BuyEgg            = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 60 },
-	HatchEgg          = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 60 },
-	CollectCash       = { Kind = "Event",    Direction = "ClientToServer", MaxPerMinute = 240 },
 	BuyUpgrade        = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 	DoRebirth         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 6 },
 	LockPlot          = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
@@ -616,7 +627,7 @@ Config.RemoteGlobalMaxPerMinute = 600
 Config.Prompts = {
 	MaxActivationDistance = 12,   -- must match the server distance check
 	ServerDistanceSlack = 4,      -- server allows MaxActivationDistance + slack
-	BuyHold = 0.5,
+	ShopOpenHold = 0,             -- opening a shop panel is a tap
 	HatchHold = 0.5,
 	StealHold = 3,
 	CaptureHold = 5,
@@ -803,17 +814,21 @@ function Config.FormatNumber(n: number): string
 		n /= 1000
 		tier += 1
 	end
-	local text
+	local digits
 	if tier == 1 then
-		text = string.format("%d", math.floor(n))
+		digits = string.format("%d", math.floor(n))
 	elseif n < 10 then
-		text = string.format("%.2f%s", n, suffixes[tier])
+		digits = string.format("%.2f", math.floor(n * 100) / 100)
 	elseif n < 100 then
-		text = string.format("%.1f%s", n, suffixes[tier])
+		digits = string.format("%.1f", math.floor(n * 10) / 10)
 	else
-		text = string.format("%d%s", math.floor(n), suffixes[tier])
+		digits = string.format("%d", math.floor(n))
 	end
-	return (negative and "-" or "") .. text
+	-- "1.00" -> "1", "1.50" -> "1.5", "10.0" -> "10" (only after a decimal point)
+	if string.find(digits, ".", 1, true) then
+		digits = string.gsub(digits, "%.?0+$", "")
+	end
+	return (negative and "-" or "") .. digits .. suffixes[tier]
 end
 
 table.freeze(Config.RarityOrder)

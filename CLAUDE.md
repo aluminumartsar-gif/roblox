@@ -132,7 +132,10 @@ LocalScript, plain `.luau` = ModuleScript.
   Never delete old migrations.
 - Nests are a dense array; an empty nest is `false`, never `nil`.
 - If a profile can't load safely, kick. Never play on a blank profile.
-- Studio-only test hook: `ServerStorage.SAC_Debug:Invoke("give"|"dump"|"save"|"wipe"|"status", playerName, ...)`.
+- Studio-only test hook: `ServerStorage.SAC_Debug:Invoke(command, playerName, ...)`.
+  Commands are listed at the top of `Modules/DebugCommands` (status, give,
+  dump, save, wipe, plots, resetlock, simulate, giveegg, setheat, hatch,
+  setslot, nests).
   Must be used via a BindableFunction because MCP/command-bar code runs in a
   separate Luau VM and gets its own copies of modules.
 
@@ -161,6 +164,25 @@ LocalScript, plain `.luau` = ModuleScript.
 - Find world objects by CollectionService tag (`Config.Tags`), and expect
   them to stream in and out on the client (StreamingEnabled).
 - Edit-only place settings live in `tools/place-settings.luau`.
+
+### Eggs, creatures and boosts
+- **Luck, income multiplier, heat rate, nest capacity and vault cap come
+  from `BoostService` only.** A new bonus source (pass, potion, rebirth,
+  codex) is added there, nowhere else. Game passes go through
+  `BoostService.HasPass`, wired to MarketplaceService in Step 6.
+- Change what's in a nest only through `NestService` (`SetSlot`, `TakeSlot`,
+  `PlaceEgg`, `Hatch`). It saves, pushes and redraws in one go.
+- The one exception to "write through the DataService API": the heat and
+  income ticks write `slot.Heat` / `slot.Vault` straight into the profile
+  every second without a client push. Display goes through model attributes.
+- Rolls happen in `Modules/EggRoller` on the server. Never roll on a client.
+- Placeholder art is built in `Modules/ItemVisuals`; the art pass replaces
+  those builders without touching game logic.
+
+### Test data
+Studio play tests read and write the **same DataStore as the live game**.
+Don't leave debug-spawned items in the owner's save (remove them after
+testing), and bump `Config.Data.StoreScope` before launch to start clean.
 
 ### Multi-client tests through the MCP
 After the owner starts Test → Clients and Servers, `list_roblox_studios`

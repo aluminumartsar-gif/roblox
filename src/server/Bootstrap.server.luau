@@ -32,9 +32,12 @@ local ServicesFolder = ServerRoot:WaitForChild("Services")
 local SERVICE_ORDER: { string } = {
 	"WorldService",     -- build the map first, before anyone can spawn
 	"DataService",
+	"BoostService",
 	"MovementService",
 	"PlotService",
-	-- Step 3: "EggService", "IncomeService",
+	"NestService",
+	"IncomeService",
+	"EggShopService",
 	-- Step 4: "StealService",
 	-- Step 5: "RebirthService", "UpgradeService",
 	-- Step 6: "MonetizationService",

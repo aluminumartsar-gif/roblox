@@ -19,6 +19,12 @@
 	  dbg:Invoke("wipe", "PlayerName")   -- resets to a fresh profile
 	  dbg:Invoke("plots")                -- who owns what, lock state
 	  dbg:Invoke("resetlock", "PlayerName")
+	  dbg:Invoke("simulate", 10000)      -- odds check, every egg, heat 0 & max
+	  dbg:Invoke("giveegg", "PlayerName", "forest", heat)
+	  dbg:Invoke("setheat", "PlayerName", 100)
+	  dbg:Invoke("hatch", "PlayerName", nestIndex)
+	  dbg:Invoke("setslot", "PlayerName", nestIndex, "egg"|"creature"|"empty", id, heat)
+	  dbg:Invoke("nests", "PlayerName")
 ]]
 
 local Players = game:GetService("Players")
@@ -26,6 +32,9 @@ local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 local Services = ServerScriptService:WaitForChild("Server"):WaitForChild("Services")
 local Modules = ServerScriptService:WaitForChild("Server"):WaitForChild("Modules")
@@ -139,6 +148,106 @@ function DebugCommands.Start()
 		player:SetAttribute("PlotLockedUntil", 0)
 		player:SetAttribute("PlotLockCooldownUntil", 0)
 		return "lock reset for " .. player.Name
+	end
+
+	local NestService = require(Services:WaitForChild("NestService"))
+	local EggRoller = require(Modules:WaitForChild("EggRoller"))
+
+	-- 10k-roll check of every egg at heat 0 and max heat (Step 3 deliverable).
+	function commands.simulate(rolls)
+		local n = tonumber(rolls) or 10000
+		local out = {}
+		local worst = 0
+		for _, eggId in ipairs(Config.EggOrder) do
+			for _, heat in ipairs({ 0, Config.Heat.Max }) do
+				local report, worstZ = EggRoller.SimulationReport(eggId, heat, 0, n)
+				worst = math.max(worst, worstZ)
+				table.insert(out, report)
+			end
+		end
+		table.insert(out, string.format("Worst |z| across all tables: %.2f  (below ~4 = consistent with Config)", worst))
+		return table.concat(out, "\n")
+	end
+
+	-- Places an egg without charging (test only).
+	function commands.giveegg(name, eggId, heat)
+		local player = findPlayer(name)
+		if not player then
+			return "no such player"
+		end
+		local nestIndex = NestService.PlaceEgg(player, eggId or "forest", tonumber(heat) or 0)
+		return if nestIndex then ("egg in nest " .. nestIndex) else "no empty nest"
+	end
+
+	-- Sets the heat of every egg the player owns.
+	function commands.setheat(name, heat)
+		local player = findPlayer(name)
+		local data = player and DataService.Get(player)
+		local plot = player and PlotService.GetPlot(player)
+		if not data or not plot then
+			return "not loaded"
+		end
+		local count = 0
+		for i, slot in ipairs(data.Nests) do
+			if slot ~= false and slot.Kind == "Egg" then
+				slot.Heat = math.clamp(tonumber(heat) or 0, 0, Config.Heat.Max)
+				local model = NestService.GetVisual(plot.Index, i)
+				if model then
+					model:SetAttribute("Heat", slot.Heat)
+				end
+				count += 1
+			end
+		end
+		return "set heat on " .. count .. " egg(s)"
+	end
+
+	-- Hatches a nest directly (skips the prompt's distance check).
+	function commands.hatch(name, nestIndex)
+		local player = findPlayer(name)
+		if not player then
+			return "no such player"
+		end
+		local result = NestService.Hatch(player, tonumber(nestIndex) or 1)
+		return if result then string.format("%s (%s)", result.CreatureId, result.Rarity) else "no egg there"
+	end
+
+	-- Puts anything in a nest: ("egg", eggId, heat) / ("creature", creatureId) / ("empty").
+	function commands.setslot(name, nestIndex, kind, id, heat)
+		local player = findPlayer(name)
+		local index = tonumber(nestIndex)
+		if not player or not index then
+			return "usage: setslot(player, nestIndex, egg|creature|empty, id, heat?)"
+		end
+		local now = os.time()
+		if kind == "egg" and Config.Eggs[id] then
+			NestService.SetSlot(player, index, { Kind = "Egg", EggId = id, Heat = tonumber(heat) or 0, Vault = 0, AcquiredAt = now, LastIncomeAt = now })
+		elseif kind == "creature" and Config.CreaturesById[id] then
+			NestService.SetSlot(player, index, { Kind = "Creature", CreatureId = id, Rarity = Config.CreaturesById[id].Rarity, Heat = 0, Vault = 0, AcquiredAt = now, LastIncomeAt = now })
+		elseif kind == "empty" then
+			NestService.SetSlot(player, index, false)
+		else
+			return "bad kind or id"
+		end
+		return "nest " .. index .. " set"
+	end
+
+	function commands.nests(name)
+		local player = findPlayer(name)
+		local data = player and DataService.Get(player)
+		if not data then
+			return "not loaded"
+		end
+		local lines = {}
+		for i, slot in ipairs(data.Nests) do
+			if slot ~= false then
+				if slot.Kind == "Egg" then
+					table.insert(lines, string.format("%d: Egg %s heat=%.1f", i, slot.EggId, slot.Heat))
+				else
+					table.insert(lines, string.format("%d: %s (%s) vault=%.1f", i, slot.CreatureId, slot.Rarity, slot.Vault))
+				end
+			end
+		end
+		return #lines > 0 and table.concat(lines, "\n") or "all nests empty"
 	end
 
 	local existing = ServerStorage:FindFirstChild("SAC_Debug")

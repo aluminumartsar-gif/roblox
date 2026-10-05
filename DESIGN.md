@@ -160,6 +160,23 @@ failure, never a lost purchase).
 
 Exact per-egg weight tables live in `Config.Eggs`.
 
+### How the egg loop works (as built in Step 3)
+
+1. **Buy** at the Egg Shop counter in the hub — you must be standing there.
+   The panel shows each egg's price and its Legendary-or-better odds at heat
+   0 vs full heat. The egg appears in your first free nest at home.
+2. **Heat** builds while it sits (0→100% over 10 min; faster with the
+   Incubation Speed upgrade or a Nest Warmer). Everyone can see an egg's heat
+   on its label — a hot egg advertises itself to thieves.
+3. **Hatch** with the egg's prompt (owner only). The roll happens on the
+   server using the egg's current heat and your luck. The creature appears
+   in the same nest. Legendary and better are announced to the whole server.
+4. **Earn.** Each creature fills its own vault with cash. Walk into it to
+   collect. A full vault stops filling.
+
+Heat and income only tick while you're in the server; nothing accrues
+offline (eggs keep the heat they had when you left).
+
 ---
 
 ## 4. The plot
