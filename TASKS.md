@@ -134,19 +134,43 @@ from the owner's save afterwards.
 
 ---
 
-## Step 4 — Stealing `[ ]`
+## Step 4 — Stealing `[x]`
 
-- [ ] 3-second steal prompt on eggs and creatures on unlocked plots
-- [ ] Carry overhead at −25% speed; cannot lock own base while carrying
-- [ ] Claim by touching your own plot pad
-- [ ] Owner alarm + red outline + thief's name on screen
-- [ ] Bat starter tool: knockback + 1s stun, 0.5s cooldown
-- [ ] Drop on death or Bat hit; anyone can pick up
-- [ ] Unclaimed items return home after 60s
-- [ ] 30s steal cooldown; 2-min same-item immunity; 5-min new-player spawn lock
-- [ ] Stolen eggs keep their heat
+- [x] 3-second steal prompt on eggs and creatures (unlocked, unprotected
+      plots); hold length enforced server-side
+- [x] Carry overhead at −25% speed; cannot lock own base while carrying
+- [x] Claim by touching your own plot pad (needs a free nest)
+- [x] Owner alarm (banner + sound) from the moment the hold starts, red
+      outline through walls, thief's name on screen
+- [x] Bat starter tool: knockback + 1s stun, 0.5s cooldown, stun immunity
+- [x] Drop on death or Bat hit; anyone can pick up; owner pickup = home
+- [x] Unclaimed items return home 60s after the steal
+- [x] 30s steal cooldown; 2-min same-item guard; spawn protection
+      (5 min first join, 2 min after; stealing ends your own)
+- [x] Stolen eggs keep their heat; owner keeps the creature's vault cash
+- [x] Dupe-safe transit: owner's slot is marked Away until the claim moves
+      it; crash → item home on next load; owner leaving forfeits
 
-**Test:** 2 clients — steal, defend with the Bat, drop, re-steal, timeout return.
+**Tested with 2 clients (all pass):** spawn protection refused a forced
+steal ("protected for 0:15"); real steal → item overhead, speed 12, carry
+banner; owner saw alarm + red outline, empty nest, vault paid out; thief
+couldn't lock own camp; Bat dropped the item and stunned (speed 0, jump 0);
+thief re-picked it up; 60s timer sent it home with a 2-min guard; re-steal
+refused ("guarded for 1:14"); steal → claim on pad: egg kept 100% heat,
+owner's nest cleared, stats updated; 30s cooldown refused the next steal;
+thief death dropped the item at the exact spot; owner leaving forfeited it
+(saved data cleared), thief picked it up and claimed it.
+
+**Bugs found and fixed during testing:** (1) every steal silently failed —
+Roblox fires "hold ended" *before* "triggered", and the hold-ended handler
+discarded the hold; (2) a leftover pickup hold could be reused later for an
+instant pickup; (3) `PlotService.EndProtection` called a function defined
+below it (nil at runtime) — any protected player stealing would have errored.
+
+**Not yet re-verified** (need a fresh 2-player session; next time one runs):
+the instant-steal cheat (its earlier "pass" ran under bug 1, so it proves
+nothing), and the thief-leaves-while-carrying path (same return-home code as
+the timer, which passed).
 
 ---
 
@@ -245,6 +269,14 @@ Things only the owner can do. Ticked when done.
   the camp is open 4 of every 5 minutes.
 - **Map is generated** from Config for now; may move to a hand-built map at
   the art pass.
+- **Spawn protection on every join** (owner didn't pick; Claude's
+  recommendation used as the default): 5 min on a first-ever join, 2 min
+  after (`Config.Steal.NewPlayerSpawnLock` / `ReturningPlayerSpawnLock`).
+  Stealing ends your own protection early.
+- **Stealing rules Claude chose** (all in `Config.Steal` / `Config.Bat`):
+  owner keeps a creature's uncollected vault cash when it's stolen; owner
+  leaving mid-steal forfeits the item; thief leaving or timing out sends it
+  home; anyone's Bat can knock a stolen item loose; stun immunity 1.5s.
 
 ---
 
@@ -271,14 +303,4 @@ Options: (a) leave it and let the Vault Size upgrade (up to $25M) carry it;
 10 min). Claude leans **(b)** — Vault Size stays meaningful for the common
 middle, and a Secret still pays out like a Secret.
 
-### 1. Spawn lock: first join only, or every join? *(needed before Step 4)*
-
-The design says "new players get a 5-minute spawn lock." Your nests persist
-between sessions, so a returning player's plot is full of loot the instant
-they spawn, before they've had a chance to look around.
-
-- **First join only** — literal reading; protects true newcomers.
-- **Every join** — protects anyone who just loaded in. Common in the genre.
-
-Claude's recommendation: **every join**, but shorter for returning players
-(e.g. 5 min first join, 2 min after) — both numbers in Config.
+### 1. ~~Spawn lock~~ — defaulted at Step 4 (see decisions log); change anytime.

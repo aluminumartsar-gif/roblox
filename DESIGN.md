@@ -239,6 +239,27 @@ creature.
 
 Stolen eggs keep their heat. That is the entire reason stealing matters.
 
+### As built (Step 4)
+
+- **Who can steal what:** anyone but the owner, from a plot that's not
+  locked and not spawn-protected, an item that isn't still guarded from a
+  recent steal, while not already carrying something and not on cooldown,
+  with a free nest at home to bring it to.
+- **The owner is warned the moment the hold starts** — banner, alarm sound,
+  red outline on the item — so a fast owner can stop a steal before it
+  completes (walk up and Bat the thief).
+- **The owner keeps the cash** a creature had already earned; the thief
+  takes the cryptid, not the wallet.
+- **While carried** the item is outlined red for its owner, through walls.
+- **Spawn protection** on every join: 5 minutes the first time, 2 after.
+  Starting a steal yourself ends it.
+- **Any player's Bat** knocks a stolen item loose (the brief's "anyone can
+  jump them on the way"). Being bonked stuns for 1s, then 1.5s of immunity
+  so two players can't stun-lock someone.
+- **Leaving:** a thief who leaves loses the item back to its owner; an owner
+  who leaves while their item is out forfeits it — leaving can't be used to
+  save an item.
+
 ---
 
 ## 6. Rebirth

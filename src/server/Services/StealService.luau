@@ -334,6 +334,20 @@ function StealService.Drop(player: Player, reason: string)
 	prompt.PromptButtonHoldBegan:Connect(function(picker)
 		starts[picker] = os.clock()
 	end)
+	-- Same ordering caveat as steal prompts: forget an abandoned hold only
+	-- after giving Triggered a moment to consume it, so an old hold can't be
+	-- reused later for an instant pickup.
+	prompt.PromptButtonHoldEnded:Connect(function(picker)
+		local began = starts[picker]
+		if not began then
+			return
+		end
+		task.delay(0.2, function()
+			if starts[picker] == began then
+				starts[picker] = nil
+			end
+		end)
+	end)
 	prompt.Triggered:Connect(function(picker)
 		local began = starts[picker]
 		starts[picker] = nil
@@ -528,16 +542,27 @@ local function wireStealPrompt(plot: PlotRecord, nestIndex: number, model: Model
 		})
 	end)
 
+	-- When a hold COMPLETES, Roblox fires HoldEnded before Triggered. So
+	-- HoldEnded can't mean "they let go" on its own: wait a moment, and only
+	-- treat it as abandoned if Triggered didn't consume the hold meanwhile.
 	prompt.PromptButtonHoldEnded:Connect(function(thief: Player)
 		local starts = holdStarts[thief]
-		if starts then
-			starts[prompt] = nil
+		local began = starts and starts[prompt]
+		if not began then
+			return
 		end
-		local alarmed = holdAlarmed[thief]
-		if alarmed and alarmed[prompt] then
-			alarmed[prompt] = nil
-			alarm(plot.Owner, "Stopped", nil, { Thief = thief.DisplayName, NestIndex = nestIndex })
-		end
+		task.delay(0.2, function()
+			local current = holdStarts[thief]
+			if not current or current[prompt] ~= began then
+				return -- consumed by Triggered, or a new hold started
+			end
+			current[prompt] = nil
+			local alarmed = holdAlarmed[thief]
+			if alarmed and alarmed[prompt] then
+				alarmed[prompt] = nil
+				alarm(plot.Owner, "Stopped", nil, { Thief = thief.DisplayName, NestIndex = nestIndex })
+			end
+		end)
 	end)
 
 	prompt.Triggered:Connect(function(thief: Player)

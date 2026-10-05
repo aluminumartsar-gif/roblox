@@ -135,7 +135,7 @@ LocalScript, plain `.luau` = ModuleScript.
 - Studio-only test hook: `ServerStorage.SAC_Debug:Invoke(command, playerName, ...)`.
   Commands are listed at the top of `Modules/DebugCommands` (status, give,
   dump, save, wipe, plots, resetlock, simulate, giveegg, setheat, hatch,
-  setslot, nests).
+  setslot, nests, carries, unprotect, clearcooldown).
   Must be used via a BindableFunction because MCP/command-bar code runs in a
   separate Luau VM and gets its own copies of modules.
 
@@ -184,7 +184,33 @@ Studio play tests read and write the **same DataStore as the live game**.
 Don't leave debug-spawned items in the owner's save (remove them after
 testing), and bump `Config.Data.StoreScope` before launch to start clean.
 
+### Gotchas learned the hard way
+- **ProximityPrompt event order:** when a hold completes, Roblox fires
+  `PromptButtonHoldEnded` *before* `Triggered`. Never treat HoldEnded alone
+  as "they let go" — defer that decision (StealService waits 0.2s and checks
+  whether Triggered consumed the hold).
+- **Server-side hold timing:** record the time on `PromptButtonHoldBegan`
+  and require `Triggered` to come at least HoldDuration − tolerance later.
+  Clear abandoned holds so an old one can't be reused.
+- **Luau local functions can't be called above their definition** — the
+  name is nil there. Forward-declare (`local publish: (T) -> ()`) and assign
+  later with `function publish(...)`.
+- **Stealing is dupe-safe only because** the owner's slot stays (marked
+  Away) until the claim, and the claim removes it from the owner and adds it
+  to the thief in one synchronous step, then saves the owner first.
+
 ### Multi-client tests through the MCP
+- **Re-identify windows every session and assert in every client call**
+  (`assert(game.Players.LocalPlayer.Name == "Player2")`). Mixing up which
+  window is which player cost a long false-bug hunt in Step 4.
+- Background threads (`task.spawn`) started inside an `execute_luau` call
+  are cleaned up when the call returns — a prompt hold started in one gets
+  released early. Do holds start-to-finish inside a single call.
+- Toasts last `Config.UI.NotificationDuration` (4s); read them within a
+  second of the action, not after a 3s hold.
+- Server code changes need a fresh test session (Rojo writes to Edit only).
+  Batch fixes before asking the owner to restart.
+
 After the owner starts Test → Clients and Servers, `list_roblox_studios`
 shows one extra Studio per window (names are null). Call `get_studio_state`
 on each: the one whose focused datamodel is `Server` is the server; for the

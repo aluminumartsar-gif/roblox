@@ -76,6 +76,10 @@ local lockChecks: { (Player) -> (boolean, string?) } = {}
 -- Throttle for "this camp is locked" messages.
 local lastEjectNotice: { [Player]: number } = {}
 
+-- Defined further down (state -> attributes); declared here so functions
+-- above its definition can call it.
+local publish: (PlotRecord) -> ()
+
 local function now(): number
 	return Workspace:GetServerTimeNow()
 end
@@ -158,7 +162,7 @@ end
 -- State -> replicated attributes and visuals
 --------------------------------------------------------------------------
 
-local function publish(plot: PlotRecord)
+function publish(plot: PlotRecord)
 	local m = plot.Model
 	local owner = plot.Owner
 	m:SetAttribute("OwnerUserId", if owner then owner.UserId else 0)
