@@ -171,6 +171,42 @@ function NotificationController.Show(text: string, kind: string?, color: Color3?
 	end)
 end
 
+-- Banners at the top of the screen (sightings, the Hunt) reserve space so
+-- toasts never cover them: key -> the banner's bottom edge in screen pixels.
+local TOAST_GAP = 8
+local reservations: { [string]: number } = {}
+local stackBase: UDim2? = nil
+
+local function placeStack()
+	local frame = container
+	local base = stackBase
+	if not frame or not base then
+		return
+	end
+	local lowest: number? = nil
+	for _, bottom in pairs(reservations) do
+		if not lowest or bottom > lowest then
+			lowest = bottom
+		end
+	end
+	if lowest then
+		local gui = frame:FindFirstAncestorWhichIsA("LayerCollector")
+		local guiTop = if gui and gui:IsA("ScreenGui") then gui.AbsolutePosition.Y else 0
+		local wanted = lowest + TOAST_GAP - guiTop
+		frame.Position = UDim2.new(base.X.Scale, base.X.Offset, base.Y.Scale, math.max(base.Y.Offset, wanted))
+	else
+		frame.Position = base
+	end
+end
+
+--- Keeps the toast stack below a banner. `key` names the banner; `bottom`
+--- is its bottom edge in screen pixels (AbsolutePosition.Y + AbsoluteSize.Y),
+--- or nil when the banner hides.
+function NotificationController.ReserveTop(key: string, bottom: number?)
+	reservations[key] = bottom
+	placeStack()
+end
+
 function NotificationController.Start()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "Notifications"
@@ -195,6 +231,8 @@ function NotificationController.Start()
 
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	container = frame
+	stackBase = frame.Position
+	placeStack()
 
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local notify = remotes:WaitForChild("Notify") :: RemoteEvent

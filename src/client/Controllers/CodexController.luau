@@ -1022,6 +1022,13 @@ local function runCelebrations()
 		if item.Delay > 0 then
 			task.wait(item.Delay)
 		end
+		-- Let a hatch reveal (FeedbackController) finish first, so the two
+		-- celebrations don't pile on top of each other.
+		local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		local waitUntil = os.clock() + 10
+		while playerGui and playerGui:FindFirstChild("HatchReveal") and os.clock() < waitUntil do
+			task.wait(0.2)
+		end
 		local page = item.Page
 		if page then
 			task.delay(0.6, showPageBanner, page)

@@ -4,14 +4,19 @@
 	ServerScriptService/Server/Services/WorldService
 
 	Sets the night lighting from Config.Atmosphere and builds the world
-	(terrain + map) with MapBuilder. Starts right after ArtService (whose
-	mesh templates the map clones), before anyone can spawn.
+	(terrain + map) with MapBuilder. Also hangs a small lantern glow on every
+	character (Config.Atmosphere.PlayerLantern) so the woods stay playable
+	and everyone can see other players' lights moving in the dark.
+
+	Starts right after ArtService (whose mesh templates the map clones),
+	before anyone can spawn.
 
 	The boot log prints the terrain time, total build time and part counts
 	per category, so performance regressions show up in every play test.
 	Studio: SAC_Debug "mapstats" prints the same.
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Workspace = game:GetService("Workspace")
@@ -48,6 +53,21 @@ function WorldService.DescribeBuild(): string
 		stats.Lights, stats.MeshProps, stats.FallbackProps)
 end
 
+local function addLantern(character: Model)
+	local spec = Config.Atmosphere.PlayerLantern
+	local root = character:WaitForChild("HumanoidRootPart", 10)
+	if not root or root:FindFirstChild("Lantern") then
+		return
+	end
+	local light = Instance.new("PointLight")
+	light.Name = "Lantern"
+	light.Color = spec.Color
+	light.Range = spec.Range
+	light.Brightness = spec.Brightness
+	light.Shadows = false
+	light.Parent = root
+end
+
 function WorldService.Start()
 	MapBuilder.ApplyAtmosphere()
 
@@ -65,6 +85,19 @@ function WorldService.Start()
 	print(string.format("[SAC/World] Map built: %d plots — %s", #plots, WorldService.DescribeBuild()))
 	if #plots ~= Config.Plot.Count then
 		warn(string.format("[SAC/World] Expected %d plots, built %d", Config.Plot.Count, #plots))
+	end
+
+	if Config.Atmosphere.PlayerLantern.Enabled then
+		local function hook(player: Player)
+			player.CharacterAdded:Connect(addLantern)
+			if player.Character then
+				task.spawn(addLantern, player.Character)
+			end
+		end
+		Players.PlayerAdded:Connect(hook)
+		for _, player in ipairs(Players:GetPlayers()) do
+			hook(player)
+		end
 	end
 end
 

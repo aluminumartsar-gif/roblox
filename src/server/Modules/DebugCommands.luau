@@ -278,6 +278,18 @@ function DebugCommands.Start()
 		return if amount > 0 then ("sold for $" .. amount) else "no creature there"
 	end
 
+	-- Puts a belt egg in a player's hands (as if just bought), e.g. to test
+	-- the Brood Mother chasing a carrier.
+	function commands.carry(name, eggId)
+		local player = findPlayer(name)
+		if not player then
+			return "no such player"
+		end
+		local id = if Config.Eggs[eggId or ""] then eggId else "forest"
+		local ok = require(Services:WaitForChild("StealService")).CarryBought(player, id)
+		return if ok then ("carrying a " .. id .. " egg") else "couldn't (already carrying, or no character)"
+	end
+
 	-- The Brood Mother (HuntService).
 	function commands.hunt()
 		return require(Services:WaitForChild("HuntService")).DebugStart()

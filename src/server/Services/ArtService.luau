@@ -84,6 +84,9 @@ local function buildTemplate(kind: string, id: string, spec: any): Model?
 	-- Scale to the requested standing height.
 	local natural = meshPart.Size
 	local height = tonumber(spec.Height) or natural.Y
+	if kind == "Creatures" then
+		height *= Config.Art.CreatureScale or 1
+	end
 	local factor = if natural.Y > 0 then height / natural.Y else 1
 	meshPart.Size = natural * factor
 

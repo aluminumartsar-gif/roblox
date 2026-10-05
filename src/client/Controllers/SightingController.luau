@@ -42,6 +42,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 local Components = script.Parent.Parent:WaitForChild("Components")
 local ScreenScale = require(Components:WaitForChild("ScreenScale"))
 local Icon = require(Components:WaitForChild("Icon"))
+local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
 local SightingController = {}
 
@@ -51,7 +52,6 @@ local localPlayer = Players.LocalPlayer
 -- 11.5% of the screen; the banner starts just below them.
 local BANNER_TOP = 0.12
 local BANNER_SIZE = Vector2.new(440, 60)
-local TOAST_GAP = 6
 local FLASH_SECONDS = 5
 local PROMPT_RESET_DELAY = 0.15
 local UI_REFRESH = 0.2
@@ -98,9 +98,6 @@ local fovCamera: Camera? = nil
 local fovOffset = 0
 local lastAmbience = 0
 local ambience: Sound? = nil -- the looped SightingAmbience while you're near
-
-local toastStack: GuiObject? = nil
-local toastBase: UDim2? = nil
 
 local bobBases: { [Model]: CFrame } = setmetatable({}, { __mode = "k" }) :: any
 
@@ -367,25 +364,8 @@ end
 --- Keeps the toast stack (NotificationController) below the banner while
 --- the banner shows, and puts it back after.
 local function placeToasts(bannerVisible: boolean)
-	if not toastStack or not toastStack.Parent then
-		local notifications = localPlayer.PlayerGui:FindFirstChild("Notifications")
-		local stack = notifications and notifications:FindFirstChild("Stack")
-		if not stack or not stack:IsA("GuiObject") then
-			return
-		end
-		toastStack = stack
-		toastBase = stack.Position
-	end
-	local stack = toastStack :: GuiObject
-	local base = toastBase :: UDim2
-	if bannerVisible then
-		local gui = stack:FindFirstAncestorWhichIsA("LayerCollector")
-		local guiTop = if gui and gui:IsA("ScreenGui") then gui.AbsolutePosition.Y else 0
-		local wanted = banner.AbsolutePosition.Y + banner.AbsoluteSize.Y + TOAST_GAP - guiTop
-		stack.Position = UDim2.new(base.X.Scale, base.X.Offset, base.Y.Scale, math.max(base.Y.Offset, wanted))
-	else
-		stack.Position = base
-	end
+	NotificationController.ReserveTop("Sighting",
+		if bannerVisible then banner.AbsolutePosition.Y + banner.AbsoluteSize.Y else nil)
 end
 
 local function showBanner(title: string, text: string, rarity: any)

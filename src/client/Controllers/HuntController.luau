@@ -270,11 +270,12 @@ local function buildGui()
 		speck.Parent = grain
 	end
 
-	-- Banner, below the kit's Base/Eggs buttons.
+	-- Banner, just below the kit's Base/Eggs buttons (they fill the top
+	-- 11.5% of the screen) — the same spot as the sighting banner.
 	banner = Instance.new("Frame")
 	banner.Name = "Banner"
 	banner.AnchorPoint = Vector2.new(0.5, 0)
-	banner.Position = UDim2.new(0.5, 0, 0, 96)
+	banner.Position = UDim2.new(0.5, 0, 0.12, 0)
 	banner.Size = UDim2.fromOffset(460, 62)
 	banner.BackgroundColor3 = Color3.fromRGB(16, 6, 8)
 	banner.BackgroundTransparency = 0.15
@@ -379,8 +380,8 @@ local function jumpscare()
 	face.Parent = viewport
 	local camera = Instance.new("Camera")
 	local height = face:GetExtentsSize().Y
-	local headPos = Vector3.new(0, height * 0.86, 0)
-	camera.CFrame = CFrame.lookAt(headPos + Vector3.new(0, 0, -height * 0.32), headPos)
+	local headPos = Vector3.new(0, height * 0.8, 0)
+	camera.CFrame = CFrame.lookAt(headPos + Vector3.new(0, -height * 0.04, -height * 0.62), headPos)
 	camera.FieldOfView = 50
 	camera.Parent = viewport
 	viewport.CurrentCamera = camera
@@ -426,6 +427,16 @@ local function formatClock(seconds: number): string
 end
 
 local shakeAmount = 0
+local reservedBottom: number? = nil
+
+--- Keeps the toast stack below the banner while it shows.
+local function reserveBanner(visible: boolean)
+	local bottom = if visible then banner.AbsolutePosition.Y + banner.AbsoluteSize.Y else nil
+	if bottom ~= reservedBottom then
+		reservedBottom = bottom
+		NotificationController.ReserveTop("Hunt", bottom)
+	end
+end
 
 local function update(dt: number)
 	local s = state
@@ -437,6 +448,7 @@ local function update(dt: number)
 
 	if phase == "Idle" or phase == nil then
 		banner.Visible = false
+		reserveBanner(false)
 		hideModel()
 		setDread(0)
 		shakeAmount = 0
@@ -445,6 +457,7 @@ local function update(dt: number)
 
 	-- Banner
 	banner.Visible = true
+	reserveBanner(true)
 	local carrying = localPlayer:GetAttribute("Carrying") == true
 	if phase == "Warning" then
 		bannerTitle.Text = "Something stirs in the woods..."

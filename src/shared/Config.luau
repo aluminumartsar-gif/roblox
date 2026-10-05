@@ -1196,14 +1196,19 @@ Config.Art = {
 		thunderbird = { Mesh = "rbxassetid://118963594307595", Texture = "rbxassetid://82598969794423", Height = 5.2, Yaw = 0 },
 		bunyip = { Mesh = "rbxassetid://113317298872835", Texture = "rbxassetid://123505522201560", Height = 5.2, Yaw = 0 },
 		death_worm = { Mesh = "rbxassetid://72402313990350", Texture = "rbxassetid://88869529137142", Height = 5.2, Yaw = 0 },
+		nessie = { Mesh = "rbxassetid://105933576488987", Texture = "rbxassetid://115855645034356", Height = 4.4, Yaw = 0 },
 		kraken = { Mesh = "rbxassetid://72768183058923", Texture = "rbxassetid://137691239141461", Height = 6.2, Yaw = 0 },
 		ningen = { Mesh = "rbxassetid://117659548202346", Texture = "rbxassetid://83752095862825", Height = 6.2, Yaw = 0 },
+		mokele_mbembe = { Mesh = "rbxassetid://120339522011118", Texture = "rbxassetid://84784757685916", Height = 6.2, Yaw = 0 },
 	},
 	Eggs = {},
 	Props = {
 		BroodMother = { Mesh = "rbxassetid://82525672471592", Texture = "rbxassetid://92308619353136", Height = 16, Yaw = 0 },
 		BroodNest = { Mesh = "rbxassetid://92051071995688", Texture = "rbxassetid://136342658450558", Height = 4, Yaw = 0 },
 	},
+	-- Every creature mesh is drawn this much bigger than its Height above
+	-- (one knob to make the cryptids loom over their nests).
+	CreatureScale = 1.35,
 	-- Boot waits up to this long for the meshes (they load in parallel,
 	-- usually in a second or two). Anything not ready by then uses the
 	-- placeholder for this server's lifetime.
@@ -1256,7 +1261,7 @@ Config.Hunt = {
 	-- Client-side dread (HuntController)
 	DreadRadius = 140,         -- heartbeat / vignette start at this distance
 	ShakeRadius = 35,          -- camera shake inside this distance
-	DimLights = 0.45,          -- Lighting brightness multiplier while she hunts
+	DimLights = 0.6,           -- Lighting brightness multiplier while she hunts
 	FogDensityBonus = 0.18,    -- thicker fog while she hunts
 	Color = Color3.fromRGB(255, 70, 60), -- her eye / banner colour
 	ModelHeight = 16,          -- fallback model size (the mesh is Config.Art.Props.BroodMother)
@@ -1604,6 +1609,14 @@ Config.Atmosphere = {
 	LanternColor = Color3.fromRGB(255, 196, 128),
 	LanternRange = 26,
 	LanternBrightness = 2.2,
+	-- Every player carries a small lantern glow, so the dark woods stay
+	-- playable and you can see other players' lights moving at night.
+	PlayerLantern = {
+		Enabled = true,
+		Color = Color3.fromRGB(255, 186, 120),
+		Range = 24,
+		Brightness = 1.1,
+	},
 }
 
 -- =========================================================================
