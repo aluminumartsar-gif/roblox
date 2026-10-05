@@ -125,12 +125,19 @@ function PlotService.ProtectionRemaining(plot: PlotRecord): number
 	return math.max(0, plot.ProtectedUntil - now())
 end
 
---- Ends a player's spawn protection early (they started stealing).
+--- Ends a player's spawn protection early (they started stealing). Also
+--- clears the saved copy, so rejoining can't bring it back.
 function PlotService.EndProtection(player: Player)
 	local plot = plotByPlayer[player]
 	if plot and plot.ProtectedUntil > now() then
 		plot.ProtectedUntil = 0
 		publish(plot)
+	end
+	local data = DataService.Get(player)
+	if data and data.SpawnLockUntil ~= 0 then
+		DataService.Mutate(player, function(d)
+			d.SpawnLockUntil = 0
+		end)
 	end
 end
 
@@ -278,12 +285,25 @@ local function claim(player: Player)
 	plot.Owner = player
 	plot.LockedUntil = 0
 	plot.LockCooldownUntil = 0
-	-- Spawn protection: longer on a player's very first join.
+	-- Spawn protection: longer on a player's very first join; a fresh
+	-- returning grant only after ReturningLockMinAway offline. A quick
+	-- rejoin just resumes what was left (saved as SpawnLockUntil), so
+	-- rejoining over and over can't keep a camp unstealable.
 	local data = DataService.Get(player)
 	local firstJoin = data ~= nil and (data.Stats.JoinCount or 0) <= 1
-	plot.ProtectedUntil = now() + (if firstJoin
-		then Config.Steal.NewPlayerSpawnLock
-		else Config.Steal.ReturningPlayerSpawnLock)
+	local t = os.time()
+	local grant: number
+	if firstJoin then
+		grant = Config.Steal.NewPlayerSpawnLock
+	elseif not data or t - (data.Stats.LastLeftAt or 0) >= Config.Steal.ReturningLockMinAway then
+		grant = Config.Steal.ReturningPlayerSpawnLock
+	else
+		grant = math.max(0, (data.SpawnLockUntil or 0) - t)
+	end
+	DataService.Mutate(player, function(d)
+		d.SpawnLockUntil = t + grant
+	end)
+	plot.ProtectedUntil = if grant > 0 then now() + grant else 0
 	plotByPlayer[player] = plot
 
 	MapBuilder.SetPlotSign(plot.Model, player.DisplayName)

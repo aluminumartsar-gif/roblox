@@ -375,8 +375,8 @@ local STEPS: { Step } = {
 		Guide = function(_state)
 			return {
 				text = "Grab cryptid eggs off the " .. bold("egg belt") .. " and carry them home.\n"
-					.. "Let them " .. bold("warm up") .. " for better odds, then hatch cryptids that " .. bold("earn cash") .. ".\n"
-					.. "Steal from other camps — and guard your own!",
+					.. "They " .. bold("hatch by themselves") .. " after a while (better eggs take longer) into cryptids that " .. bold("earn cash") .. ".\n"
+					.. "Anyone can steal an egg until it hatches — so guard yours, and rob other camps!",
 			}
 		end,
 	},

@@ -52,6 +52,9 @@ local localPlayer = Players.LocalPlayer
 -- 11.5% of the screen; the banner starts just below them.
 local BANNER_TOP = 0.12
 local BANNER_SIZE = Vector2.new(440, 60)
+-- Pixels to shift down during a Hunt: HuntController's banner (62px tall,
+-- same top) plus a gap.
+local BELOW_HUNT_BANNER = 70
 local FLASH_SECONDS = 5
 local PROMPT_RESET_DELAY = 0.15
 local UI_REFRESH = 0.2
@@ -377,8 +380,17 @@ local function showBanner(title: string, text: string, rarity: any)
 	banner.Visible = true
 end
 
+--- True while the Hunt is on (HuntController's banner owns the top spot).
+local function huntActive(): boolean
+	local huntState = ReplicatedStorage:FindFirstChild("HuntState")
+	local phase = huntState and huntState:GetAttribute("Phase")
+	return phase ~= nil and phase ~= "Idle"
+end
+
 local function renderBanner()
 	local now = serverNow()
+	-- Sit just under the Hunt banner while she's out, so neither hides the other.
+	banner.Position = UDim2.new(0.5, 0, BANNER_TOP, if huntActive() then BELOW_HUNT_BANNER else 0)
 	local mine = myCapture()
 	local sighting = current
 	local cap = otherCapture()
@@ -680,7 +692,11 @@ local function onBanner(phase: string, info: Info)
 			matched = true
 		end
 		if matched then
-			setFlash("IT GOT AWAY", string.format("The %s slipped back into the woods.", tostring(info.Label)), info.Rarity)
+			if info.TakenBack == true then
+				setFlash("SHE TOOK IT", string.format("%s took the %s.", Config.Hunt.Name, tostring(info.Label)), info.Rarity)
+			else
+				setFlash("IT GOT AWAY", string.format("The %s slipped back into the woods.", tostring(info.Label)), info.Rarity)
+			end
 		end
 	elseif phase == "Interrupted" then
 		resetPrompts()

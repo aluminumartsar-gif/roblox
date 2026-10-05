@@ -42,7 +42,18 @@
 	thief until the claim, and the claim removes it from the owner in the
 	same step. If the server dies mid-carry, the owner's saved slot is still
 	Away and ProfileTemplate sends it home on their next load. The thief's
-	save never had it.
+	save never had it. After a claim the thief's saves are held
+	(DataService.HoldSaves) until the owner's loss is saved.
+
+	An owner who CHOOSES to leave mid-carry forfeits the item, but the thief
+	can only claim it once the owner's final save (with the slot removed)
+	is confirmed (ForfeitPending -> DataService.OnAfterRelease); if that save
+	fails, the carry is dropped. On a server shutdown nothing is forfeited:
+	the item stays in the owner's nest.
+
+	Claims are refused (the item goes home / vanishes) if the carrier got to
+	their pad faster than walking allows from where they picked it up
+	(Config.Steal.CarryTravelSlack): the client owns its own position.
 
 	Owner alerts go through the StealAlarm remote:
 	  ("Started" | "Stopped" | "Stolen" | "Dropped" | "Claimed" | "Returned", info)
@@ -85,6 +96,12 @@ export type Carry = {
 	ReturnAtServer: number,  -- workspace:GetServerTimeNow(), for client countdowns
 	Carrier: Player?,        -- nil while dropped
 	Model: Model?,
+	-- Where/when the current carrier picked it up (teleport check on claims).
+	StartPos: Vector3?,
+	StartClock: number?,
+	-- The owner left and their final save (with the slot removed) hasn't
+	-- been confirmed yet: not claimable until it is (see OnAfterRelease).
+	ForfeitPending: boolean?,
 }
 
 local StealService = {}
@@ -314,6 +331,8 @@ local function attachToCarrier(carry: Carry, player: Player): boolean
 
 	carry.Model = model
 	carry.Carrier = player
+	carry.StartPos = root.Position
+	carry.StartClock = os.clock()
 	carryByCarrier[player] = carry
 	MovementService.SetModifier(player, "Carrying",
 		if carry.Source == "Belt" then Config.Belt.CarrySpeedMultiplier else Config.Steal.CarrySpeedMultiplier)
@@ -329,9 +348,10 @@ local function forget(carry: Carry)
 	carries[carry.Id] = nil
 end
 
---- Sends the item back to its owner's nest.
-local function returnHome(carry: Carry, reason: string)
-	local carrier = carry.Carrier
+--- Sends the item back to its owner's nest. `quietCarrier`: don't toast
+--- the carrier (the caller tells them itself, e.g. the Brood Mother).
+local function returnHome(carry: Carry, reason: string, quietCarrier: boolean?)
+	local carrier = if quietCarrier then nil else carry.Carrier
 	releaseCarrier(carry)
 	forget(carry)
 
@@ -417,7 +437,14 @@ function StealService.Drop(player: Player, reason: string)
 
 	local starts: { [Player]: number } = {}
 	prompt.PromptButtonHoldBegan:Connect(function(picker)
-		starts[picker] = os.clock()
+		local began = os.clock()
+		starts[picker] = began
+		-- Expire it on the server even if HoldEnded never arrives.
+		task.delay(Config.Steal.PickupHold + Config.Steal.HoldMaxOverrun, function()
+			if starts[picker] == began then
+				starts[picker] = nil
+			end
+		end)
 	end)
 	-- Same ordering caveat as steal prompts: forget an abandoned hold only
 	-- after giving Triggered a moment to consume it, so an old hold can't be
@@ -467,7 +494,7 @@ function StealService.Drop(player: Player, reason: string)
 
 	StealService.ItemDropped:Fire(player, carry)
 	Notifier.Send(player, string.format("You dropped the %s!", itemLabel(carry.Slot)), "Warning")
-	if carry.Owner then
+	if carry.Owner and carry.Owner.Parent == Players then
 		Notifier.Send(carry.Owner, string.format("Your %s was knocked loose — grab it back!", itemLabel(carry.Slot)), "Warning")
 		alarm(carry.Owner, "Dropped", carry, { Thief = player.DisplayName })
 	end
@@ -476,14 +503,26 @@ end
 
 --- The Brood Mother (HuntService) takes back whatever `player` is
 --- carrying: a stolen egg goes home to its owner, a belt egg or a captured
---- cryptid is gone. Returns false if they weren't carrying anything.
+--- cryptid is gone. Returns false if they weren't carrying anything. The
+--- carrier isn't toasted here: the caller tells them what happened.
 function StealService.Reclaim(player: Player, reason: string): boolean
 	local carry = carryByCarrier[player]
 	if not carry then
 		return false
 	end
-	returnHome(carry, reason)
+	returnHome(carry, reason, true)
 	return true
+end
+
+--- How many carries of this Source are out right now, held or dropped.
+function StealService.CountSource(source: string): number
+	local n = 0
+	for _, carry in pairs(carries) do
+		if carry.Source == source then
+			n += 1
+		end
+	end
+	return n
 end
 
 --- A bought (or picked-up) belt egg reaches its carrier's pad.
@@ -513,7 +552,7 @@ end
 local function claimCapture(player: Player, carry: Carry)
 	local nestIndex = NestService.FindEmptyNest(player)
 	if not nestIndex then
-		throttledNotice(player, "No empty nest! Hatch something or make room, quick.")
+		throttledNotice(player, "No empty nest! Sell a cryptid to make room, quick.")
 		return
 	end
 	local now = os.time()
@@ -543,9 +582,15 @@ local function claim(player: Player, carry: Carry)
 		claimCapture(player, carry)
 		return
 	end
+	if carry.ForfeitPending then
+		-- The owner just left; their save (with this slot removed) hasn't
+		-- landed yet. Claiming now could duplicate it if that save failed.
+		throttledNotice(player, "Hang on — the owner is still leaving. Step on your pad again in a moment.", "Info")
+		return
+	end
 	local nestIndex = NestService.FindEmptyNest(player)
 	if not nestIndex then
-		throttledNotice(player, "No empty nest! Hatch something or make room, quick.")
+		throttledNotice(player, "No empty nest! Sell a cryptid to make room, quick.")
 		return
 	end
 
@@ -566,6 +611,9 @@ local function claim(player: Player, carry: Carry)
 		end)
 	end
 
+	-- Hold the thief's saves until the owner's loss is on disk (released in
+	-- the task below), so no autosave can persist the gain first.
+	DataService.HoldSaves(player)
 	local slot = ProfileTemplate.DeepCopy(carry.Slot)
 	slot.Away = nil
 	slot.AwayThief = nil
@@ -592,10 +640,36 @@ local function claim(player: Player, carry: Carry)
 
 	-- Save the owner's loss first, then the thief's gain: if the server died
 	-- between the two writes, the item would be lost rather than duplicated.
+	-- The thief's saves (autosave included) are held until the owner's save
+	-- succeeds, or the retries run out. (An owner who already left had their
+	-- loss confirmed by their final save before this carry was claimable.)
 	task.spawn(function()
 		if owner and owner.Parent == Players then
-			DataService.SaveNow(owner)
+			local saved = false
+			for attempt = 1, Config.Data.ClaimOwnerSaveRetries do
+				if DataService.SaveNow(owner) then
+					saved = true
+					break
+				end
+				if not DataService.IsLoaded(owner) then
+					-- Leaving: their final save carries the loss. Let it land
+					-- before the thief's save goes through.
+					local deadline = os.clock() + Config.Data.SaveHoldTimeout
+					while DataService.Get(owner) and os.clock() < deadline do
+						task.wait(0.25)
+					end
+					break
+				end
+				if attempt < Config.Data.ClaimOwnerSaveRetries then
+					task.wait(2 ^ attempt)
+				end
+			end
+			if not saved then
+				warn(string.format("[SAC/Steal] Owner %s's save after claim %d failed; saving thief %s anyway",
+					owner.Name, carry.Id, player.Name))
+			end
 		end
+		DataService.ReleaseSaves(player)
 		if player.Parent == Players then
 			DataService.SaveNow(player)
 		end
@@ -608,8 +682,16 @@ end
 -- Starting a steal
 --------------------------------------------------------------------------
 
+--- The hold lasted about as long as the prompt's HoldDuration: not shorter
+--- (instant-trigger exploit), and not much longer either (an abandoned hold
+--- whose HoldEnded never arrived can't be cashed in later).
 local function holdWasLongEnough(began: number?, required: number): boolean
-	return began ~= nil and (os.clock() - began) >= required - Config.Steal.HoldTolerance
+	if began == nil then
+		return false
+	end
+	local elapsed = os.clock() - began
+	return elapsed >= required - Config.Steal.HoldTolerance
+		and elapsed <= required + Config.Steal.HoldMaxOverrun
 end
 
 --- Every rule for "may this player steal this nest's item right now?".
@@ -698,7 +780,10 @@ local function wireStealPrompt(plot: PlotRecord, nestIndex: number, model: Model
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "StealPrompt"
 	prompt.ActionText = "Steal"
-	prompt.ObjectText = itemLabel(slot)
+	-- Name only: progress changes every second and this is set once (the
+	-- live % is on the nest's own label and bar).
+	local egg = slot.Kind == "Egg" and Config.Eggs[slot.EggId]
+	prompt.ObjectText = if egg then egg.Name else itemLabel(slot)
 	prompt.HoldDuration = Config.Prompts.StealHold
 	prompt.MaxActivationDistance = Config.Prompts.MaxActivationDistance
 	prompt.RequiresLineOfSight = Config.Prompts.RequiresLineOfSight
@@ -712,8 +797,9 @@ local function wireStealPrompt(plot: PlotRecord, nestIndex: number, model: Model
 			end
 			return
 		end
+		local began = os.clock()
 		holdStarts[thief] = holdStarts[thief] or {}
-		holdStarts[thief][prompt] = os.clock()
+		holdStarts[thief][prompt] = began
 		holdAlarmed[thief] = holdAlarmed[thief] or {}
 		holdAlarmed[thief][prompt] = true
 		alarm(plot.Owner, "Started", nil, {
@@ -721,6 +807,20 @@ local function wireStealPrompt(plot: PlotRecord, nestIndex: number, model: Model
 			Item = itemLabel(reasonOrSlot),
 			NestIndex = nestIndex,
 		})
+		-- Expire the hold on the server even if HoldEnded never arrives, and
+		-- close the owner's alarm.
+		task.delay(Config.Prompts.StealHold + Config.Steal.HoldMaxOverrun, function()
+			local current = holdStarts[thief]
+			if not current or current[prompt] ~= began then
+				return -- consumed, abandoned normally, or a newer hold
+			end
+			current[prompt] = nil
+			local alarmed = holdAlarmed[thief]
+			if alarmed and alarmed[prompt] then
+				alarmed[prompt] = nil
+				alarm(plot.Owner, "Stopped", nil, { Thief = thief.DisplayName, NestIndex = nestIndex })
+			end
+		end)
 	end)
 
 	-- When a hold COMPLETES, Roblox fires HoldEnded before Triggered. So
@@ -807,12 +907,19 @@ function StealService.TryPickup(player: Player, carry: Carry, began: number?)
 			throttledNotice(player, "You have no empty nest to bring it home to.")
 			return
 		end
+		-- In someone's hand again: no timer. Set before attaching so the held
+		-- model isn't stamped with the old drop-expiry ReturnAt.
+		local oldReturnAt, oldReturnAtServer = carry.ReturnAt, carry.ReturnAtServer
+		carry.ReturnAt = math.huge
+		carry.ReturnAtServer = math.huge
 		destroyModel(carry)
 		if not attachToCarrier(carry, player) then
+			-- No living character: leave it unheld; its drop timer still runs
+			-- (nothing else would ever clean it up).
+			carry.ReturnAt = oldReturnAt
+			carry.ReturnAtServer = oldReturnAtServer
 			return
 		end
-		carry.ReturnAt = math.huge -- in someone's hand again: no timer
-		carry.ReturnAtServer = math.huge
 		if carry.Source == "Belt" then
 			Notifier.Send(player, string.format("You grabbed a %s! Take it to your camp's pad.", itemLabel(carry.Slot)), "Success")
 		else
@@ -932,6 +1039,27 @@ end
 -- Start
 --------------------------------------------------------------------------
 
+--- The fastest anyone can legally walk with this carry: max Walk Speed
+--- upgrade, own-plot bonus, and the carry's slow-down.
+local function maxCarrySpeed(carry: Carry): number
+	local fastest = 0
+	for _, level in ipairs(Config.Upgrades.WalkSpeed.Levels) do
+		fastest = math.max(fastest, level.Value)
+	end
+	local multiplier = if carry.Source == "Belt" then Config.Belt.CarrySpeedMultiplier else Config.Steal.CarrySpeedMultiplier
+	return fastest * (1 + Config.Plot.OwnerWalkSpeedBonus) * multiplier
+end
+
+--- False if the carrier reached `padPosition` faster than walking allows
+--- since they picked the item up (the client owns its character's
+--- position, so an exploiter could teleport home).
+local function travelTimeOk(carry: Carry, padPosition: Vector3): boolean
+	local offset = (carry.StartPos or padPosition) - padPosition
+	local distance = Vector3.new(offset.X, 0, offset.Z).Magnitude
+	local need = distance / (maxCarrySpeed(carry) * Config.Steal.CarryTravelSlack) - Config.Steal.CarryTravelGrace
+	return os.clock() - (carry.StartClock or 0) >= need
+end
+
 local function hookCharacter(player: Player, character: Model)
 	local humanoid = character:WaitForChild("Humanoid", 10) :: Humanoid?
 	if humanoid then
@@ -974,6 +1102,12 @@ function StealService.Start()
 					return
 				end
 				if not RemoteGuard.IsWithinReach(player, pad.Position, 12) then
+					return
+				end
+				if not travelTimeOk(carry, pad.Position) then
+					warn(string.format("[SAC/Steal] Rejected claim by %s: carry %d (%s) arrived too fast (possible teleport)",
+						player.Name, carry.Id, carry.Source))
+					returnHome(carry, "teleport")
 					return
 				end
 				claim(player, carry)
@@ -1026,13 +1160,14 @@ function StealService.Start()
 
 		for _, carry in pairs(carries) do
 			if carry.Owner == owner then
-				if Config.Steal.OwnerLeavingForfeits then
+				-- Forfeit only when the owner CHOSE to leave. On a server
+				-- shutdown the thief can never claim it, so it stays home.
+				if Config.Steal.OwnerLeavingForfeits and not DataService.IsShuttingDown() then
+					-- Out of the owner's save now; claimable once that save is
+					-- confirmed (OnAfterRelease below).
 					data.Nests[carry.NestIndex] = false
-					carry.Owner = nil
-					if carry.Carrier then
-						Notifier.Send(carry.Carrier, "The owner left — it's yours if you get it home!", "Success")
-					end
-					log("owner %s left; carry %d forfeited", owner.Name, carry.Id)
+					carry.ForfeitPending = true
+					log("owner %s left; carry %d forfeit pending their final save", owner.Name, carry.Id)
 				else
 					local slot = data.Nests[carry.NestIndex]
 					if slot ~= false then
@@ -1041,6 +1176,32 @@ function StealService.Start()
 					end
 					releaseCarrier(carry)
 					forget(carry)
+				end
+			end
+		end
+	end)
+
+	-- The leaving owner's final save: on success the forfeit is real and the
+	-- thief may claim it; on failure their stored save may still hold the
+	-- item, so the carry is dropped (no claim, no duplicate).
+	DataService.OnAfterRelease(function(owner: Player, saved: boolean)
+		for _, carry in pairs(carries) do
+			if carry.Owner == owner and carry.ForfeitPending then
+				carry.ForfeitPending = nil
+				carry.Owner = nil
+				if saved then
+					if carry.Carrier then
+						Notifier.Send(carry.Carrier, "The owner left — it's yours if you get it home!", "Success")
+					end
+					log("owner %s's save confirmed; carry %d forfeited", owner.Name, carry.Id)
+				else
+					local carrier = carry.Carrier
+					releaseCarrier(carry)
+					forget(carry)
+					if carrier and carrier.Parent == Players then
+						Notifier.Send(carrier, string.format("The %s vanished into the woods.", itemLabel(carry.Slot)), "Warning")
+					end
+					warn(string.format("[SAC/Steal] Owner %s's final save failed; carry %d dropped so it can't duplicate", owner.Name, carry.Id))
 				end
 			end
 		end

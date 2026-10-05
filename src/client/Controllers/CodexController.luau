@@ -582,7 +582,7 @@ local function buildDetails(content: GuiObject)
 			statusLabel.TextColor3 = Color3.fromRGB(140, 235, 150)
 			statusLabel.Text = "Photographed"
 		else
-			blurbLabel.Text = "No file yet. Photograph one with your Field Camera, or hatch, steal or capture one, to unlock its notes."
+			blurbLabel.Text = "No file yet. Photograph one with your Field Camera, or hatch or capture one, to unlock its notes."
 			statusIcon.Visible = false
 			statusLabel.Position = UDim2.fromScale(0.5, 0.75)
 			statusLabel.Size = UDim2.fromScale(0.46, 0.08)

@@ -135,7 +135,9 @@ local function buildFallback(): Model
 	return m
 end
 
-local function buildModel(): Model
+--- Builds a fresh copy of her and returns it with its eye light. Touches no
+--- module state: the jumpscare face is built with this too.
+local function buildModel(): (Model, PointLight?)
 	local template = ItemVisuals.GetTemplate("Props", "BroodMother")
 	local m: Model
 	if template then
@@ -164,7 +166,6 @@ local function buildModel(): Model
 	else
 		m = buildFallback()
 	end
-	modelHeight = m:GetExtentsSize().Y
 
 	-- A cold mist around her feet.
 	local primary = m.PrimaryPart :: BasePart
@@ -183,17 +184,21 @@ local function buildModel(): Model
 	mist.LightInfluence = 0.3
 	mist.Parent = feet
 
+	local light: PointLight? = nil
 	for _, d in ipairs(m:GetDescendants()) do
 		if d:IsA("PointLight") then
-			eye = d
+			light = d
 		end
 	end
-	return m
+	return m, light
 end
 
 local function showModel()
 	if not model then
-		model = buildModel()
+		local m, light = buildModel()
+		model = m
+		eye = light
+		modelHeight = m:GetExtentsSize().Y
 	end
 	local m = model :: Model
 	if m.Parent ~= Workspace then
@@ -357,12 +362,20 @@ end
 
 local function jumpscare()
 	SoundController.Play("Jumpscare")
+	-- Its own ScreenGui above every other UI (toasts, banners, popups), so
+	-- her face really fills the screen. Gone when the scare fades.
+	local scareGui = Instance.new("ScreenGui")
+	scareGui.Name = "HuntJumpscare"
+	scareGui.ResetOnSpawn = false
+	scareGui.IgnoreGuiInset = true
+	scareGui.DisplayOrder = Config.Hunt.JumpscareDisplayOrder
+	scareGui.Parent = localPlayer:WaitForChild("PlayerGui")
 	local overlay = Instance.new("Frame")
 	overlay.Size = UDim2.fromScale(1, 1)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
 	overlay.BackgroundTransparency = 0
 	overlay.ZIndex = 50
-	overlay.Parent = gui
+	overlay.Parent = scareGui
 
 	-- Her face, filling the screen.
 	local viewport = Instance.new("ViewportFrame")
@@ -413,7 +426,7 @@ local function jumpscare()
 		TweenService:Create(viewport, TweenInfo.new(0.4), { ImageTransparency = 1 }):Play()
 		fade:Play()
 		fade.Completed:Wait()
-		overlay:Destroy()
+		scareGui:Destroy()
 	end)
 end
 
@@ -467,7 +480,7 @@ local function update(dt: number)
 		bannerTitle.Text = if mine then "SHE'S COMING FOR YOU" else string.upper(Config.Hunt.Name) .. " IS HUNTING"
 		local left = formatClock((s:GetAttribute("EndsAt") or now) - now)
 		bannerSub.Text = if carrying
-			then string.format("She can smell your egg. Get it home!  %s", left)
+			then string.format("She can smell what you're carrying. Get it home!  %s", left)
 			else string.format("Stay inside a camp or by the campfire.  %s", left)
 	else
 		bannerTitle.Text = "She's going back into the woods..."
@@ -527,6 +540,17 @@ local function update(dt: number)
 	end
 end
 
+--- Puts the lights, fog and heartbeat back. Safe to call more than once.
+local function cleanup()
+	dimLights(false)
+	local hb = heartbeat
+	if hb then
+		hb:Destroy()
+		heartbeat = nil
+	end
+	setDread(0)
+end
+
 local function onEvent(phase: any, info: any)
 	if typeof(info) ~= "table" then
 		info = {}
@@ -556,13 +580,7 @@ local function onEvent(phase: any, info: any)
 			end
 		end
 	elseif phase == "Ended" then
-		dimLights(false)
-		local hb = heartbeat
-		if hb then
-			hb:Destroy()
-			heartbeat = nil
-		end
-		setDread(0)
+		cleanup()
 	end
 end
 
@@ -575,6 +593,12 @@ function HuntController.Start()
 	-- Joined mid-hunt: catch up.
 	local s = state
 	if s then
+		-- Back to Idle without an "Ended" (lost, or never sent): restore anyway.
+		s:GetAttributeChangedSignal("Phase"):Connect(function()
+			if s:GetAttribute("Phase") == "Idle" then
+				cleanup()
+			end
+		end)
 		local phase = s:GetAttribute("Phase")
 		if phase == "Warning" or phase == "Hunting" then
 			dimLights(true)

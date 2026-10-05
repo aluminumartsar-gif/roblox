@@ -338,7 +338,7 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 		duration *= FX.HatchRevealQueuedFactor
 	end
 
-	-- Backdrop and the skip button (the whole screen).
+	-- Backdrop (the whole screen; a plain Frame, so touches pass through).
 	local backdrop = Instance.new("Frame")
 	backdrop.Name = "Backdrop"
 	backdrop.Size = UDim2.fromScale(1, 1)
@@ -468,27 +468,38 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 		TextColor3 = Color3.fromRGB(255, 190, 120),
 		TextTransparency = 1,
 	})
-	local hint = label(gui, {
-		Name = "Hint",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -24),
-		Size = UDim2.fromOffset(260, 26),
-		Font = Enum.Font.GothamBold,
-		Text = "Tap to continue",
-		TextColor3 = Color3.fromRGB(220, 220, 220),
-		TextTransparency = 1,
-	})
-	fixedScale(hint)
-
+	-- A small Skip button, top-right under the Roblox top bar. Eggs hatch on
+	-- their own, so the reveal can open mid-chase: nothing in it may cover
+	-- the screen and eat input (the thumbstick, jump button and tool taps
+	-- must keep working). Everything else here is a non-Active Frame/label.
 	local skip = Instance.new("TextButton")
 	skip.Name = "Skip"
-	skip.Size = UDim2.fromScale(1, 1)
+	skip.AnchorPoint = Vector2.new(1, 0)
+	skip.Position = UDim2.new(1, -16, 0, 64)
+	skip.Size = UDim2.fromOffset(120, 40)
+	skip.BackgroundColor3 = BLACK
 	skip.BackgroundTransparency = 1
+	skip.BorderSizePixel = 0
 	skip.Text = ""
 	skip.AutoButtonColor = false
 	skip.ZIndex = 50
 	skip:SetAttribute("SAC_NoClick", true)
+	local skipCorner = Instance.new("UICorner")
+	skipCorner.CornerRadius = UDim.new(0.3, 0)
+	skipCorner.Parent = skip
+	fixedScale(skip)
 	skip.Parent = gui
+
+	local hint = label(skip, {
+		Name = "Hint",
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -20, 1, -14),
+		Font = Enum.Font.GothamBold,
+		Text = "Skip",
+		TextColor3 = Color3.fromRGB(220, 220, 220),
+		TextTransparency = 1,
+		ZIndex = 51,
+	})
 
 	local static: Frame? = nil
 	local staticCells: { Frame } = {}
@@ -522,6 +533,7 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 	end
 	task.delay(1, function()
 		tween(hint, 0.4, { TextTransparency = 0.2 })
+		tween(skip, 0.4, { BackgroundTransparency = 0.45 })
 	end)
 	if big then
 		task.delay(FX.HatchStingDelay, function()
@@ -589,6 +601,7 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 	tween(backdrop, 0.2, { BackgroundTransparency = 1 })
 	tween(popScale, 0.2, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 	tween(hint, 0.15, { TextTransparency = 1 })
+	tween(skip, 0.15, { BackgroundTransparency = 1 })
 	if static then
 		static.Visible = false
 	end
@@ -602,6 +615,12 @@ local function pump()
 	showing = true
 	task.spawn(function()
 		while #queue > 0 do
+			-- Hold the reveal while the player carries something home (a thief
+			-- or the Brood Mother may be on them); the nest burst already
+			-- played, and the reveal opens once they've dropped it off.
+			while localPlayer:GetAttribute("Carrying") == true do
+				localPlayer:GetAttributeChangedSignal("Carrying"):Wait()
+			end
 			local data = table.remove(queue, 1) :: Reveal
 			local gui = Instance.new("ScreenGui")
 			gui.Name = "HatchReveal"

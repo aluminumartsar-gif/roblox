@@ -136,9 +136,16 @@ it up (the owner picking it up sends it straight home). Unclaimed, it runs
 home 60 seconds after the steal. The Brood Mother takes it back (below).
 
 **Friction:** 20-second cooldown after a successful steal; the same egg can't
-be stolen again for 2 minutes; spawn protection on every join (5 minutes the
-first time, 2 after — stealing yourself ends it). The owner leaving forfeits
-an egg that's out being carried (no rage-quitting to save it).
+be stolen again for 2 minutes; spawn protection when you join (5 minutes the
+first time; 2 minutes after at least 10 minutes away — a quicker rejoin only
+gets back whatever protection was left, so rejoining can't keep a camp safe;
+stealing yourself ends it for good). The owner leaving forfeits an egg that's
+out being carried (no rage-quitting to save it) — once their save confirms
+it's gone; a server shutdown never forfeits anything.
+
+**Fair play:** the server times every hold (too short or long-abandoned holds
+are refused) and refuses a claim if you reached your pad faster than you could
+have walked there — the egg goes home (or vanishes) instead.
 
 **Defending:** the **Lock** (60s, longer with the Lock Duration upgrade or the
 Extended Lock pass; 5-minute cooldown from activation) makes the doorway a
@@ -147,7 +154,8 @@ faster on their own camp. Everyone has a **Bat** (knockback + 1s stun, no
 damage, 1.5s stun immunity after).
 
 Dupe safety: the owner's slot stays (marked Away) until the claim, and the
-claim moves it to the thief in one step, saving the owner first.
+claim moves it to the thief in one step; the thief's saves are held until the
+owner's save has gone through.
 
 ---
 
@@ -228,7 +236,7 @@ which is exactly when thieves are out.
 
 ## 7. Rebirth
 
-- **Cost:** `$75,000 × 2.2^rebirths`. **Requires** a Rare-or-better cryptid
+- **Cost:** `$400,000 × 2.3^rebirths`. **Requires** a Rare-or-better cryptid
   at home. Refused while you're carrying a stolen egg or one of yours is out.
 - **Resets:** cash (you restart with **$1,500**), nests, upgrades.
 - **Keeps:** Codex, game passes, rebirth count, stats, purchase history,

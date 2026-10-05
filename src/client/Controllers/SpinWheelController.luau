@@ -214,6 +214,10 @@ end
 
 local function build()
 	local gui = Kit.Mount("SpinWheel")
+	-- The kit ships this screen at DisplayOrder 0, under the HUD and the
+	-- tutorial panel. Layer it like the other kit popups (the Daily screen's).
+	local dailyTemplate = ReplicatedStorage:WaitForChild("UIKit"):WaitForChild("StarterGui"):WaitForChild("DailyRewards") :: ScreenGui
+	gui.DisplayOrder = dailyTemplate.DisplayOrder
 	local container = gui:WaitForChild("Container") :: GuiObject
 	local content = Kit.Deep(container, "Content")
 	if not content then
@@ -242,7 +246,7 @@ local function build()
 	end
 
 	-- The kit's wheel screen has no close button: borrow the Daily screen's.
-	local closeTemplate = Kit.Deep(ReplicatedStorage:WaitForChild("UIKit"):WaitForChild("StarterGui"):WaitForChild("DailyRewards"), "CloseBtn")
+	local closeTemplate = Kit.Deep(dailyTemplate, "CloseBtn")
 	if closeTemplate then
 		local close = closeTemplate:Clone()
 		close.AnchorPoint = Vector2.new(1, 0)

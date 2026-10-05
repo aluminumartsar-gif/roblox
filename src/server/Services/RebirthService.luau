@@ -9,9 +9,9 @@
 	  * cash >= Config.GetRebirthCost(rebirths)
 	  * at least one creature of rarity index >= Config.RebirthMinRarityIndex
 	    (Rare+) sitting in a nest at home
-	  * not carrying a stolen item, and none of your own items out being
-	    stolen — wiping your nests mid-steal would make that item vanish for
-	    both players
+	  * not carrying anything (stolen egg, belt egg or captured cryptid), and
+	    none of your own eggs out being stolen — wiping your nests mid-steal
+	    would make that egg vanish for both players
 
 	Effect: resets exactly Config.Rebirth.Resets (Cash / Nests / Upgrades),
 	adds one rebirth. Everything else is kept. The bonuses themselves
@@ -45,14 +45,14 @@ function RebirthService.Check(player: Player): (boolean, string?)
 		return false, "Still loading your save..."
 	end
 	if StealService.IsCarrying(player) then
-		return false, "You can't rebirth while carrying a stolen item."
+		return false, "You can't rebirth while carrying something. Drop it off at your camp first."
 	end
 
 	local hasRarePlus = false
 	for _, slot in ipairs(data.Nests) do
 		if slot ~= false then
 			if slot.Away then
-				return false, "One of your cryptids is being stolen — get it back first."
+				return false, "One of your eggs is being stolen. Get it back first."
 			end
 			if slot.Kind == "Creature" and Config.GetRarityIndex(slot.Rarity) >= Config.RebirthMinRarityIndex then
 				hasRarePlus = true

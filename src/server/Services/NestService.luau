@@ -570,6 +570,37 @@ local function checkRescue()
 	end
 end
 
+-- Players already told (this visit) that selling frees nests.
+local sellHinted: { [Player]: boolean } = {}
+
+--- Every usable nest holds a cryptid and they could afford an egg: remind
+--- them (once per visit) that selling is how you make room.
+local function checkSellHint()
+	if not Config.Economy.SellHintEnabled or not Config.Sell.Enabled then
+		return
+	end
+	local cheapest = cheapestStarterEggPrice()
+	for _, plot in ipairs(PlotService.GetPlots()) do
+		local owner = plot.Owner
+		local data = owner and DataService.Get(owner)
+		if owner and data and not sellHinted[owner] and data.Cash >= cheapest then
+			local capacity = NestService.GetCapacity(owner)
+			local allCreatures = capacity > 0
+			for i = 1, capacity do
+				local slot = data.Nests[i]
+				if slot == false or slot.Kind ~= "Creature" then
+					allCreatures = false
+					break
+				end
+			end
+			if allCreatures then
+				sellHinted[owner] = true
+				Notifier.Send(owner, "Your nests are full! Hold Sell on your weakest cryptid to make room for a better egg.", "Info")
+			end
+		end
+	end
+end
+
 --------------------------------------------------------------------------
 -- Start
 --------------------------------------------------------------------------
@@ -603,21 +634,26 @@ function NestService.Start()
 		end
 	end)
 
-	if Config.Economy.RescueEnabled then
-		assert(Config.Eggs[Config.Economy.RescueEggId], "Config.Economy.RescueEggId is not an egg")
-		task.spawn(function()
-			while true do
-				task.wait(Config.Economy.RescueCheckInterval)
+	assert(Config.Eggs[Config.Economy.RescueEggId], "Config.Economy.RescueEggId is not an egg")
+	task.spawn(function()
+		while true do
+			task.wait(Config.Economy.RescueCheckInterval)
+			if Config.Economy.RescueEnabled then
 				local ok, err = pcall(checkRescue)
 				if not ok then
 					warn("[SAC/Nest] rescue check errored: " .. tostring(err))
 				end
 			end
-		end)
-		Players.PlayerRemoving:Connect(function(player)
-			lastRescue[player] = nil
-		end)
-	end
+			local ok, err = pcall(checkSellHint)
+			if not ok then
+				warn("[SAC/Nest] sell hint check errored: " .. tostring(err))
+			end
+		end
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		lastRescue[player] = nil
+		sellHinted[player] = nil
+	end)
 
 	-- Optional boot-time odds check (Config.Debug.RunOddsSimulationOnStart).
 	if Config.Debug.RunOddsSimulationOnStart then

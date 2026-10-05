@@ -60,6 +60,9 @@ export type Options = {
 	RetryCount: number?,
 	RetryBaseDelay: number?,
 	StaleAfter: number?,
+	-- Release saves only: how many tries, and the most seconds they may take.
+	SaveRetryCount: number?,
+	SaveRetryDeadline: number?,
 	Mock: boolean?,
 	-- Studio only: treat locks left by earlier Studio sessions as dead.
 	TakeOverStudioLocks: boolean?,
@@ -104,6 +107,8 @@ function SessionStore.new(options: Options)
 	self.RetryCount = options.RetryCount or 5
 	self.RetryBaseDelay = options.RetryBaseDelay or 1
 	self.StaleAfter = options.StaleAfter or 300
+	self.SaveRetryCount = options.SaveRetryCount or 4
+	self.SaveRetryDeadline = options.SaveRetryDeadline or 20
 	self.OwnerId = SERVER_OWNER_ID
 	self.TakeOverStudioLocks = options.TakeOverStudioLocks == true and RunService:IsStudio()
 
@@ -284,25 +289,49 @@ end
 ---
 --- Refuses to write if the lock has been taken by another server — that
 --- means our copy is stale and writing it would undo their work.
+---
+--- A release save is the last chance to write this session, so a failed
+--- UpdateAsync (5xx, full queue) is retried with backoff, up to
+--- SaveRetryCount tries within SaveRetryDeadline seconds. A lost lock is
+--- never retried. Autosaves try once: the next autosave is the retry.
 function SessionStore:SaveAsync(key: string, data: any, release: boolean?): (boolean, string?)
 	local lostLock = false
+	local ok: boolean, err: any = false, nil
+	local attempts = if release then math.max(1, self.SaveRetryCount) else 1
+	local deadline = os.clock() + self.SaveRetryDeadline
 
-	local ok, err = pcall(function()
-		self._backend:UpdateAsync(key, function(record)
-			lostLock = false -- may be called more than once; see LoadAsync
-			record = record or freshRecord()
+	for attempt = 1, attempts do
+		lostLock = false
+		ok, err = pcall(function()
+			self._backend:UpdateAsync(key, function(record)
+				lostLock = false -- may be called more than once; see LoadAsync
+				record = record or freshRecord()
 
-			if self:_lockIsForeign(record.Lock) then
-				lostLock = true
-				return nil -- another server owns this now; do not clobber
-			end
+				if self:_lockIsForeign(record.Lock) then
+					lostLock = true
+					return nil -- another server owns this now; do not clobber
+				end
 
-			record.Data = data
-			record.UpdatedAt = os.time()
-			record.Lock = if release then nil else self:_makeLock()
-			return record
+				record.Data = data
+				record.UpdatedAt = os.time()
+				record.Lock = if release then nil else self:_makeLock()
+				return record
+			end)
 		end)
-	end)
+		if ok or lostLock then
+			break
+		end
+		if attempt < attempts then
+			local baseDelay: number = self.RetryBaseDelay
+			local delay = baseDelay * (2 ^ (attempt - 1))
+			if os.clock() + delay > deadline then
+				break
+			end
+			warn(string.format("[SAC/SessionStore] Release save '%s' attempt %d/%d failed: %s — retrying in %ds",
+				key, attempt, attempts, tostring(err), delay))
+			task.wait(delay)
+		end
+	end
 
 	if release then
 		self._held[key] = nil

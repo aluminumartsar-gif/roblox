@@ -18,8 +18,9 @@
 	    (characters, Workspace.Runtime items, see-through and walk-through
 	    parts don't block).
 	  * Hatching a creature (NestService.Hatched) and claiming one
-	    (StealService.Claimed — stolen ones and captured sightings) log it
-	    too, silently if it's already known.
+	    (StealService.Claimed — captured sightings; only eggs can be
+	    stolen, and they log when they hatch) log it too, silently if it's
+	    already known.
 
 	Data: profile.Codex[creatureId] = true (ProfileTemplate; repair drops
 	unknown ids). The Codex is not in Config.Rebirth.Resets, so it survives

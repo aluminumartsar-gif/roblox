@@ -125,8 +125,9 @@ function ProfileTemplate.new(): ProfileData
 			JoinCount = 0,
 			FirstJoinAt = 0,  -- filled on first load
 			LastJoinAt = 0,
+			LastLeftAt = 0,   -- os.time() of the last voluntary leave (0 = unknown / server shut down)
 		},
-		SpawnLockUntil = 0,
+		SpawnLockUntil = 0,   -- os.time() spawn protection runs until (PlotService)
 		PendingEggs = {},
 		PendingInstantHatch = 0,
 		Retention = {
@@ -337,8 +338,17 @@ local function repair(data: ProfileData, context: string): { string }
 		fix(string.format("Trimmed purchase log from %d to %d entries", #purchaseList, ProfileTemplate.MaxRememberedPurchases))
 	end
 
-	if typeof(data.SpawnLockUntil) ~= "number" then
+	if typeof(data.SpawnLockUntil) ~= "number" or data.SpawnLockUntil ~= data.SpawnLockUntil then
 		data.SpawnLockUntil = 0
+	end
+	-- Protection can't run longer than the longest grant from now.
+	data.SpawnLockUntil = math.clamp(data.SpawnLockUntil, 0,
+		now + math.max(Config.Steal.NewPlayerSpawnLock, Config.Steal.ReturningPlayerSpawnLock))
+	if typeof(data.Stats) == "table" then
+		local leftAt = data.Stats.LastLeftAt
+		if typeof(leftAt) ~= "number" or leftAt ~= leftAt or leftAt < 0 or leftAt > now then
+			data.Stats.LastLeftAt = 0
+		end
 	end
 
 	-- Paid-for rewards waiting to be applied must stay valid.

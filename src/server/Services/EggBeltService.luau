@@ -156,7 +156,7 @@ function EggBeltService.Buy(player: Player, egg: BeltEgg, began: number?): Remot
 		return { Ok = false, Message = "You don't have a camp yet." }
 	end
 	if not NestService.FindEmptyNest(player) then
-		return { Ok = false, Message = "No empty nest! Hatch an egg or upgrade your nests first." }
+		return { Ok = false, Message = "No empty nest! Sell a cryptid (hold Sell on it) or upgrade your nests first." }
 	end
 	local eggCentre = BeltPath.EggCFrame(age).Position + Vector3.new(0, EGG_CENTRE_HEIGHT, 0)
 	if not RemoteGuard.IsWithinReach(player, eggCentre) then

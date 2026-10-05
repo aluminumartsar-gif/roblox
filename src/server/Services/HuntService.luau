@@ -73,6 +73,11 @@ local wanderPoint: Vector3? = nil
 local caughtCount = 0
 local victimCooldown: { [Player]: number } = {}
 local stunned: { [Player]: number } = {}
+-- Players she gave up on (couldn't get closer): not targeted until then.
+local giveUpUntil: { [Player]: number } = {}
+-- Progress toward the current target: best flat distance and when it improved.
+local bestDistToTarget = math.huge
+local bestDistAt = 0
 local nestModel: Model? = nil
 local forceStart = false
 local forceEnd = false
@@ -81,6 +86,12 @@ local function log(fmt: string, ...: any)
 	if Config.Debug.Verbose then
 		print(string.format("[SAC/Hunt] " .. fmt, ...))
 	end
+end
+
+--- Starts tracking progress toward a (new) target from scratch.
+local function resetProgress()
+	bestDistToTarget = math.huge
+	bestDistAt = os.clock()
 end
 
 local function serverNow(): number
@@ -139,7 +150,15 @@ local function forbidden(point: Vector3): boolean
 	if inCampfireLight(point, 2) then
 		return true
 	end
-	return flat(point - HUB_CENTRE).Magnitude > Config.Map.BoundaryRadius - 12
+	return flat(point - HUB_CENTRE).Magnitude > Config.Map.BoundaryRadius - h.BoundaryMargin
+end
+
+--- A player she can never reach: hugging the map edge, past where she
+--- can go (BoundaryMargin, minus ~2 studs lost to her look-ahead probe)
+--- plus her catch reach. She doesn't chase them.
+local function outOfReach(p: Vector3): boolean
+	local h = Config.Hunt
+	return flat(p - HUB_CENTRE).Magnitude > Config.Map.BoundaryRadius - h.BoundaryMargin - 2 + h.CatchRadius - 1
 end
 
 --- Is this player somewhere she won't follow?
@@ -326,7 +345,7 @@ local function reclaim(player: Player): string?
 		local def = Config.CreaturesById[slot.CreatureId]
 		label = if def then def.Name else "cryptid"
 	end
-	StealService.Reclaim(player, "brood mother")
+	StealService.Reclaim(player, Config.Hunt.ReclaimReason)
 	return label
 end
 
@@ -334,6 +353,7 @@ local function catch(player: Player)
 	victimCooldown[player] = os.clock() + Config.Hunt.VictimCooldown
 	if target == player then
 		target = nil
+		resetProgress()
 	end
 	local item = reclaim(player)
 	stun(player, position)
@@ -388,7 +408,7 @@ local function pickTarget(): Player?
 	local bestOtherDist = math.huge
 	for _, player in ipairs(Players:GetPlayers()) do
 		local root = eligible(player)
-		if root then
+		if root and not outOfReach(root.Position) and (giveUpUntil[player] or 0) <= os.clock() then
 			local dist = flat(root.Position - position).Magnitude
 			if StealService.IsCarrying(player) then
 				if dist <= h.SenseRadius and dist < bestCarrierDist then
@@ -416,9 +436,27 @@ local function step(dt: number, rng: Random)
 	local goal: Vector3
 	local chasing = false
 	local root = target and eligible(target)
+	if root and outOfReach(root.Position) then
+		root = nil -- hugging the map edge: she can't get there
+	end
 	if target and root then
 		goal = root.Position
 		chasing = StealService.IsCarrying(target)
+		-- Not getting any closer (boxed in, or they outrun her)? Give up on
+		-- them for a while and prowl instead of jittering in place.
+		local now = os.clock()
+		local dist = flat(goal - position).Magnitude
+		if dist < bestDistToTarget - h.GiveUpProgress then
+			bestDistToTarget = dist
+			bestDistAt = now
+		elseif now - bestDistAt > h.GiveUpTime then
+			log("gave up on %s", target.Name)
+			giveUpUntil[target] = now + h.VictimCooldown
+			target = nil
+			chasing = false
+			wanderPoint = randomProwlPoint(rng)
+			goal = wanderPoint :: Vector3
+		end
 	else
 		target = nil
 		if not wanderPoint or flat(wanderPoint - position).Magnitude < 8 then
@@ -484,7 +522,9 @@ local function runHunt(rng: Random)
 	local h = Config.Hunt
 	caughtCount = 0
 	victimCooldown = {}
+	giveUpUntil = {}
 	target = nil
+	resetProgress()
 	wanderPoint = nil
 	forceEnd = false
 	refreshGroundFilter()
@@ -527,6 +567,7 @@ local function runHunt(rng: Random)
 			local best = pickTarget()
 			if best ~= target then
 				target = best
+				resetProgress()
 				if best then
 					wanderPoint = nil
 				end
@@ -590,8 +631,11 @@ function HuntService.DebugState(): string
 		if target then target.Name else "none", caughtCount)
 end
 
+--- A sighting is running, or a captured wild cryptid is still out (carried
+--- home or lying dropped): its banner owns the screen until it's settled.
 local function sightingActive(): boolean
 	return #CollectionService:GetTagged(Config.Tags.WildCryptid) > 0
+		or StealService.CountSource("Sighting") > 0
 end
 
 function HuntService.Start()
@@ -610,6 +654,7 @@ function HuntService.Start()
 
 	Players.PlayerRemoving:Connect(function(player)
 		victimCooldown[player] = nil
+		giveUpUntil[player] = nil
 		stunned[player] = nil
 		if target == player then
 			target = nil
@@ -640,6 +685,15 @@ function HuntService.Start()
 						warn("[SAC/Hunt] hunt errored: " .. tostring(err))
 						removeNest()
 						setPhase("Idle")
+						target = nil
+						state:SetAttribute("TargetUserId", 0)
+						-- Clients restore their lights and fog only on "Ended".
+						local endedOk, endedErr = pcall(function()
+							eventRemote:FireAllClients("Ended", { Caught = caughtCount })
+						end)
+						if not endedOk then
+							warn("[SAC/Hunt] couldn't send Ended after error: " .. tostring(endedErr))
+						end
 					end
 					nextAt = os.clock() + rng:NextNumber(Config.Hunt.MinInterval, Config.Hunt.MaxInterval)
 				end

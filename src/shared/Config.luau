@@ -54,6 +54,9 @@ Config.Economy = {
 	RescueEggId = "forest",
 	RescueCheckInterval = 5,   -- seconds between checks
 	RescueCooldown = 180,      -- per player, seconds between free eggs
+	-- Selling is how you upgrade your nests. When every usable nest holds a
+	-- cryptid and you could afford an egg, you get one hint per visit.
+	SellHintEnabled = true,
 }
 
 -- =========================================================================
@@ -554,12 +557,24 @@ Config.Steal = {
 	-- Spawn protection: your camp can't be stolen from right after you join.
 	-- Starting a steal yourself ends it early.
 	NewPlayerSpawnLock = 300,         -- first ever join: 5 minutes
-	ReturningPlayerSpawnLock = 120,   -- every later join: 2 minutes
+	ReturningPlayerSpawnLock = 120,   -- a later join after ReturningLockMinAway offline: 2 minutes
+	-- A fresh ReturningPlayerSpawnLock only after this long offline; a quicker
+	-- rejoin just resumes whatever protection was left (saved in the profile
+	-- as SpawnLockUntil), so rejoining can't keep a camp unstealable.
+	ReturningLockMinAway = 600,
 	-- Hold time to pick up a dropped item (anyone, including the owner).
 	PickupHold = 1,
-	-- The server rejects a steal/pickup whose hold was shorter than the
-	-- prompt's HoldDuration minus this (stops instant-steal exploits).
+	-- The server rejects a steal/pickup/capture whose hold was shorter than
+	-- the prompt's HoldDuration minus this (stops instant-steal exploits).
 	HoldTolerance = 0.35,
+	-- ...or whose Triggered came more than this long after the hold should
+	-- have finished (an abandoned hold can't be cashed in later).
+	HoldMaxOverrun = 1.5,
+	-- Teleport check on claims: reaching your pad must take at least
+	-- (flat distance from where the carry started) / (fastest legal carry
+	-- speed * CarryTravelSlack) - CarryTravelGrace seconds.
+	CarryTravelSlack = 1.5,
+	CarryTravelGrace = 1,
 	-- Carried item sits this far above the thief's HumanoidRootPart, and is
 	-- shrunk to fit within MaxCarrySize studs so huge cryptids stay sane.
 	CarryOffset = Vector3.new(0, 3.5, 0),
@@ -569,6 +584,7 @@ Config.Steal = {
 	PayOwnerVaultOnSteal = true,
 	-- If the owner leaves while their item is being carried, it's forfeited
 	-- (the thief can still claim it). Stops rage-quitting to save an item.
+	-- Never on a server shutdown: then the item stays in the owner's nest.
 	OwnerLeavingForfeits = true,
 }
 
@@ -851,9 +867,9 @@ local playtimeGifts: { RetentionReward } = {
 	{ Minutes = 2,  Items = { { Kind = "Cash", Base = 200, Minutes = 1 } } },
 	{ Minutes = 5,  Items = { { Kind = "Cash", Base = 500, Minutes = 2 } } },
 	{ Minutes = 10, Items = { { Kind = "Egg", EggId = "swamp", Count = 1 } } },
-	{ Minutes = 15, Items = { { Kind = "Cash", Base = 1500, Minutes = 5 } } },
+	{ Minutes = 15, Items = { { Kind = "Cash", Base = 1500, Minutes = 2 } } },
 	{ Minutes = 25, Items = { { Kind = "Buff", Buff = "HatchSpeed", Duration = 600 } } },
-	{ Minutes = 40, Items = { { Kind = "Cash", Base = 5000, Minutes = 10 } } },
+	{ Minutes = 40, Items = { { Kind = "Cash", Base = 5000, Minutes = 4 } } },
 	{ Minutes = 60, Items = { { Kind = "Egg", EggId = "mountain", Count = 1 }, { Kind = "Buff", Buff = "Luck", Duration = 900 } } },
 }
 
@@ -939,7 +955,7 @@ Config.Leaderboards = {
 	Boards = {
 		Cash = { Title = "TOP EARNERS", Subtitle = "All-time cash earned", Store = "LB_TotalCash", Prefix = "$" },
 		Rebirths = { Title = "MOST REBIRTHS", Subtitle = "Fresh starts taken", Store = "LB_Rebirths", Prefix = "" },
-		Steals = { Title = "MASTER THIEVES", Subtitle = "Cryptids stolen", Store = "LB_Steals", Prefix = "" },
+		Steals = { Title = "MASTER THIEVES", Subtitle = "Eggs stolen", Store = "LB_Steals", Prefix = "" },
 	},
 	TopCount = 10,
 	-- Each online player's scores are written once per UpdateInterval
@@ -1176,7 +1192,7 @@ Config.Art = {
 	Creatures = {
 		jackalope = { Mesh = "rbxassetid://131681255958586", Texture = "rbxassetid://79054338605187", Height = 3, Yaw = 0 },
 		hodag = { Mesh = "rbxassetid://112139235538943", Texture = "rbxassetid://111351156320288", Height = 3, Yaw = 0 },
-		drop_bear = { Mesh = "rbxassetid://78702348110149", Texture = "rbxassetid://102984468658933", Height = 3, Yaw = 0 },
+		drop_bear = { Mesh = "rbxassetid://103810274470439", Texture = "rbxassetid://107743726194616", Height = 3, Yaw = 0 },
 		snallygaster = { Mesh = "rbxassetid://94810624728859", Texture = "rbxassetid://140476442674641", Height = 3, Yaw = 0 },
 		gremlin = { Mesh = "rbxassetid://122939913645135", Texture = "rbxassetid://103548199248869", Height = 3, Yaw = 0 },
 		wolpertinger = { Mesh = "rbxassetid://135528267883620", Texture = "rbxassetid://93241747302662", Height = 3, Yaw = 0 },
@@ -1200,11 +1216,38 @@ Config.Art = {
 		kraken = { Mesh = "rbxassetid://72768183058923", Texture = "rbxassetid://137691239141461", Height = 6.2, Yaw = 0 },
 		ningen = { Mesh = "rbxassetid://117659548202346", Texture = "rbxassetid://83752095862825", Height = 6.2, Yaw = 0 },
 		mokele_mbembe = { Mesh = "rbxassetid://120339522011118", Texture = "rbxassetid://84784757685916", Height = 6.2, Yaw = 0 },
+		the_static = { Mesh = "rbxassetid://95556272454043", Texture = "rbxassetid://78106021129534", Height = 6.4, Yaw = 0 },
+		the_signal = { Mesh = "rbxassetid://103819770144469", Texture = "rbxassetid://91451924433938", Height = 6.4, Yaw = 0 },
+		the_hollow = { Mesh = "rbxassetid://88078350984363", Texture = "rbxassetid://125532570798335", Height = 6.4, Yaw = 0 },
+		redacted = { Mesh = "rbxassetid://120127131863803", Texture = "rbxassetid://108522663384059", Height = 6.4, Yaw = 0 },
 	},
-	Eggs = {},
+	Eggs = {
+		forest = { Mesh = "rbxassetid://128755161420008", Texture = "rbxassetid://113316397783775", Height = 3.4, Yaw = 0 },
+		swamp = { Mesh = "rbxassetid://109419354523171", Texture = "rbxassetid://118733378237954", Height = 3.4, Yaw = 0 },
+		mountain = { Mesh = "rbxassetid://120477806906855", Texture = "rbxassetid://85325511736961", Height = 3.4, Yaw = 0 },
+		deepsea = { Mesh = "rbxassetid://80467682038434", Texture = "rbxassetid://134360886378072", Height = 3.4, Yaw = 0 },
+		sky = { Mesh = "rbxassetid://128991196430590", Texture = "rbxassetid://80597578119558", Height = 3.4, Yaw = 0 },
+		void = { Mesh = "rbxassetid://107844197297365", Texture = "rbxassetid://92962855209984", Height = 3.4, Yaw = 0 },
+	},
 	Props = {
 		BroodMother = { Mesh = "rbxassetid://82525672471592", Texture = "rbxassetid://92308619353136", Height = 16, Yaw = 0 },
 		BroodNest = { Mesh = "rbxassetid://92051071995688", Texture = "rbxassetid://136342658450558", Height = 4, Yaw = 0 },
+		PineTree = { Mesh = "rbxassetid://120978045480952", Texture = "rbxassetid://99906053858043", Height = 26, Yaw = 0 },
+		RoundTree = { Mesh = "rbxassetid://137352084557648", Texture = "rbxassetid://73858969692287", Height = 18, Yaw = 0 },
+		Bush = { Mesh = "rbxassetid://113515846658272", Texture = "rbxassetid://82770608079115", Height = 3, Yaw = 0 },
+		Rock = { Mesh = "rbxassetid://104204045661071", Texture = "rbxassetid://134156184554572", Height = 3, Yaw = 0 },
+		Boulder = { Mesh = "rbxassetid://122868846112775", Texture = "rbxassetid://138895984433120", Height = 6, Yaw = 0 },
+		Stump = { Mesh = "rbxassetid://77014346713469", Texture = "rbxassetid://93505119968562", Height = 2, Yaw = 0 },
+		FallenLog = { Mesh = "rbxassetid://119148576956714", Texture = "rbxassetid://75875174676139", Height = 2.4, Yaw = 0 },
+		Mushroom = { Mesh = "rbxassetid://121976905947599", Texture = "rbxassetid://103288479519348", Height = 2.5, Yaw = 0 },
+		Tent = { Mesh = "rbxassetid://113005939175837", Texture = "rbxassetid://121224824088418", Height = 7, Yaw = 0 },
+		Campfire = { Mesh = "rbxassetid://134781419754335", Texture = "rbxassetid://101049878330451", Height = 2.5, Yaw = 0 },
+		Lantern = { Mesh = "rbxassetid://136230819142612", Texture = "rbxassetid://76117696975394", Height = 6, Yaw = 0 },
+		LogBench = { Mesh = "rbxassetid://101656690216689", Texture = "rbxassetid://120458372602051", Height = 2.5, Yaw = 0 },
+		Crate = { Mesh = "rbxassetid://126832556889214", Texture = "rbxassetid://137093063646573", Height = 3, Yaw = 0 },
+		Nest = { Mesh = "rbxassetid://84706038882341", Texture = "rbxassetid://97704595335257", Height = 1.6, Yaw = 0 },
+		Totem = { Mesh = "rbxassetid://90477829662382", Texture = "rbxassetid://98173743902039", Height = 14, Yaw = 0 },
+		Signpost = { Mesh = "rbxassetid://105253205156519", Texture = "rbxassetid://133934530233307", Height = 7, Yaw = 0 },
 	},
 	-- Every creature mesh is drawn this much bigger than its Height above
 	-- (one knob to make the cryptids loom over their nests).
@@ -1249,10 +1292,22 @@ Config.Hunt = {
 	CatchRadius = 6,
 	VictimCooldown = 25,       -- seconds before she goes after the same player again
 	RetargetInterval = 0.5,
+	-- Gives up on a target she hasn't got GiveUpProgress studs closer to in
+	-- GiveUpTime seconds (stuck against a camp, the fire or the map edge).
+	GiveUpTime = 3,
+	GiveUpProgress = 2,
 
 	-- Where she can't go
 	SafeInCamps = true,        -- never enters a camp (any camp)
 	CampfireSafeRadius = 70,   -- never enters this far from the hub centre (the fire keeps her back)
+	BoundaryMargin = 12,       -- stays this far inside Config.Map.BoundaryRadius
+
+	-- The reason StealService.Reclaim gets when she takes something back
+	-- (SightingService reads it to word a captured cryptid's loss).
+	ReclaimReason = "brood mother",
+	-- Her jumpscare screen sits above every other UI (toasts 10, StealUI 8,
+	-- Codex celebration 15, feedback fx 30/31).
+	JumpscareDisplayOrder = 40,
 
 	-- Getting caught
 	StunDuration = 2.5,
@@ -1276,8 +1331,10 @@ Config.Hunt = {
 -- =========================================================================
 
 Config.Rebirth = {
-	BaseCost = 75000,
-	CostGrowth = 2.2,           -- cost = BaseCost * Growth ^ rebirths
+	-- Rebirths cost $400K, $920K, $2.12M, $4.87M... (docs/ECONOMY.md: first
+	-- rebirth ~30 min into a real first session, then growing climbs).
+	BaseCost = 400000,
+	CostGrowth = 2.3,           -- cost = BaseCost * Growth ^ rebirths
 	-- Cash you start with after a rebirth (instead of $0), so the climb back
 	-- starts at once. Set directly, not counted as earned.
 	StartingCash = 1500,
@@ -1462,6 +1519,17 @@ Config.Data = {
 	-- SessionStore); it can only cost progress since the last save.
 	SessionLockStaleAfter = 300,
 	BindToCloseTimeout = 25,
+	-- The final (release) save is retried this many times, backing off from
+	-- LoadRetryBaseDelay and doubling, but never past ReleaseSaveDeadline
+	-- seconds in all (it must finish inside BindToCloseTimeout).
+	ReleaseSaveRetryCount = 4,
+	ReleaseSaveDeadline = 20,
+	-- After a steal claim the thief's saves are held until the owner's loss
+	-- is on disk (dupe safety). A hold is ignored after this many seconds.
+	SaveHoldTimeout = 30,
+	-- A steal claim retries the owner's save this many times (2, 4, 8s apart)
+	-- before letting the thief's save through anyway.
+	ClaimOwnerSaveRetries = 3,
 }
 
 -- =========================================================================

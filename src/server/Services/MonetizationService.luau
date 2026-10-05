@@ -7,8 +7,10 @@
 
 	Game passes
 	  * Ownership is checked with MarketplaceService on join and cached for
-	    the session; a purchase mid-session (PromptGamePassPurchaseFinished)
-	    updates the cache at once. BoostService asks here via its pass
+	    the session. A purchase mid-session (PromptGamePassPurchaseFinished)
+	    is only a hint: it is verified with UserOwnsGamePassAsync (a few
+	    retries) before the cache is updated, because exploit clients can
+	    fake that event. BoostService asks here via its pass
 	    checker, so every pass effect (2x cash, +4 nests, auto collect, VIP
 	    luck/glow, extended lock) works without other services knowing about
 	    MarketplaceService.
@@ -67,6 +69,11 @@ MonetizationService.ProductGranted = Signal.new()
 local ownedPasses: { [Player]: { [string]: boolean } } = {}
 local passKeyById: { [number]: string } = {}
 local productKeyById: { [number]: string } = {}
+
+-- Verifying a mid-session pass purchase (not designer-tunable: plumbing for
+-- the UserOwnsGamePassAsync re-check). Waits attempt * BACKOFF seconds.
+local PASS_VERIFY_ATTEMPTS = 3
+local PASS_VERIFY_BACKOFF = 1
 
 local function log(fmt: string, ...: any)
 	print(string.format("[SAC/Robux] " .. fmt, ...))
@@ -415,13 +422,35 @@ function MonetizationService.Start()
 	BoostService.SetPassChecker(MonetizationService.OwnsPass)
 	MarketplaceService.ProcessReceipt = processReceipt
 
+	-- Exploit clients can make this event fire with purchased = true without
+	-- buying anything, so `purchased` is only a hint: ownership is confirmed
+	-- with UserOwnsGamePassAsync before the cache is touched.
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, passId: number, purchased: boolean)
 		local key = passKeyById[passId]
-		if purchased and key then
-			setPassOwned(player, key, true)
-			Notifier.Send(player, "Thanks! " .. Config.GamePasses[key].DisplayName .. " is yours.", "Success")
-			log("%s bought pass %s", player.Name, key)
+		if not (purchased and key) then
+			return
 		end
+		task.spawn(function()
+			for attempt = 1, PASS_VERIFY_ATTEMPTS do
+				local ok, owns = pcall(function()
+					return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)
+				end)
+				if not player.Parent then
+					return
+				end
+				if ok and owns then
+					setPassOwned(player, key, true)
+					Notifier.Send(player, "Thanks! " .. Config.GamePasses[key].DisplayName .. " is yours.", "Success")
+					log("%s bought pass %s", player.Name, key)
+					return
+				elseif not ok then
+					warn(string.format("[SAC/Robux] Couldn't verify %s for %s: %s", key, player.Name, tostring(owns)))
+				end
+				-- Short backoff; a real purchase updates the server's ownership cache.
+				task.wait(attempt * PASS_VERIFY_BACKOFF)
+			end
+			log("%s: PromptGamePassPurchaseFinished for %s not confirmed by UserOwnsGamePassAsync", player.Name, key)
+		end)
 	end)
 
 	RemoteGuard.BindFunction("PromptPurchase", function(player: Player, kind: any, key: any): RemoteGuard.Result

@@ -49,6 +49,19 @@ local function counterCFrame(shopId: string): CFrame?
 	return nil
 end
 
+-- State that forbids travel. Checked before AND after the streaming yield:
+-- a prompt Triggered (steal, belt buy, sighting capture) can land while
+-- RequestStreamAroundAsync waits, and must not ride the teleport home.
+local function stateBlock(player: Player): string?
+	if StealService.IsCarrying(player) then
+		return "You can't fast travel while carrying something — run!"
+	end
+	if BatService.IsStunned(player) then
+		return "You're stunned!"
+	end
+	return nil
+end
+
 function TravelService.Travel(player: Player, destination: any): RemoteGuard.Result
 	if not Config.Travel.Enabled then
 		return { Ok = false, Message = "Fast travel is off." }
@@ -56,11 +69,9 @@ function TravelService.Travel(player: Player, destination: any): RemoteGuard.Res
 	if destination ~= "Home" and destination ~= "EggBelt" and not SHOP_IDS[destination] then
 		return { Ok = false, Message = "Unknown destination." }
 	end
-	if StealService.IsCarrying(player) then
-		return { Ok = false, Message = "You can't fast travel while carrying something — run!" }
-	end
-	if BatService.IsStunned(player) then
-		return { Ok = false, Message = "You're stunned!" }
+	local blockedBefore = stateBlock(player)
+	if blockedBefore then
+		return { Ok = false, Message = blockedBefore }
 	end
 	local wait = RemoteGuard.Cooldowns.Remaining(player, "Travel")
 	if wait > 0 then
@@ -88,9 +99,14 @@ function TravelService.Travel(player: Player, destination: any): RemoteGuard.Res
 	pcall(function()
 		player:RequestStreamAroundAsync(target.Position, 3)
 	end)
-	if player.Character == character and character.Parent then
-		character:PivotTo(target)
+	-- Re-check after the yield: the player may have picked something up
+	-- (or been stunned, or respawned) while the destination streamed in.
+	local blocked = stateBlock(player)
+	if blocked or player.Character ~= character or not character.Parent then
+		RemoteGuard.Cooldowns.Start(player, "Travel", 0) -- refund the cooldown
+		return { Ok = false, Message = blocked or "Respawning..." }
 	end
+	character:PivotTo(target)
 	return { Ok = true }
 end
 

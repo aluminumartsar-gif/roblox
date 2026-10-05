@@ -12,7 +12,8 @@
 	  playing -> other services mutate through the API below; every change
 	             is pushed to the client (coalesced to once per frame)
 	  every Config.Data.AutosaveInterval seconds -> save, keep the lock
-	  leave   -> run BeforeRelease hooks, save, release the lock
+	  leave   -> run BeforeRelease hooks, save (retried) and release the
+	             lock, then run AfterRelease hooks with whether it saved
 	  shutdown (BindToClose) -> release everyone in parallel
 
 	Failure policy: if a profile cannot be loaded safely, the player is
@@ -45,6 +46,8 @@ type Session = {
 	PushPending: boolean,
 	Releasing: boolean,
 	Leaderstats: Folder?,
+	SaveHolds: number,          -- > 0: autosave / SaveNow wait (see HoldSaves)
+	SaveHoldSince: number,      -- os.clock() the current hold began
 }
 
 local DataService = {}
@@ -57,6 +60,7 @@ DataService.CashChanged = Signal.new()
 local sessions: { [Player]: Session } = {}
 local loading: { [Player]: boolean } = {}
 local beforeReleaseHooks: { (Player, ProfileData) -> () } = {}
+local afterReleaseHooks: { (Player, boolean) -> () } = {}
 
 local store: any = nil
 local profileUpdatedRemote: RemoteEvent? = nil
@@ -191,11 +195,21 @@ local function saveSession(session: Session, release: boolean): boolean
 	return ok
 end
 
+--- True while a save hold (HoldSaves) is in force and not timed out.
+local function savesHeld(session: Session): boolean
+	return session.SaveHolds > 0 and os.clock() - session.SaveHoldSince < Config.Data.SaveHoldTimeout
+end
+
 local function releaseSession(session: Session)
 	if session.Releasing then
 		return
 	end
 	session.Releasing = true
+
+	-- When they left (os.time()); PlotService uses it so a quick rejoin
+	-- doesn't hand out fresh spawn protection. A server shutdown isn't
+	-- their choice, so it doesn't count (0 = fresh protection next join).
+	session.Data.Stats.LastLeftAt = if shuttingDown then 0 else os.time()
 
 	-- Give other services a last chance to write into the profile
 	-- (e.g. return a carried item). Synchronous, in registration order.
@@ -206,6 +220,9 @@ local function releaseSession(session: Session)
 		end
 	end
 
+	-- The final save always goes through, even under a save hold: leaving
+	-- is the last chance to write, and a missed thief save can only lose an
+	-- item, never duplicate it.
 	local ok = saveSession(session, true)
 	if ok then
 		log("Released %s (cash=%d, playtime=%ds)", session.Player.Name, session.Data.Cash, session.Data.Stats.Playtime)
@@ -215,6 +232,13 @@ local function releaseSession(session: Session)
 
 	if sessions[session.Player] == session then
 		sessions[session.Player] = nil
+	end
+
+	for _, hook in ipairs(afterReleaseHooks) do
+		local hookOk, err = pcall(hook, session.Player, ok)
+		if not hookOk then
+			warnf("AfterRelease hook errored for %s: %s", session.Player.Name, tostring(err))
+		end
 	end
 end
 
@@ -296,6 +320,8 @@ local function onPlayerAdded(player: Player)
 		PushPending = false,
 		Releasing = false,
 		Leaderstats = nil,
+		SaveHolds = 0,
+		SaveHoldSince = 0,
 	}
 	sessions[player] = session
 	loading[player] = nil
@@ -344,7 +370,8 @@ local function autosaveLoop()
 			if shuttingDown then
 				break
 			end
-			if sessions[session.Player] == session and not session.Releasing then
+			-- A held session (mid steal-claim) waits for the next round.
+			if sessions[session.Player] == session and not session.Releasing and not savesHeld(session) then
 				if saveSession(session, false) then
 					saved += 1
 				end
@@ -503,18 +530,61 @@ end
 
 --- Saves immediately (yields). Use after something the player would be
 --- furious to lose, such as a Robux purchase.
+--- While the player's saves are held (HoldSaves), this waits for the hold
+--- to end (or time out) first.
 function DataService.SaveNow(player: Player): boolean
 	local session = sessions[player]
 	if not session or session.Releasing then
 		return false
 	end
+	while savesHeld(session) do
+		task.wait(0.25)
+		if sessions[player] ~= session or session.Releasing then
+			return false
+		end
+	end
 	return saveSession(session, false)
+end
+
+--- Holds back autosaves and SaveNow for `player` until ReleaseSaves (or
+--- Config.Data.SaveHoldTimeout). Used by steal claims so the thief's gain
+--- can't reach the DataStore before the owner's loss. The final save on
+--- leaving is never held. Holds nest: call ReleaseSaves once per HoldSaves.
+function DataService.HoldSaves(player: Player)
+	local session = sessions[player]
+	if not session then
+		return
+	end
+	if session.SaveHolds <= 0 then
+		session.SaveHoldSince = os.clock()
+	end
+	session.SaveHolds += 1
+end
+
+function DataService.ReleaseSaves(player: Player)
+	local session = sessions[player]
+	if session and session.SaveHolds > 0 then
+		session.SaveHolds -= 1
+	end
+end
+
+--- True once the server has started shutting down (BindToClose). Release
+--- hooks use it to tell a shutdown apart from a player choosing to leave.
+function DataService.IsShuttingDown(): boolean
+	return shuttingDown
 end
 
 --- Registers a hook that runs synchronously just before a profile is
 --- saved for the last time. Use it to write back transient state.
 function DataService.OnBeforeRelease(hook: (Player, ProfileData) -> ())
 	table.insert(beforeReleaseHooks, hook)
+end
+
+--- Registers a hook run as (player, saved) right after the final save:
+--- `saved` is false if that write failed for good (the stored profile is
+--- whatever was last saved before).
+function DataService.OnAfterRelease(hook: (Player, boolean) -> ())
+	table.insert(afterReleaseHooks, hook)
 end
 
 --- True if saves really persist (false = in-memory fallback).
@@ -539,6 +609,8 @@ function DataService.Start()
 		RetryCount = Config.Data.LoadRetryCount,
 		RetryBaseDelay = Config.Data.LoadRetryBaseDelay,
 		StaleAfter = Config.Data.SessionLockStaleAfter,
+		SaveRetryCount = Config.Data.ReleaseSaveRetryCount,
+		SaveRetryDeadline = Config.Data.ReleaseSaveDeadline,
 		-- Studio play tests are often stopped mid-load; don't lock the
 		-- developer out of their own save for minutes afterwards.
 		TakeOverStudioLocks = true,

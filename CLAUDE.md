@@ -124,7 +124,13 @@ LocalScript, plain `.luau` = ModuleScript.
   - `SaveNow(player)` — after anything the player would be furious to lose
     (Robux purchases).
   - `OnBeforeRelease(hook)` — write transient state (e.g. a carried item) back
-    into the profile before the final save.
+    into the profile before the final save. `IsShuttingDown()` tells a
+    server shutdown apart from a player choosing to leave.
+  - `OnAfterRelease(hook)` — `(player, saved)` after the final save (which
+    is retried); `saved == false` means the stored profile is the last
+    earlier save.
+  - `HoldSaves(player)` / `ReleaseSaves(player)` — keep autosave and
+    SaveNow back for a moment (steal claims; see Gotchas).
   - `ProfileLoaded` signal — start per-player systems here, not on
     `PlayerAdded` (the profile isn't there yet).
 - **Adding** a profile field: add it to `ProfileTemplate.new()`. Reconcile fills
@@ -287,14 +293,23 @@ debug-spawned items in it (snapshot before, restore after).
   as "they let go" — defer that decision (StealService waits 0.2s and checks
   whether Triggered consumed the hold).
 - **Server-side hold timing:** record the time on `PromptButtonHoldBegan`
-  and require `Triggered` to come at least HoldDuration − tolerance later.
-  Clear abandoned holds so an old one can't be reused.
+  and require `Triggered` to come at least HoldDuration − tolerance later,
+  and no more than HoldDuration + `Config.Steal.HoldMaxOverrun` later.
+  Expire abandoned holds on the server too (a `task.delay`) — never rely
+  on the client sending HoldEnded.
 - **Luau local functions can't be called above their definition** — the
   name is nil there. Forward-declare (`local publish: (T) -> ()`) and assign
   later with `function publish(...)`.
 - **Stealing is dupe-safe only because** the owner's slot stays (marked
   Away) until the claim, and the claim removes it from the owner and adds it
-  to the thief in one synchronous step, then saves the owner first.
+  to the thief in one synchronous step, then saves the owner first — and
+  `DataService.HoldSaves(thief)` keeps the thief's autosave/SaveNow back
+  until that owner save succeeds (or its retries run out). A leaving
+  owner's forfeit only becomes claimable once their final save succeeds
+  (`DataService.OnAfterRelease`); a shutdown never forfeits.
+- **The client owns its character's position.** Every reach check reads
+  a position the client can teleport; claims also check travel time from
+  where the carry started (`Config.Steal.CarryTravelSlack`).
 
 - **Edit-mode tool code caches modules.** Code run in the Edit datamodel
   (MCP or command bar) keeps every module it has required, so after Config

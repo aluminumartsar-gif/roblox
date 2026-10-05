@@ -1,376 +1,348 @@
-# ECONOMY.md — progression check (Step 8)
+# ECONOMY.md — progression check (auto-hatch design)
 
-*Written for the owner and the lead. Plain-English summary first, then the
-numbers, then exactly what to change.*
+*Written for the owner and the lead. The plain-English summary comes first,
+then the numbers, then exactly what to change. Re-run on 2026-10-05 for the
+current design: no heat, eggs hatch by themselves, fixed odds per egg, only
+eggs can be stolen, Sell, the Hunt, Sightings, Codex and the retention
+rewards. The previous check was for the old heat design, which is gone.*
 
 ## The short version
 
-The current numbers give a great **first 30 seconds** (the tutorial gets a
-cryptid hatched almost straight away) and a reasonable **first rebirth
-(~28 min)**. Everything around those two moments has problems:
+The new design fixed the old problems. Nobody gets stuck any more, there's
+something new to do every few minutes, and the first upgrade comes inside 3
+minutes. **The one problem is the opposite of last time: the game is now too
+fast.**
 
-1. **Players get stuck with full nests.** There is no way to remove a
-   cryptid. After about 13 minutes all 6 nests hold creatures and the only
-   ways forward are a $5,000 nest upgrade or rebirth. Income then sits flat
-   at about $20–30/s for the whole first hour, and **9% of players never
-   hatch a Rare** (needed to rebirth) in 4 hours of play — they are stuck
-   for good.
-2. **The first upgrade comes at ~11 minutes** (good games: under 3), and in
-   the first hour a player goes **~17 minutes without a single new goal**.
-3. **Rebirth wipes you to $0 and empty nests.** Income crashes and takes a
-   long time to come back, so rebirths 2 and 3 are slow (85 and 155 min) and
-   a third of players never reach rebirth 3 in 4 hours.
-4. **The egg ladder is too steep.** Each egg costs 10x the last but is only
-   ~1.5–2x better, so Deep Sea arrives at ~85 min and Sky (1M) basically
-   never in a 4-hour session.
+- **Rebirth 1 comes at ~16 minutes** (target 30–60), and at **~14 minutes**
+  for a real new player who also gets the daily reward, the free spin and the
+  playtime gifts. Rebirths 2 and 3 follow at about 36 and 61 minutes. Income
+  goes from $150/s at 10 minutes to $3,000/s at 4 hours.
+- The reason is that **every egg is a lottery ticket with the jackpot
+  included.** A $100 Forest egg has a 0.5% Mythic ($1,200/s) and a 0.1%
+  Secret ($6,000/s) chance. With Sell, a player opens ~280 eggs in 4 hours, so
+  the jackpots keep landing, and each one pays for a rebirth in minutes.
+- **Selling is what keeps the game moving.** A simulated player who never
+  sells stalls at ~$70/s, and 8–32% of them never rebirth. The game mentions
+  Sell only in the last tutorial card and in the belt's "No empty nest" message.
 
-The fix is two small features (the lead/owner must OK them) plus cheaper
-numbers:
+**Proposed fix (Config only, no code):**
 
-- **Release a cryptid** (new): hold a prompt on your own cryptid to let it go
-  back to the woods, freeing its nest, for its vault plus 60 seconds of its
-  income. This is the single biggest improvement.
-- **Rebirth starting cash** (new): after a rebirth you start with $1,500,
-  not $0.
-- **Cheaper early upgrades**, a **flatter egg price ladder**, rebirth base
-  cost **$75K**, and starting cash **$500** (already changed — it's in my
-  Config section).
+| Change | From | To |
+|---|---:|---:|
+| `Config.Rebirth.BaseCost` | 75,000 | **400,000** |
+| `Config.Rebirth.CostGrowth` | 2.2 | **2.3** |
+| 15-minute playtime gift: `Minutes` on its Cash item | 5 | **2** |
+| 40-minute playtime gift: `Minutes` on its Cash item | 10 | **4** |
 
-With all of that, a typical player gets: first cryptid 30 s, first upgrade
-~4 min (25% of players under 2 min), 6 cryptids ~7 min, first Rare ~4 min,
-Mountain eggs ~8 min, Deep Sea ~25 min, **rebirth 1 at ~34 min**, rebirth 2
-~79 min, rebirth 3 ~129 min, and income keeps climbing (~$90/s at 1 h,
-~$630/s at 4 h) instead of flat-lining.
+With these changes: **rebirth 1 at ~34 min** (~30 min with all first-session
+rewards), rebirth 2 ~77 min, rebirth 3 ~139 min, Void eggs ~3.2 h. First
+upgrade is still 2.5 min, nobody stalls, and the longest wait between goals
+in hour 1 is ~8 min (that's the save-up for the rebirth itself).
+
+Nothing else needs to change. Egg prices, hatch times, upgrade costs,
+Sell.RefundSeconds, belt weights and starting cash were all tested and are
+fine as they are (see "Levers that don't matter much").
 
 ---
 
 ## How the simulation works
 
-A deterministic Monte-Carlo model (200 players with fixed random seeds, so
-every run gives the same answer) of one typical player over 4 hours of play,
-using the real Config tables and the real `Config.GetRarityChances` for
-every hatch. It ran in Studio's Edit datamodel against an **unparented clone
-of Config** (nothing was added to the place). The economy tables in Studio's
-copy were checked value-by-value against the repo before running
-(prices, weights, incomes, upgrades, rebirth, belt, heat, luck — identical;
-only `Config.Economy` was missing from Studio's older copy, so the sim
-supplied the repo's starting cash).
+A Monte-Carlo model of one typical player over 4 hours: 200 players with
+fixed seeds, so every run gives the same answer. It uses the real Config
+tables, the real `Config.GetRarityChances(egg, luck)` for every hatch and
+`Config.GetRebirthCost` / `GetUpgradeValue` / `GetUpgradeNextCost`. It ran in
+Studio's Edit datamodel against an **unparented clone of Config**, so nothing
+was added to the place. At the time, Studio's Config was the same size as the
+repo's (91,927 bytes), and the egg, sell, rebirth and economy values were
+spot-checked against it. The source is in the appendix.
 
-What the simulated player does:
+What the simulated player does, second by second:
 
-- **Belt:** one egg every `Config.Belt.SpawnInterval` (2 s), picked by
-  `Config.Belt.EggWeights`. They wait for the best tier they can afford
-  (spreading cash over up to 2 free nests), accept one tier lower, and take
-  anything affordable after 40 s. **They win a wanted egg 50% of the time**
-  (other players, missed taps).
-- **Travel:** HUD Eggs fast travel (3 s, respecting the 8 s cooldown) to the
-  belt; carrying home is walked: 196 studs from the arch to the pad at
-  walk speed × `Belt.CarrySpeedMultiplier`.
-- **Heat:** the first egg is hatched immediately (the tutorial says so). The
-  "realistic" player then hatches the next 5 at 25% heat (impatient new
-  player) and everything after at **70%**. Variants at 25% / 70% / 100%
-  below.
-- **Income & vaults:** income by rarity × (1 + 0.25 × rebirths); vault cap =
-  max(Vault Size, 10 min of income). They collect every 90 s while home.
-- **Upgrades:** cheapest available first, as soon as they can afford it and
-  still keep $100 per empty nest for eggs; they stop buying upgrades once
-  they own a Rare+ and have half the rebirth cost saved.
-- **Rebirth:** as soon as they can afford it and own a Rare+ creature.
-  Resets cash, nests and upgrades, exactly like `Config.Rebirth.Resets`.
-- **Rescue egg:** modelled as built (free Forest egg when you have nothing).
-- **Not modelled:** stealing (assumed to balance out), Robux, sightings,
-  codex luck, daily/spin/gift/offline rewards (these only speed things up).
+- **Start:** `Config.Economy.StartingCash` ($500). If they have no eggs, no
+  cryptids and less than $100, they get the rescue egg (Forest, 180 s
+  cooldown), as NestService does.
+- **Belt:** one egg every `Belt.SpawnInterval` (2 s), picked by
+  `Belt.EggWeights`. They aim for the best tier they can afford, splitting
+  their cash over up to 2 free nests. They also take one tier lower, and
+  anything affordable after 40 s of waiting. **They win a wanted egg 50% of
+  the time** (other players, missed taps). Eggs they haven't unlocked ride past.
+- **Travel:** fast travel to the belt takes 3 s and respects `Travel.Cooldown`
+  (8 s). The walk home carrying the egg is 196 studs at Walk Speed ×
+  `Belt.CarrySpeedMultiplier`.
+- **Incubation:** each egg counts up to `Eggs[id].HatchTime` at the Hatch
+  Speed upgrade's rate (× `HatchBoost.Multiplier` while a Hatch Boost is
+  active). It hatches by itself with fixed odds plus luck. The player makes
+  no choices here.
+- **Income and vaults:** `Rarities[r].IncomePerSecond` × (1 + 0.25 per
+  rebirth). Vault cap = max(Vault Size, 600 s of the creature's own income).
+  They collect every 90 s while home, and before each belt trip.
+- **Upgrades:** they buy the cheapest one as soon as they can afford it and
+  still keep $100 per empty nest for eggs. They stop buying once they're
+  saving for a rebirth (they own a Rare+ and have half the cost).
+- **Selling:** when every nest is full, they sell the weakest cryptid (never
+  their last Rare+) if they can afford an egg whose *typical* income
+  (Common..Legendary, ignoring the Mythic/Secret jackpots) is at least **2×**
+  that cryptid's income. Selling pays vault + `Sell.RefundSeconds` (60) of
+  income.
+- **Rebirth:** as soon as they can afford it and own a Rare+, and aren't
+  carrying anything. It resets cash to `Rebirth.StartingCash` ($1,500), nests
+  and upgrades, exactly like `Config.Rebirth.Resets`. Each rebirth gives +10%
+  luck and +25% income. Sky unlocks at rebirth 1, Void at 3.
+- **Theft (eggs only):** each egg in a nest has a steady per-second chance of
+  being stolen: 20% per 90 s, ×1.5 for announced eggs (Sky/Void), and none
+  during the 300 s new-player spawn lock. So slow, big eggs are the juicy
+  targets. That works out to **11% of all eggs lost**: ~9% of Forest eggs,
+  ~31% of Deep Sea, ~60–75% of unguarded Sky/Void eggs. In return, after
+  bringing a belt egg home, they go on a 50 s raid 45% of the time and come
+  back with an egg of about their own tier, 0–80% done. They steal about as
+  many eggs as they lose, and stolen eggs are free.
+- **The Hunt:** hunts follow `Config.Hunt` (first at 240 s, then every
+  420–600 s, 70 s each plus warning and leave time). A player who buys an egg
+  while she's out waits by the fire half the time; otherwise they walk and are
+  caught 30% of the time (belt egg gone, stunned). About 4–5 catches per 4 hours.
+- **Extras** (the "+ extras" columns only):
+  - Daily day 1, the free spin (rolled by its weights) and every playtime
+    gift, applied exactly as Config describes them: Cash = max(Base, Minutes
+    of income), Eggs go to a free nest or are saved, and Buffs and Instant
+    Hatch work as they do in game.
+  - Sightings per `Config.Sightings`, never during a hunt. This player wins
+    20% of them (a server of 8), and a win takes a 60 s trip.
+  - Codex luck from hatching alone (photos would make it a bit faster).
+- **Not modelled:** Robux (passes, products, cash packs), offline earnings,
+  the Bat, locking your camp. The theft rates above stand in for all of the
+  stealing back and forth.
 
-The full source is at the end of this file; re-run it any time the economy
-numbers change.
+A "goal" is any of: a new egg tier affordable for the first time, a rarity
+seen for the first time, an upgrade bought, or a rebirth. "Stalled" means 60+
+minutes with no new goal at some point in the 4 hours.
 
 ---
 
 ## Results as built
 
-Times are minutes of play: median [25th..75th percentile]. "never in X%" =
-that share of players didn't get there in 4 hours.
+Minutes of play: median [25th..75th percentile]. "never X%" means that share
+of players didn't get there in 4 hours. Upgrade levels are before the first
+rebirth (rebirth resets them).
 
-| Milestone | As built (hatch at 70%) | As built, realistic (first 6 at 25%) |
-|---|---|---|
-| First cryptid | 0.5 | 0.5 |
-| First upgrade (any) | 11.5 [9.9..13.2] | 8.3 [6.5..10.9] |
-| First Rare+ | 8.2 (never in 9%) | 4.0 (never in 12%) |
-| 6 cryptids at once | 12.8 | 7.1 |
-| Can afford Swamp ($1K) | 8.3 | 5.6 |
-| Can afford Mountain ($10K) | 14.4 | 13.5 |
-| Can afford Deep Sea ($100K) | 84.8 (never in 12%) | 83.8 (never in 15%) |
-| Can afford Sky ($1M, R1+) | never in 94% | never in 94% |
-| Can afford Void ($25M, R3+) | never | never |
-| Nest Slots L2 ($5K) | 11.4 | 8.2 |
-| Nest Slots L3 ($25K) | never in 88% | never in 80% |
-| Incubation L2 ($7.5K) | 14.2 | 11.3 |
-| Vault Size L2 ($10K) | 16.6 | 16.1 |
-| Walk Speed L2 ($12K) | 20.6 | 21.2 |
-| Lock Duration L2 ($15K) | 25.3 | 27.2 |
-| **Rebirth 1** ($50K) | **27.8** [16.2..45.8] (never in 9%) | 29.4 (never in 12%) |
-| Rebirth 2 ($110K) | 85.3 (never in 14%) | 86.8 (never in 15%) |
-| Rebirth 3 ($242K) | 154.7 (never in 36%) | 159.6 (never in 36%) |
-| Longest stretch with no new goal, hour 1 | **17.4** | 17.9 |
+| Milestone | As built | As built + extras | **Proposed** | **Proposed + extras** |
+|---|---|---|---|---|
+| First cryptid | 1.1 | 1.0 | 1.1 | 1.0 |
+| First upgrade | **2.5** [2.1..2.9] | 0.1 | **2.5** | 0.1 |
+| First Rare+ | 2.3 | 1.6 | 2.3 | 1.6 |
+| First sell | 3.7 | 3.7 | 3.7 | 3.7 |
+| 6 cryptids at once | 4.8 | 4.3 | 4.8 | 4.2 |
+| Can afford Swamp ($600) | 2.7 | 0.1 | 2.7 | 0.1 |
+| Can afford Mountain ($4K) | 5.7 | 3.7 | 5.7 | 3.7 |
+| Can afford Deep Sea ($30K) | 13.5 | 10.6 | 13.5 | 10.6 |
+| Can afford Sky ($250K, R1+) | 58.2 | 40.0 | 61.7 | 54.2 |
+| Can afford Void ($2.5M, R3+) | 180 (never 3%) | 163 | 194 (never 13%) | 180 (never 8%) |
+| Hatch Speed L2 / L3 / L4 / L5 | 2.5 / 5.8 / 13.0 (never 24%) / — | 0.1 / 4.4 / 10.6 / — | 2.5 / 5.8 / 12.6 / 26.3 | 0.1 / 4.4 / 9.9 / 23.3 |
+| Walk Speed L2 / L3 / L4 | 3.1 / 6.5 / — | 1.4 / 5.8 / — | 3.1 / 6.5 / 16.3 | 1.4 / 5.8 / 13.9 |
+| Nest Slots L2 / L3 / L4 / L5 | 3.5 / 7.6 / 15.7 (never 52%) / — | 2.2 / 5.8 / 12.1 / — | 3.5 / 7.5 / 14.1 / 30.0 (never 42%) | 2.2 / 5.8 / 11.7 / 26.5 |
+| Lock Duration L2 / L3 / L4 | 4.2 / 9.5 / — | 3.0 / 7.1 / — | 4.2 / 9.2 / 18.8 | 3.0 / 6.6 / 15.1 |
+| Vault Size L2 / L3 / L4 | 5.6 / 11.4 / — | 3.6 / 9.2 / — | 5.6 / 11.2 / 22.5 | 3.6 / 8.4 / 19.4 |
+| **Rebirth 1** | **16.3** [12.6..21.8] | **13.6** [6.8..15.2] | **33.7** [26.1..42.1] | **29.6** [19.5..36.9] |
+| Rebirth 2 | 36.2 | 31.4 | 76.6 | 66.2 |
+| Rebirth 3 | 60.9 | 48.6 | 139.2 | 125.0 |
+| Rebirth 4 | 91.5 | 76.0 | 201.5 (never 25%) | 184.5 (never 18%) |
+| Longest stretch with no new goal, hour 1 | 6.0 [4.9..7.2] | 5.5 | 7.9 [6.3..9.3] | 7.7 |
+| Stalled (60+ min, no new goal) | 0% | 0% | 0% | 0% |
 
-Income per second (median player):
+"—" = most players rebirth before reaching that level.
+
+**Income per second** (median player; dips are rebirths resetting the nests):
 
 | | 2m | 5m | 10m | 15m | 20m | 30m | 45m | 60m | 90m | 120m | 180m | 240m |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| As built | $1 | $1 | $29 | $35 | $27 | $21 | $27 | $30 | $47 | $48 | $54 | $67 |
-| As built, realistic | $1 | $14 | $29 | $29 | $30 | $18 | $26 | $24 | $34 | $48 | $64 | $73 |
+| As built | $8 | $74 | $154 | $169 | $169 | $211 | $360 | $558 | $1.09K | $1.58K | $2.2K | $3.07K |
+| As built + extras | $17 | $93 | $132 | $120 | $150 | $413 | $269 | $847 | $1.34K | $1.64K | $2.34K | $3.22K |
+| **Proposed** | $8 | $76 | $199 | $375 | $480 | $610 | $450 | $813 | $987 | $1.47K | $1.71K | $1.96K |
+| Proposed + extras | $17 | $96 | $229 | $405 | $445 | $670 | $395 | $976 | $1.13K | $1.47K | $1.82K | $2.46K |
 
-The dip after ~25 min is rebirth 1 wiping everything; the flat line after
-that is full nests with no way to replace weak cryptids.
+Per player over 4 hours (as built): ~280 eggs placed, ~180 cryptids sold,
+~31 eggs stolen from them (11%), ~28 stolen by them, ~5 Brood Mother catches,
+~1 sighting won (with extras).
 
 ### Compared with good Roblox simulator pacing
 
-| Target | As built | Verdict |
+| Target | As built | Proposed |
 |---|---|---|
-| First meaningful upgrade < 3 min | 8–12 min | **Too slow** |
-| A fresh goal every few minutes | up to 17 min with nothing new | **Too slow** |
-| First rebirth ~30–60 min | ~28 min median, but 9–12% never | Timing fine, the "never" is a bug-level problem |
-| Rebirth should feel like a power-up | income drops for 20+ min after | **Feels like a punishment** |
-| Long-term goals stay reachable | Deep Sea 85 min, Sky/Void never | **Ladder too steep** |
+| First upgrade < 3 min | 2.5 min (0.1 with the daily reward) | same |
+| A new goal every few minutes | longest gap ~6 min | ~8 min, and that gap *is* the rebirth save-up (the progress bar is the goal) |
+| First rebirth 30–60 min | **16 min** (14 with rewards): too fast | **34 min** (30 with rewards) |
+| Rebirths keep spacing out | 16 → 36 → 61 → 92: every ~25 min, the loop gets samey | 34 → 77 → 139 → 202: each one a bigger climb |
+| Nobody stuck | 0% stalled (selling players) | 0% stalled |
+| Long-term goals stay reachable | Sky ~1 h, Void ~3 h | Sky ~1 h, Void ~3.2 h |
+
+### How many players get stuck
+
+- **Players who sell: nobody.** 0% stalled in every variant. Without heat,
+  a Rare+ is easy (25% of Forest eggs), so the rebirth requirement never
+  blocks anyone (first Rare+ at ~2 min).
+- **Players who never sell:** income flat at ~$55–90/s for the whole session.
+  As built: 8% never rebirth, 12% stall for an hour or more, hour-1 gap 13.5
+  min. Proposed: 32% never rebirth, 38% stall. A **picky seller** (only
+  sells for a 4× better egg) is fine: rebirth 1 at 42 min, 2% stall.
+- So the real "stuck" risk is a player who doesn't know Sell exists. See
+  "Outside Config" below.
 
 ---
 
-## What's wrong, in order of importance
+## Why it's fast, and which levers matter
 
-### 1. No way to free a nest (needs a small feature)
-DESIGN.md says "every creature you keep is an egg you can't cook", but the
-game has no way *not* to keep one. Once 6 nests hold Commons you can only
-wait for $5K (nest 7), and nests 8+ cost $25K–$15M. 9% of players never see a
-Rare in 4 hours, and without a Rare they can never rebirth. Getting robbed
-is currently the only way to free a nest.
+Income per egg at luck 0, from the Config weights (`GetRarityChances`):
 
-**Proposal — Release:** a "Release" ProximityPrompt (owner only, ~1 s hold,
-`Config.Prompts`) on your own cryptids. It pays the cryptid's vault plus
-**60 seconds of its income** and empties the nest (`NestService.SetSlot(…,
-false)`). Simulated effect: income at 4 h goes from $67/s to $446/s, rebirth 3
-from 155 to 114 min, and nobody is stuck without a Rare (0% "never").
-Suggested Config:
+| Egg | Price | Hatch | Mean income (EV) | Typical (no Mythic/Secret) | Most likely result | Rare+ chance | Pays for itself (EV) |
+|---|---:|---:|---:|---:|---|---:|---:|
+| Forest | $100 | 0:40 | $26.1/s | $14.1/s | Common | 25.5% | 4 s |
+| Swamp | $600 | 1:00 | $38.2/s | $19.1/s | Uncommon | 36.8% | 16 s |
+| Mountain | $4K | 1:30 | $60.7/s | $30.7/s | Rare | 54.8% | 66 s |
+| Deep Sea | $30K | 2:30 | $99.3/s | $51.3/s | Rare | 73.9% | 5 min |
+| Sky | $250K | 4:00 | $183/s | $76.6/s | Epic | 88.9% | 23 min |
+| Void | $2.5M | 6:00 | $449/s | $111/s | Legendary | 98.0% | 93 min |
 
-```lua
-Config.Release = {
-	Enabled = true,
-	RefundSeconds = 60,   -- pays vault + this many seconds of the cryptid's income
-}
--- and in Config.Prompts:
-ReleaseHold = 1,
-```
+- Cheap eggs pay for themselves in seconds, so the only real limit is
+  **nests**. Selling turns nest space into extra rolls. About half the EV of
+  a cheap egg is the Mythic/Secret jackpot, so income is lumpy (wide p25..p75)
+  and grows fast once a player opens hundreds of eggs.
+- **Rebirth cost is the lever that works, but it's weak.** Rebirth 1 for a
+  cost of $75K / $150K / $200K / $250K / $300K / $400K lands at 16 / ~26 /
+  ~27 / ~30 / 30 / 34 minutes ($150K–$250K are quick scans, see the note
+  below). That's why the proposed number is so much bigger than it looks like
+  it should be.
+- **The playtime gifts are worth a lot.** Their cash scales with income: the
+  15-minute gift pays 5 minutes of income (~$100K at that point) and the
+  40-minute gift pays 10 minutes. At a $300K rebirth with all extras on,
+  rebirth 2 lands at exactly minute 40 for a quarter of players. That's the
+  gift paying for it.
+  Trimming those two to 2 and 4 minutes of income moves the with-extras
+  rebirth 1 from 21 to 25 min (at $300K). Rewards alone: rebirth 1 30 → 20 min
+  at $300K. Sightings alone: almost no effect (~1 win per 4 h). Codex alone:
+  none.
 
-Keep the refund small: with Release, hatching eggs quickly (high
-throughput) earns more than waiting for heat (see "Heat" below), and a big
-refund would make churning even stronger.
+### Levers that don't matter much (tested, kept as they are)
 
-### 2. Rebirth leaves you with nothing (needs a one-line change)
-After a rebirth you have $0, no nests and no upgrades; the only way back is
-the 3-minute rescue egg. Rebirth 2 and 3 therefore take far longer than the
-cost growth suggests.
+These are all with the proposed rebirth cost:
 
-**Proposal:** `Config.Rebirth.StartingCash = 1500` and in RebirthService,
-after the reset, set Cash to that (not via AddCash, so it doesn't count as
-earned). With it: rebirth 2 at 79 min instead of 86, rebirth 3 at 129 instead
-of 148, and the income dip after rebirth 1 recovers in ~10 min instead of
-~25. (Simulated with Release on; "$0 after rebirth" variant below.)
+| Variant | Rebirth 1 | Rebirth 2 | Rebirth 3 | Note |
+|---|---|---|---|---|
+| Proposed (hatch 40/60/90/150/240/360) | 33.7 | 76.6 | 139.2 | |
+| Hatch times ~1.5× (45/90/150/240/360/480) | 37.1 | 81.7 | 142.0 | eggs lost to theft rise 11% → 16%; first cryptid 1.2 min |
+| `Sell.RefundSeconds` 20 | 33.3 | 74.1 | 136.1 | |
+| `Sell.RefundSeconds` 180 | 32.5 | 72.1 | 130.1 | |
+| No theft, no Hunt (as built) | 14.9 | 33.5 | 56.5 | theft + Hunt cost ~1.5 min on rebirth 1 |
 
-### 3. Upgrades start too expensive
-The cheapest upgrade is $5,000 while a new player earns $1–30/s, so the
-first one lands at 8–12 minutes. Proposed ladders start at $200–$1,500 and
-grow ~5–7x per level, so there's something to buy every few minutes for the
-first half hour.
+- **Hatch time** is a *theft-tension* dial, not a pacing dial. Leave it where
+  it is: longer eggs mostly mean more of them get stolen. Forest's 40 s also
+  keeps the tutorial's first hatch at about a minute.
+- **Sell refund** barely matters. What a sale is worth is the free nest, not
+  the cash. 60 s is fine. It isn't a money printer either. A "churner" who
+  sells everything below Epic as soon as a Forest egg is affordable reaches
+  rebirth 1 no sooner (34.5 vs 34.5 min), because belt trips are the
+  bottleneck. Their late income does run higher ($4K/s vs $2.2K/s at 4 h).
+  With a 120 s refund they'd gain ~3 min. *(quick scan)*
+- **Egg prices and belt weights** only shift when each tier first becomes
+  affordable. They're fine. Deep Sea at ~13 min and Sky at ~1 h are good goals.
+  Testing Sky at $150K and Deep Sea at $40K moved the rebirths by less than
+  3 minutes, and Sky from ~61 to ~54 min. *(quick scan)*
 
-### 4. Egg prices go up 10x per tier but value only ~1.5–2x
-Expected income per hatch (luck 0), measured with `Config.GetRarityChances`:
-
-| Egg | Price now | EV heat 0 | EV heat 70 | EV heat 100 | Usual result (median) at 70% |
-|---|---:|---:|---:|---:|---|
-| Forest | $100 | $15.1/s | $38.4/s | $46.3/s | Uncommon |
-| Swamp | $1K | $19.8/s | $45.9/s | $54.0/s | Uncommon |
-| Mountain | $10K | $34.7/s | $73.0/s | $82.9/s | Rare |
-| Deep Sea | $100K | $63.1/s | $116.1/s | $127.2/s | Rare |
-| Sky | $1M | $124.8/s | $200.7/s | $213.4/s | Epic |
-| Void | $25M | $343.0/s | $479.3/s | $496.6/s | Legendary |
-
-Notes: EV is dominated by the rare tail (most of a Forest egg's $15/s is
-Legendary+), so most hatches earn far less than EV. **Swamp is barely better
-than Forest** at 10x the price. Proposed prices flatten the ladder (~5–8x per
-tier) so each tier arrives on a sensible schedule.
-
-### 5. Vault Size does almost nothing
-`Config.Income.MinVaultSeconds = 600` already lets every cryptid hold 10
-minutes of its own income, and an active player collects every 1–2 minutes,
-so the Vault Size upgrade only matters to players who go AFK for 10+
-minutes. Not urgent — the cheaper prices below at least make it a cheap early
-goal. Optional later idea: make Vault Size raise the *minutes* a vault holds
-(10 → 15 → 20 → 30 → 45 → 60) instead of a flat cash amount (code change in
-BoostService.GetVaultCap).
-
-### 6. Heat is a lottery dial, not an income dial
-With Release in the game, impatient hatching (25%) out-earns patient
-hatching (100%): at 60 min $146/s vs $63/s, rebirth 1 at 30 vs 39 min. Heat
-still triples a Forest egg's EV (15 → 46) and is the way to hunt
-Legendaries, Mythics and the Secret, which is a fine role for it. Making heat
-much stronger (Rare x3 … Secret x12) did **not** change this (throughput still
-wins) and sped the whole economy up ~40%, so I don't recommend it. If the
-owner wants patience to pay in cash too, the lever is the Release refund
-(keep it small) or a future "heat also raises mutation chance" (mutations are
-already in Config, switched off).
+*Quick scans* (rebirth costs $150K–$250K, the churner, the price scan) ran in
+a Python copy of the same model, for fast tuning. It was checked against the
+Studio runs (as built: rebirth 1 17.7 vs 16.3 min, rebirth 3 61.8 vs 60.9).
+Every other number in this file comes from the Studio runs.
 
 ---
 
 ## Recommended changes
 
-### Already changed (my section)
-| Key | Was | Now | Why |
-|---|---:|---:|---|
-| `Config.Economy.StartingCash` | 300 | **500** | Five Forest eggs during the tutorial; more of the first nests fill straight away. Only affects brand-new profiles. |
-
 ### Config values for the lead to apply (exact numbers)
 
-**Egg prices** (`Config.Eggs.<id>.Price`; weights, unlocks and belt chances
-unchanged):
+```lua
+-- Config.Rebirth
+BaseCost = 400000,  -- was 75000
+CostGrowth = 2.3,   -- was 2.2   (rebirths cost $400K, $920K, $2.12M, $4.87M...)
 
-| Egg | Now | Proposed |
-|---|---:|---:|
-| forest | 100 | 100 |
-| swamp | 1,000 | **600** |
-| mountain | 10,000 | **4,000** |
-| deepsea | 100,000 | **30,000** |
-| sky | 1,000,000 | **250,000** |
-| void | 25,000,000 | **2,500,000** |
+-- Config.Retention playtimeGifts (the local table above Config.Retention)
+{ Minutes = 15, Items = { { Kind = "Cash", Base = 1500, Minutes = 2 } } },  -- Minutes was 5
+{ Minutes = 40, Items = { { Kind = "Cash", Base = 5000, Minutes = 4 } } },  -- Minutes was 10
+```
 
-**Upgrade costs** (`Config.Upgrades.<id>.Levels[n].Cost`; every `Value`
-unchanged; level 1 stays 0):
+Also update DESIGN.md §7 ("Cost: `$400,000 × 2.3^rebirths`") and the
+`IncomeBonusPerRebirth` comment if it mentions the old cost.
 
-| Upgrade | L2 | L3 | L4 | L5 | L6 | L7 |
-|---|---:|---:|---:|---:|---:|---:|
-| NestSlots now | 5,000 | 25,000 | 120,000 | 600,000 | 3,000,000 | 15,000,000 |
-| NestSlots **proposed** | **1,000** | **6,000** | **30,000** | **150,000** | **750,000** | **4,000,000** |
-| IncubationSpeed now | 7,500 | 40,000 | 200,000 | 1,000,000 | 6,000,000 | — |
-| IncubationSpeed **proposed** | **200** | **3,000** | **20,000** | **120,000** | **750,000** | — |
-| VaultSize now | 10,000 | 60,000 | 350,000 | 2,000,000 | 12,000,000 | — |
-| VaultSize **proposed** | **2,500** | **15,000** | **100,000** | **600,000** | **4,000,000** | — |
-| LockDuration now | 15,000 | 80,000 | 450,000 | 2,500,000 | — | — |
-| LockDuration **proposed** | **1,500** | **10,000** | **60,000** | **400,000** | — | — |
-| WalkSpeed now | 12,000 | 65,000 | 380,000 | 2,200,000 | — | — |
-| WalkSpeed **proposed** | **500** | **5,000** | **40,000** | **300,000** | — | — |
+**Unchanged on purpose:** every `HatchTime`, egg prices, rarity weights and
+incomes, upgrade costs and values, `Sell.RefundSeconds` (60),
+`Belt.EggWeights`, `Economy.StartingCash` ($500), `Rebirth.StartingCash`
+($1,500), luck, `Income.MinVaultSeconds`.
 
-**Rebirth:** `Config.Rebirth.BaseCost` 50,000 → **75,000** (CostGrowth 2.2
-unchanged: rebirths cost $75K, $165K, $363K…). With everything else cheaper,
-$50K came at ~28 min; $75K lands rebirth 1 at ~34 min, inside the 30–60 min
-target.
+**Alternative if the owner wants faster rebirths:** $300K × 2.4 (same gift
+trim) gives rebirth 1 at ~30 min (~25 with extras), rebirth 2 ~65, rebirth 3
+~119.
 
-**Unchanged on purpose:** rarity incomes, egg weights, belt weights, heat
-multipliers, heat time (10 min), luck, vault minimum.
+### Outside Config (for the lead/owner to decide; small code/UI changes)
 
-**Robux cash packs:** with cheaper eggs the packs buy more (Pocket Change
-$25K was 2.5 Mountain eggs, it'd be 6). That's generous rather than broken;
-if the owner wants the same value as before, scale them to roughly
-**$10K / $120K / $2M** (`Config.DevProducts.CashSmall/CashMedium/CashLarge.Amount`
-and their Description text).
-
-### Features for the lead/owner to OK (small code changes)
-1. **Release a cryptid** — see problem 1. NestService (prompt + handler with
-   the usual owner/distance/hold checks, `SetSlot(player, i, false)`, pay
-   via `DataService.AddCash(player, vault + income * RefundSeconds,
-   "release")`), plus a client confirm if desired. Refuse while the
-   cryptid is Away (being stolen).
-2. **Rebirth starting cash** — see problem 2. RebirthService: after the
-   reset, `DataService.Mutate(player, function(d) d.Cash =
-   Config.Rebirth.StartingCash end)`.
-
-Both are needed for the "proposed" numbers below; without Release the price
-changes alone still help the first 30 minutes but the mid-game stays flat
-(see "P4 without Release").
-
----
-
-## Results with the proposals
-
-"P4" = all proposed Config values + Release (60 s refund) + $1,500 after
-rebirth, realistic player. Columns to the right switch one thing off.
-
-| Milestone | **P4 (proposed)** | P4 without Release | P4, $0 after rebirth |
-|---|---|---|---|
-| First cryptid | 0.5 | 0.5 | 0.5 |
-| First upgrade (any) | **4.3** [1.9..4.8] | 4.3 | 4.3 |
-| First Rare+ | 4.0 | 3.9 (never in 5%) | 4.0 |
-| 6 cryptids at once | 7.0 | 5.7 | 7.0 |
-| Can afford Swamp | 4.7 | 4.8 | 4.7 |
-| Can afford Mountain | 7.5 | 7.0 | 7.5 |
-| Can afford Deep Sea | 25.1 | 27.5 | 25.1 |
-| Can afford Sky (R1+) | 125 | 162 (never in 34%) | 145 |
-| Can afford Void (R3+) | 198 (never in 97%) | never | 211 (never in 99%) |
-| Incubation L2 / L3 / L4 | 4.3 / 8.2 / 21.8 | 4.3 / 8.2 / 23.9 | same as P4 |
-| Walk Speed L2 / L3 | 4.7 / 9.8 | 4.7 / 9.8 | same |
-| Nest Slots L2 / L3 / L4 | 5.2 / 12.1 / 27.2 | 5.5 / 12.5 / 35.2 | same |
-| Lock Duration L2 / L3 | 6.1 / 14.6 | 6.3 / 15.3 | same |
-| Vault Size L2 / L3 | 7.1 / 17.8 | 7.2 / 18.5 | same |
-| **Rebirth 1** | **33.8** [24.8..46.2] | 39.5 (never in 5%) | 33.8 |
-| Rebirth 2 | 78.8 | 98.1 (never in 10%) | 85.5 |
-| Rebirth 3 | 129.4 | 167.1 (never in 37%) | 148.3 |
-| Longest stretch with no new goal, hour 1 | **9.1** | 12.0 | 11.7 |
-
-Income per second (median):
-
-| | 2m | 5m | 10m | 15m | 20m | 30m | 45m | 60m | 90m | 120m | 180m | 240m |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| **P4** | $1 | $33 | $36 | $57 | $68 | $82 | $76 | $93 | $125 | $214 | $314 | $630 |
-| P4 without Release | $1 | $33 | $37 | $41 | $42 | $50 | $34 | $46 | $43 | $92 | $117 | $159 |
-| P4, $0 after rebirth | $1 | $33 | $36 | $54 | $52 | $58 | $27 | $55 | $91 | $139 | $294 | $330 |
-
-Heat strategy with the P4 numbers (same player, different hatch heat):
-
-| Hatch at | Rebirth 1 | Rebirth 2 | Rebirth 3 | Income 60 min | Income 240 min |
-|---|---|---|---|---|---|
-| 25% | 29.8 | 66.2 | 114.1 | $146 | $1.03K |
-| 70% | 33.8 | 78.8 | 129.4 | $93 | $630 |
-| 100% | 38.5 | 85.0 | 139.6 | $63 | $376 |
-
-(The last table's 25%/100% rows were run on "P3", identical to P4 except
-Incubation L2 at $250 instead of $200 — a difference that only moves the
-first upgrade.)
-
-### Remaining gaps
-- **First upgrade ~4 min** (target < 3). The first few minutes are the
-  tutorial plus eggs heating; a quarter of players buy Incubation L2 before
-  2 min. Good enough; the tutorial's last card points at the Upgrades cabin.
-- **The first ~4 minutes earn ~$1/s** (one cryptid while the rest heat up).
-  That's the heat hook doing its job; the tutorial fills this time.
-- **Void** remains a long-term goal (needs rebirth 3 + $2.5M): ~3.3 h.
-  That's appropriate for the top egg.
+1. **Teach selling properly.** It's the one thing that separates a smooth
+   game from a stalled one. Right now Sell is mentioned only in the
+   tutorial's last card and in the belt's "No empty nest!" message. Ideas,
+   cheapest first:
+   - When every nest is full and the player can afford a better egg, show a
+     one-time toast plus a pulse on the weakest cryptid's Sell prompt.
+   - Add a tutorial step after the 6th cryptid: "Sell your weakest cryptid".
+2. **Show rebirth progress on the HUD** (cash / rebirth cost). The longest
+   gap in hour 1 (~8 min) is the save-up for the rebirth, and a visible bar
+   turns it into a goal.
+3. **Cash packs** (`DevProducts.CashSmall/Medium/Large`: $25K / $300K / $5M)
+   are flat amounts. Incomes reach $1–2K/s within 2 hours, so the packs stop
+   mattering quickly. Consider max(Amount, N minutes of income), like the
+   retention rewards. That's a MonetizationService change.
+4. **Vault Size is still weak.** `MinVaultSeconds = 600` gives every cryptid
+   10 minutes of storage, so the upgrade only matters to AFK players. It's
+   the last upgrade most players buy (L4 ~23 min). Not urgent. The old idea
+   still stands: make it raise the minutes a vault holds (10 → 15 → 20 → 30 →
+   45 → 60) in BoostService.GetVaultCap.
+5. **Playtime gifts restart on every join.** A player who rejoins every 15
+   minutes collects the 2/5/10/15-minute gifts over and over. The trim above
+   limits the damage. If it shows up in analytics, make the clock daily.
 
 ---
 
 ## Re-running the simulation
 
-Paste the source below into Studio's command bar (or MCP `execute_luau`,
-Edit datamodel). It only `require`s an **unparented clone** of Config, so it
-changes nothing in the place. It registers `_G.SAC_EconSim`; then run, e.g.:
+Studio must be in **Edit** (not in a play test). Paste the source below into
+the command bar or MCP `execute_luau` (Edit datamodel). It only `require`s an
+**unparented clone** of Config, so it changes nothing in the place. It
+registers `_G.SAC_EconSim(name, overrideFn?, params?)`, which returns a text
+report. Then, e.g.:
 
 ```lua
 print(_G.SAC_EconSim("as built", nil, {}))
-print(_G.SAC_EconSim("realistic", nil, { earlyHatches = 6, earlyThreshold = 25 }))
-print(_G.SAC_EconSim("with release", function(C)
-	C.Rebirth.BaseCost = 75000 -- any Config overrides for this run
-end, { earlyHatches = 6, earlyThreshold = 25, release = true, sellSeconds = 60, rebirthCashAfter = 1500 }))
+print(_G.SAC_EconSim("as built + extras", nil, { rewards = true, sightings = true, codex = true }))
+print(_G.SAC_EconSim("proposed", function(C)
+	C.Rebirth.BaseCost = 400000; C.Rebirth.CostGrowth = 2.3   -- any Config overrides for this run
+	for _, g in ipairs(C.Retention.Playtime.Gifts) do
+		for _, it in ipairs(g.Items) do
+			if it.Kind == "Cash" and g.Minutes == 15 then it.Minutes = 2 end
+			if it.Kind == "Cash" and g.Minutes == 40 then it.Minutes = 4 end
+		end
+	end
+end, { rewards = true, sightings = true, codex = true }))
+print(_G.SAC_EconSim("never sells", nil, { sell = false }))
 ```
 
-Keep each command bar call to about 3 variants (200 runs ≈ 8 s each).
-Note Studio's Edit copy of Config must match the repo (push first) — or
-apply the repo values in the override function as above.
+Each variant takes ~10 s (200 runs × 4 h at 1 s steps). Keep it to about 3
+per call. Studio's Config must match the repo (Rojo pushes it), or put the
+repo values in the override function. Every assumption (belt win chance,
+theft rates, Hunt catch chance, sell rule...) is a `params` key. See
+`DEFAULTS` at the top of the source.
 
 ### Source
 
 ```lua
--- Steal a Cryptid economy simulation. Read-only: requires an UNPARENTED clone
--- of Config, so nothing is added to the place. Run in the Edit datamodel.
+-- Steal a Cryptid economy simulation -- auto-hatch design (profile SchemaVersion 2).
+-- Read-only: requires an UNPARENTED clone of Config, so nothing is added to the
+-- place. Run in the Edit datamodel (MCP execute_luau or the command bar).
 -- Registers _G.SAC_EconSim(name, overrideFn?, params?) -> report text.
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config:Clone())
-Config.Economy = Config.Economy or {}
-Config.Economy.StartingCash = Config.Economy.StartingCash or 300
 
 local function deepCopy(t)
 	if type(t) ~= "table" then return t end
@@ -383,19 +355,34 @@ local DEFAULTS = {
 	runs = 200,
 	horizon = 4 * 3600,
 	dt = 1,
-	heatThreshold = 70,   -- hatch at this heat (players: 60..100)
-	earlyThreshold = 70,  -- heat used for the first `earlyHatches` hatches before rebirth 1
-	earlyHatches = 0,
-	firstHatchNow = true, -- the tutorial has them hatch the first egg right away
-	collectInterval = 90,
-	gotWantedChance = 0.5, -- chance they win a wanted egg as it rides past
-	travelToBelt = 3,      -- HUD Eggs fast travel + settle
-	carryDistance = 196,   -- arch -> own pad, studs (walked, carrying)
-	release = false,       -- can free a nest by releasing the worst creature
-	sellSeconds = 0,       -- a release pays this many seconds of the creature's income
-	rebirthCashAfter = 0,  -- cash right after a rebirth
-	saveFraction = 0.5,    -- stop buying upgrades once cash >= this * rebirth cost (and a Rare+ is owned)
-	impatience = 40,       -- seconds at the belt before taking any affordable egg
+	collectInterval = 90,    -- collect vaults this often while home
+	gotWantedChance = 0.5,   -- chance they win a wanted egg as it rides past
+	travelToBelt = 3,        -- HUD Eggs fast travel + settle
+	carryDistance = 196,     -- belt arch -> own pad, studs (walked, carrying)
+	impatience = 40,         -- seconds at the belt before taking any affordable egg
+	saveFraction = 0.5,      -- "saving for rebirth" once cash >= this * cost (and a Rare+ is owned)
+	saveEggShare = 0.25,     -- while saving, an egg may cost at most this share of cash
+	sell = true,             -- sell the weakest cryptid to make room for a better egg
+	sellRatio = 2,           -- ... if the egg's typical income >= this x the cryptid's income
+	-- Theft (eggs only). Losses are a per-second risk while an egg incubates,
+	-- so slow eggs are more exposed, and announced eggs (Sky/Void) more so.
+	theft = true,
+	lossPer90s = 0.20,       -- chance an egg is stolen per 90 s in a nest (calibrated: ~11% of eggs lost)
+	announceRisk = 1.5,
+	spawnLock = 300,         -- Config.Steal.NewPlayerSpawnLock: no losses before this
+	stealChance = 0.45,      -- after bringing a bought egg home, chance they also steal one (~as many as they lose)
+	raidTime = 50,           -- seconds a steal trip takes
+	-- The Hunt (Config.Hunt schedule). Carriers caught in the open lose the egg.
+	hunt = true,
+	huntWaitChance = 0.5,    -- a carrier who sees a hunt waits at the fire until it ends
+	huntCatchChance = 0.3,   -- one who walks through it anyway is caught this often
+	-- Extras a real first session has (off by default)
+	rewards = false,         -- daily day 1 + the free spin + playtime gifts
+	codex = false,           -- page completion luck (hatches only, no photos)
+	sightings = false,
+	sightingWinChance = 0.2, -- share of sightings this player captures (contested)
+	sightingTrip = 60,
+	playersOnline = 8,
 }
 local P = table.clone(DEFAULTS)
 local SAMPLES = { 2, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240 }
@@ -415,41 +402,114 @@ local function runOnce(C, seed)
 		end
 		return eggOrder[1]
 	end
-	local function rollRarity(eggId, heat, luck)
-		local ch = C.GetRarityChances(eggId, heat, luck)
-		local r = rng:NextNumber()
+	local function rollFrom(ch)
+		local total = 0
+		for _, rar in ipairs(C.RarityOrder) do total += ch[rar] or 0 end
+		local r = rng:NextNumber() * total
 		for _, rar in ipairs(C.RarityOrder) do
-			r -= ch[rar]
-			if r <= 0 then return rar end
+			r -= ch[rar] or 0
+			if r < 0 then return rar end
 		end
 		return "Common"
 	end
 
+	-- Hunt windows (warning -> leave) and sightings that avoid them.
+	local hunts = {}
+	if P.hunt and C.Hunt.Enabled then
+		local start = C.Hunt.FirstDelay
+		while start < P.horizon do
+			local s0 = start + C.Hunt.WarningTime
+			table.insert(hunts, { s0, s0 + C.Hunt.Duration + C.Hunt.LeaveTime })
+			start += rng:NextNumber(C.Hunt.MinInterval, C.Hunt.MaxInterval)
+		end
+	end
+	local function huntEnd(t0, t1)
+		for _, h in ipairs(hunts) do
+			if h[1] < t1 and h[2] > t0 then return h[2] end
+		end
+		return nil
+	end
+	local sightings = {}
+	local sightWeights = {}
+	if P.sightings and C.Sightings.Enabled then
+		local start = C.Sightings.FirstDelay
+		while start < P.horizon do
+			local e = huntEnd(start, start + C.Sightings.Duration)
+			if e then
+				start = e + C.Hunt.BusyRetry
+			else
+				sightings[math.floor(start)] = true
+				start += C.Sightings.Duration + rng:NextNumber(C.Sightings.MinInterval, C.Sightings.MaxInterval)
+			end
+		end
+		-- SightingService.GetWeights for playersOnline
+		local base, order = C.Sightings.BaseWeights, {}
+		for _, rar in ipairs(C.RarityOrder) do
+			if (base[rar] or 0) > 0 then table.insert(order, rar) sightWeights[rar] = base[rar] end
+		end
+		local frac = math.clamp((math.min(P.playersOnline, C.Sightings.MaxPlayersForScaling) - 1) * C.Sightings.RarerPerPlayer, 0, 1)
+		local moved = sightWeights[order[1]] * frac
+		sightWeights[order[1]] -= moved
+		local rarer = 0
+		for i = 2, #order do rarer += base[order[i]] end
+		for i = 2, #order do sightWeights[order[i]] += moved * base[order[i]] / rarer end
+	end
+
+	-- First-session rewards: daily day 1, the free spin, playtime gifts.
+	local rewards = {}
+	if P.rewards then
+		local R = C.Retention
+		if R.Daily.Enabled then table.insert(rewards, { t = 4, items = R.Daily.Rewards[1].Items }) end
+		if R.Spin.Enabled then
+			local total = 0
+			for _, p in ipairs(R.Spin.Prizes) do total += p.Weight or 1 end
+			local r = rng:NextNumber() * total
+			for _, p in ipairs(R.Spin.Prizes) do
+				r -= p.Weight or 1
+				if r <= 0 then table.insert(rewards, { t = 10, items = p.Items }) break end
+			end
+		end
+		if R.Playtime.Enabled then
+			for _, g in ipairs(R.Playtime.Gifts) do table.insert(rewards, { t = g.Minutes * 60, items = g.Items }) end
+		end
+	end
+
 	local s = {
-		cash = C.Economy.StartingCash, rebirths = 0, upgrades = {}, nests = {},
+		cash = C.Economy.StartingCash, rebirths = 0, upgrades = {}, nests = {}, pending = {},
 		phase = "home", timer = 0, carryEgg = nil, beltWait = 0, lastCollect = 0,
 		lastTravel = -999, lastRescue = -999, hatches = 0,
+		hatchBoostUntil = 0, luckUntil = 0, instant = 0, codex = {}, pages = 0, capture = nil,
 	}
 	for _, id in ipairs(C.UpgradeOrder) do s.upgrades[id] = 1 end
-	local res = { miles = {}, rarSeen = {}, eggAfford = {}, upgrade = {}, rebirth = {}, income = {} }
+	local res = { miles = {}, rarSeen = {}, eggAfford = {}, upgrade = {}, rebirth = {}, income = {},
+		placed = 0, lost = 0, stolen = 0, caught = 0, sold = 0, captured = 0 }
 
-	local function cap() return C.GetUpgradeValue("NestSlots", s.upgrades.NestSlots) end
+	local function cap() return math.min(C.GetUpgradeValue("NestSlots", s.upgrades.NestSlots), C.Plot.MaxNests) end
 	local function incomeMult() return 1 + s.rebirths * C.Rebirth.IncomeBonusPerRebirth end
-	local function luck() return s.rebirths * C.Luck.PerRebirthPercent end
-	local function heatRate() return C.Heat.Max / C.Heat.SecondsToMax * C.GetUpgradeValue("IncubationSpeed", s.upgrades.IncubationSpeed) end
-	local function creatureIncome(slot) return C.Rarities[slot.rarity].IncomePerSecond * incomeMult() end
-	local function vaultCap(slot)
-		return math.max(C.GetUpgradeValue("VaultSize", s.upgrades.VaultSize), creatureIncome(slot) * C.Income.MinVaultSeconds)
+	local function luck(t)
+		local l = s.rebirths * C.Luck.PerRebirthPercent + s.pages * C.Luck.CodexPageCompletePercent
+		if t < s.luckUntil then l += C.Luck.PotionPercent end
+		return math.min(l, C.Luck.MaxPercent)
 	end
+	local function hatchSpeed(t)
+		local m = C.GetUpgradeValue("IncubationSpeed", s.upgrades.IncubationSpeed)
+		if t < s.hatchBoostUntil then m *= C.DevProducts.HatchBoost.Multiplier end
+		return m
+	end
+	local function creatureIncome(n) return C.Rarities[n.rarity].IncomePerSecond * incomeMult() end
+	local function vaultCap(n)
+		return math.max(C.GetUpgradeValue("VaultSize", s.upgrades.VaultSize), creatureIncome(n) * C.Income.MinVaultSeconds)
+	end
+	local function isRarePlus(n) return C.GetRarityIndex(n.rarity) >= C.RebirthMinRarityIndex end
 	local function counts()
-		local free, eggs, creatures, rarePlus = 0, 0, 0, false
+		local free, eggs, creatures, rarePlus = 0, 0, 0, 0
 		for i = 1, cap() do
 			local n = s.nests[i]
 			if not n then free += 1
 			elseif n.kind == "Egg" then eggs += 1
 			else
 				creatures += 1
-				if C.GetRarityIndex(n.rarity) >= C.RebirthMinRarityIndex then rarePlus = true end
+				if isRarePlus(n) then rarePlus += 1 end
 			end
 		end
 		return free, eggs, creatures, rarePlus
@@ -463,32 +523,66 @@ local function runOnce(C, seed)
 		return t
 	end
 	local function unlocked(id) return s.rebirths >= C.Eggs[id].RequiredRebirths end
-	-- The best egg tier they'd aim for: spread the cash over up to 2 free nests.
-	local function wantedTier(free)
-		local budget = s.cash / math.max(1, math.min(free, 2))
+	local function tierFor(budget)
 		local best = 0
 		for i, id in ipairs(eggOrder) do
 			if unlocked(id) and C.Eggs[id].Price <= budget then best = i end
 		end
-		if best == 0 then
-			for i, id in ipairs(eggOrder) do
-				if unlocked(id) and C.Eggs[id].Price <= s.cash then best = i end
-			end
-		end
 		return best
 	end
-	-- Income a player "usually" gets from an egg (Common..Epic only).
-	local function typicalIncome(id)
-		local ch = C.GetRarityChances(id, P.heatThreshold, luck())
+	-- Best egg tier they'd aim for: spread cash over up to 2 free nests; while
+	-- saving for a rebirth, spend only a small share on eggs.
+	local function wantedTier(free, saving)
+		local budget = s.cash / math.max(1, math.min(free, 2))
+		if saving then return tierFor(math.min(budget, s.cash * P.saveEggShare)) end
+		local tier = tierFor(budget)
+		if tier == 0 then tier = tierFor(s.cash) end
+		return tier
+	end
+	-- What a player "usually" gets from an egg: Common..Legendary (no Mythic/Secret jackpots).
+	local function typicalIncome(id, t)
+		local ch = C.GetRarityChances(id, luck(t))
 		local v = 0
-		for _, rar in ipairs({ "Common", "Uncommon", "Rare", "Epic" }) do v += ch[rar] * C.Rarities[rar].IncomePerSecond end
+		for _, rar in ipairs({ "Common", "Uncommon", "Rare", "Epic", "Legendary" }) do
+			v += (ch[rar] or 0) * C.Rarities[rar].IncomePerSecond
+		end
 		return v * incomeMult()
 	end
-	local function placeEgg(id)
-		for i = 1, cap() do
-			if not s.nests[i] then s.nests[i] = { kind = "Egg", egg = id, heat = 0 } return true end
+	local function mile(t) table.insert(res.miles, t) end
+	local function logCodex(id)
+		if not P.codex or s.codex[id] then return end
+		s.codex[id] = true
+		local pages = 0
+		for _, rar in ipairs(C.RarityOrder) do
+			local all = true
+			for _, cr in ipairs(C.CreaturesByRarity[rar]) do
+				if not s.codex[cr.Id] then all = false break end
+			end
+			if all then pages += 1 end
 		end
-		return false
+		s.pages = pages
+	end
+	local function addCreature(i, rar, t)
+		local pool = C.CreaturesByRarity[rar]
+		logCodex(pool[rng:NextInteger(1, #pool)].Id)
+		s.nests[i] = { kind = "Creature", rarity = rar, vault = 0 }
+		if not res.rarSeen[rar] then res.rarSeen[rar] = t mile(t) end
+	end
+	local function hatch(i, t)
+		local n = s.nests[i]
+		addCreature(i, rollFrom(C.GetRarityChances(n.egg, luck(t))), t)
+		s.hatches += 1
+	end
+	local function freeNest()
+		for i = 1, cap() do if not s.nests[i] then return i end end
+		return nil
+	end
+	local function placeEgg(id, incubated)
+		local i = freeNest()
+		if not i then return nil end
+		s.nests[i] = { kind = "Egg", egg = id, inc = incubated or 0 }
+		res.placed += 1
+		return i
 	end
 	local function collect(t)
 		for i = 1, C.Plot.MaxNests do
@@ -497,111 +591,172 @@ local function runOnce(C, seed)
 		end
 		s.lastCollect = t
 	end
+	local function grant(items, t)
+		for _, it in ipairs(items) do
+			if it.Kind == "Cash" then
+				s.cash += math.min(C.Retention.MaxCashReward, math.max(it.Base or 0, math.floor((it.Minutes or 0) * 60 * totalIncome())))
+			elseif it.Kind == "Egg" then
+				local id = it.EggId
+				if not unlocked(id) then
+					local bestPrice = -1
+					for _, e in ipairs(eggOrder) do
+						if unlocked(e) and C.Eggs[e].Price > bestPrice then id, bestPrice = e, C.Eggs[e].Price end
+					end
+				end
+				for _ = 1, it.Count or 1 do table.insert(s.pending, id) end
+			elseif it.Kind == "Buff" then
+				local key = if it.Buff == "Luck" then "luckUntil" else "hatchBoostUntil"
+				s[key] = math.max(s[key], t) + (it.Duration or 0)
+			elseif it.Kind == "InstantHatch" then
+				s.instant += it.Count or 1
+			end
+		end
+	end
 	-- Upgrades: cheapest first, keeping enough for a Forest egg per free nest.
-	local function reserve()
-		return (counts()) * C.Eggs[eggOrder[1]].Price
+	local function reserve() return (counts()) * C.Eggs[eggOrder[1]].Price end
+	local function nextUpgrade()
+		local bestId, bestCost = nil, math.huge
+		for _, id in ipairs(C.UpgradeOrder) do
+			local cost = C.GetUpgradeNextCost(id, s.upgrades[id])
+			if cost and cost < bestCost then bestId, bestCost = id, cost end
+		end
+		return bestId, bestCost
 	end
 	local function buyUpgrades(t, saving)
 		if saving then return end
-		local bought = true
-		while bought do
-			bought = false
-			local bestId, bestCost = nil, math.huge
-			for _, id in ipairs(C.UpgradeOrder) do
-				local cost = C.GetUpgradeNextCost(id, s.upgrades[id])
-				if cost and cost < bestCost then bestId, bestCost = id, cost end
-			end
-			if bestId and s.cash >= bestCost + reserve() then
-				s.cash -= bestCost
-				s.upgrades[bestId] += 1
-				local key = bestId .. " L" .. s.upgrades[bestId] .. " (R" .. s.rebirths .. ")"
-				if not res.upgrade[key] then res.upgrade[key] = t end
-				if not res.firstUpgrade then res.firstUpgrade = t end
-				table.insert(res.miles, t)
-				bought = true
-			end
+		while true do
+			local id, cost = nextUpgrade()
+			if not id or s.cash < cost + reserve() then return end
+			s.cash -= cost
+			s.upgrades[id] += 1
+			local key = id .. " L" .. s.upgrades[id] .. " (R" .. s.rebirths .. ")"
+			if not res.upgrade[key] then res.upgrade[key] = t end
+			if not res.firstUpgrade then res.firstUpgrade = t end
+			mile(t)
 		end
 	end
+	-- Sell the weakest cryptid (never the last Rare+). Returns true if sold.
+	local function trySell(t, saving, rarePlus, need)
+		local worstI, worstInc = nil, math.huge
+		for i = 1, cap() do
+			local n = s.nests[i]
+			if n and n.kind == "Creature" and not (rarePlus <= 1 and isRarePlus(n)) and creatureIncome(n) < worstInc then
+				worstI, worstInc = i, creatureIncome(n)
+			end
+		end
+		if not worstI then return false end
+		if need then
+			if not need(s.nests[worstI]) then return false end
+		else
+			local value = s.nests[worstI].vault + worstInc * C.Sell.RefundSeconds
+			s.cash += value
+			local tier = wantedTier(1, saving)
+			s.cash -= value
+			if tier == 0 or typicalIncome(eggOrder[tier], t) < P.sellRatio * worstInc then return false end
+		end
+		s.cash += s.nests[worstI].vault + worstInc * C.Sell.RefundSeconds
+		s.nests[worstI] = nil
+		res.sold += 1
+		if not res.firstSell then res.firstSell = t end
+		return true
+	end
 
-	local nextSample = 1
+	local hazard = -math.log(1 - P.lossPer90s) / 90
+	local nextSample, nextReward = 1, 1
+	table.sort(rewards, function(a, b) return a.t < b.t end)
 	local t = 0
 	while t < P.horizon do
 		t += P.dt
+		-- Nests: eggs count up and hatch by themselves; creatures fill vaults.
+		local speed = hatchSpeed(t)
 		for i = 1, C.Plot.MaxNests do
 			local n = s.nests[i]
 			if n then
-				if n.kind == "Egg" then n.heat = math.min(C.Heat.Max, n.heat + heatRate() * P.dt)
-				else n.vault = math.min(vaultCap(n), n.vault + creatureIncome(n) * P.dt) end
+				if n.kind == "Egg" then
+					local egg = C.Eggs[n.egg]
+					n.inc = math.min(egg.HatchTime, n.inc + speed * P.dt)
+					if n.inc >= egg.HatchTime then
+						hatch(i, t)
+					elseif P.theft and t > P.spawnLock
+						and rng:NextNumber() < hazard * P.dt * (if egg.AnnounceInNest then P.announceRisk else 1) then
+						s.nests[i] = nil
+						res.lost += 1
+					end
+				else
+					n.vault = math.min(vaultCap(n), n.vault + creatureIncome(n) * P.dt)
+				end
 			end
 		end
+		-- Rewards, saved eggs, Instant Hatch.
+		while rewards[nextReward] and t >= rewards[nextReward].t do
+			grant(rewards[nextReward].items, t)
+			nextReward += 1
+		end
+		while #s.pending > 0 and freeNest() do placeEgg(table.remove(s.pending, 1), 0) end
+		if s.instant > 0 then
+			local bestI, bestTier = nil, 0
+			for i = 1, cap() do
+				local n = s.nests[i]
+				if n and n.kind == "Egg" and eggIndex[n.egg] > bestTier then bestI, bestTier = i, eggIndex[n.egg] end
+			end
+			if bestI then hatch(bestI, t) s.instant -= 1 end
+		end
+		-- Milestones
 		for _, id in ipairs(eggOrder) do
 			if not res.eggAfford[id] and unlocked(id) and s.cash >= C.Eggs[id].Price then
 				res.eggAfford[id] = t
-				table.insert(res.miles, t)
+				mile(t)
 			end
 		end
 		local free, eggs, creatures, rarePlus = counts()
 		if creatures >= 1 and not res.firstCreature then res.firstCreature = t end
 		if creatures >= 6 and not res.six then res.six = t end
-		if rarePlus and not res.firstRare then res.firstRare = t end
+		if rarePlus > 0 and not res.firstRare then res.firstRare = t end
+		-- Rebirth as soon as affordable with a Rare+ (not mid-carry).
 		local cost = C.GetRebirthCost(s.rebirths)
-		if rarePlus and s.cash >= cost and s.phase ~= "carrying" then
+		local busy = s.phase == "carrying" or s.phase == "raid" or s.phase == "trip"
+		if rarePlus > 0 and s.cash >= cost and not busy then
 			s.rebirths += 1
 			res.rebirth[s.rebirths] = t
-			table.insert(res.miles, t)
-			s.cash = P.rebirthCashAfter
+			mile(t)
+			s.cash = C.Rebirth.StartingCash or 0
 			s.nests = {}
 			for _, id in ipairs(C.UpgradeOrder) do s.upgrades[id] = 1 end
 			s.phase = "home"
+			free, eggs, creatures, rarePlus = counts()
 		end
-		local saving = rarePlus and s.cash >= P.saveFraction * C.GetRebirthCost(s.rebirths)
+		local saving = rarePlus > 0 and s.cash >= P.saveFraction * C.GetRebirthCost(s.rebirths)
+		-- Rescue egg (NestService): nothing at all and too poor for a Forest egg.
+		if C.Economy.RescueEnabled and eggs == 0 and creatures == 0 and #s.pending == 0 and s.phase ~= "carrying"
+			and s.cash < C.Eggs[eggOrder[1]].Price and t - s.lastRescue >= C.Economy.RescueCooldown then
+			placeEgg(C.Economy.RescueEggId, 0)
+			s.lastRescue = t
+			free, eggs, creatures, rarePlus = counts()
+		end
+		-- A sighting: some players go for it; a capture is a free Rare+.
+		if sightings[t] and (s.phase == "home" or s.phase == "atBelt") and rng:NextNumber() < P.sightingWinChance then
+			local ok = free > 0
+			if not ok and P.sell then
+				ok = trySell(t, saving, rarePlus, function(n) return not isRarePlus(n) end)
+			end
+			if ok then
+				s.capture = rollFrom(sightWeights)
+				s.phase = "trip"; s.timer = P.sightingTrip
+			end
+		end
 
 		if s.phase == "home" then
 			if t - s.lastCollect >= P.collectInterval then collect(t) end
-			local threshold = if s.rebirths == 0 and s.hatches < P.earlyHatches then P.earlyThreshold else P.heatThreshold
-			for i = 1, cap() do
-				local n = s.nests[i]
-				if n and n.kind == "Egg" and (n.heat >= threshold or (P.firstHatchNow and s.hatches == 0)) then
-					local rar = rollRarity(n.egg, n.heat, luck())
-					s.nests[i] = { kind = "Creature", rarity = rar, vault = 0 }
-					s.hatches += 1
-					if not res.rarSeen[rar] then
-						res.rarSeen[rar] = t
-						table.insert(res.miles, t)
-					end
-				end
+			if P.sell and C.Sell.Enabled and free == 0 and #s.pending == 0 then
+				if trySell(t, saving, rarePlus) then free = 1 end
 			end
-			free, eggs, creatures, rarePlus = counts()
-			-- NestService rescue egg
-			if C.Economy.RescueEnabled ~= false and eggs == 0 and creatures == 0 and s.cash < C.Eggs[eggOrder[1]].Price
-				and t - s.lastRescue >= (C.Economy.RescueCooldown or 180) then
-				placeEgg(C.Economy.RescueEggId or eggOrder[1])
-				s.lastRescue = t
-			end
-			if P.release and free == 0 and eggs == 0 then
-				local tier = wantedTier(1)
-				if tier > 0 then
-					local worstI, worstInc = nil, math.huge
-					for i = 1, cap() do
-						local n = s.nests[i]
-						if n and n.kind == "Creature" and creatureIncome(n) < worstInc then worstI, worstInc = i, creatureIncome(n) end
-					end
-					if worstI and typicalIncome(eggOrder[tier]) > worstInc * 1.5 then
-						s.cash += worstInc * P.sellSeconds + s.nests[worstI].vault
-						s.nests[worstI] = nil
-						free = 1
-					end
-				end
-			end
-			local tier = wantedTier(free)
+			local tier = wantedTier(free, saving)
 			local wantsUpgrade = false
 			if not saving then
-				for _, id in ipairs(C.UpgradeOrder) do
-					local c = C.GetUpgradeNextCost(id, s.upgrades[id])
-					if c and s.cash >= c + reserve() then wantsUpgrade = true end
-				end
+				local id, c = nextUpgrade()
+				wantsUpgrade = id ~= nil and s.cash >= c + reserve()
 			end
-			if ((free > 0 and tier > 0) or wantsUpgrade) and t - s.lastTravel >= C.Travel.Cooldown then
+			if ((free > #s.pending and tier > 0) or wantsUpgrade) and t - s.lastTravel >= C.Travel.Cooldown then
 				collect(t)
 				s.phase = "toBelt"; s.timer = P.travelToBelt; s.lastTravel = t
 			end
@@ -610,25 +765,65 @@ local function runOnce(C, seed)
 			if s.timer <= 0 then s.phase = "atBelt"; s.beltWait = 0; buyUpgrades(t, saving) end
 		elseif s.phase == "atBelt" then
 			s.beltWait += P.dt
-			if (t % C.Belt.SpawnInterval) == 0 then
+			if (t % C.Belt.SpawnInterval) == 0 and free > 0 then
 				local id = rollBelt()
-				local tier = wantedTier(math.max(free, 1))
-				local ok = unlocked(id) and C.Eggs[id].Price <= s.cash and free > 0
+				local tier = wantedTier(free, saving)
+				local ok = unlocked(id) and C.Eggs[id].Price <= s.cash and tier > 0
 					and (eggIndex[id] >= tier - 1 or s.beltWait >= P.impatience)
+					and (not saving or C.Eggs[id].Price <= s.cash * P.saveEggShare)
 				if ok and rng:NextNumber() < P.gotWantedChance then
 					s.cash -= C.Eggs[id].Price
 					s.carryEgg = id
-					local speed = C.GetUpgradeValue("WalkSpeed", s.upgrades.WalkSpeed) * C.Belt.CarrySpeedMultiplier
-					s.phase = "carrying"; s.timer = P.carryDistance / speed + 2
+					local walk = C.GetUpgradeValue("WalkSpeed", s.upgrades.WalkSpeed) * C.Belt.CarrySpeedMultiplier
+					local carryTime = P.carryDistance / walk + 2
+					s.phase = "carrying"; s.timer = carryTime
+					local e = huntEnd(t, t + carryTime)
+					if e then
+						if rng:NextNumber() < P.huntWaitChance then
+							s.timer = (e - t) + carryTime -- wait it out by the fire
+						elseif rng:NextNumber() < P.huntCatchChance then
+							s.carryEgg = nil -- caught: belt egg gone, stunned
+							res.caught += 1
+							s.timer = carryTime * 0.5 + C.Hunt.StunDuration
+						end
+					end
 				end
 			end
-			if s.phase == "atBelt" and (free == 0 or wantedTier(math.max(free, 1)) == 0) then
+			if s.phase == "atBelt" and (free == 0 or wantedTier(free, saving) == 0) then
 				s.phase = "walkHome"; s.timer = P.travelToBelt + 5
 			end
 		elseif s.phase == "carrying" then
 			s.timer -= P.dt
 			if s.timer <= 0 then
-				placeEgg(s.carryEgg); s.carryEgg = nil; s.phase = "home"
+				s.phase = "home"
+				if s.carryEgg then
+					placeEgg(s.carryEgg, 0)
+					s.carryEgg = nil
+					-- Sometimes they go and steal one too (eggs only).
+					if P.theft and rng:NextNumber() < P.stealChance and freeNest() and not huntEnd(t, t + P.raidTime) then
+						s.phase = "raid"; s.timer = P.raidTime
+					end
+				end
+			end
+		elseif s.phase == "raid" then
+			s.timer -= P.dt
+			if s.timer <= 0 then
+				s.phase = "home"
+				local maxTier = tierFor(math.huge)
+				local tier = math.clamp(math.max(1, wantedTier(1, false)) + rng:NextInteger(-1, 1), 1, maxTier)
+				local id = eggOrder[tier]
+				if placeEgg(id, rng:NextNumber() * 0.8 * C.Eggs[id].HatchTime) then res.stolen += 1 end
+			end
+		elseif s.phase == "trip" then
+			s.timer -= P.dt
+			if s.timer <= 0 then
+				s.phase = "home"
+				local i = freeNest()
+				if i and s.capture then
+					addCreature(i, s.capture, t)
+					res.captured += 1
+				end
+				s.capture = nil
 			end
 		elseif s.phase == "walkHome" then
 			s.timer -= P.dt
@@ -649,14 +844,16 @@ local function pct(list, q)
 end
 local function fmtT(sec)
 	if not sec then return "never" end
-	return string.format("%.1fm", sec / 60)
+	return string.format("%.1f", sec / 60)
 end
 
 local function runVariant(name, overrideFn, params)
 	P = table.clone(DEFAULTS)
 	for k, v in pairs(params or {}) do P[k] = v end
 	local backup = {}
-	for k, v in pairs(Config) do if type(v) == "table" then backup[k] = v; Config[k] = deepCopy(v) end end
+	for k, v in pairs(Config) do
+		if type(v) == "table" then backup[k] = v; Config[k] = deepCopy(v) end
+	end
 	local all = {}
 	local ok, err = pcall(function()
 		if overrideFn then overrideFn(Config) end
@@ -665,47 +862,61 @@ local function runVariant(name, overrideFn, params)
 	for k, v in pairs(backup) do Config[k] = v end
 	if not ok then return "ERROR " .. tostring(err) end
 
-	local lines = { "== " .. name .. " (" .. #all .. " runs; median [p25..p75]) ==" }
+	local lines = { "== " .. name .. " (" .. #all .. " runs; minutes, median [p25..p75]) ==" }
 	local function stat(label, get)
 		local xs, never = {}, 0
-		for _, r in ipairs(all) do local v = get(r) if v then table.insert(xs, v) else never += 1 end end
-		table.insert(lines, string.format("%-30s %s [%s..%s]%s", label, fmtT(pct(xs, 0.5)), fmtT(pct(xs, 0.25)), fmtT(pct(xs, 0.75)),
-			if never > 0 then string.format("  (never in %d%%)", math.floor(never / #all * 100)) else ""))
+		for _, r in ipairs(all) do
+			local v = get(r)
+			if v then table.insert(xs, v) else never += 1 end
+		end
+		table.insert(lines, string.format("%-26s %s [%s..%s]%s", label, fmtT(pct(xs, 0.5)), fmtT(pct(xs, 0.25)), fmtT(pct(xs, 0.75)),
+			if never > 0 then string.format(" never %d%%", math.floor(never / #all * 100 + 0.5)) else ""))
 	end
 	stat("first creature", function(r) return r.firstCreature end)
-	stat("first upgrade (any)", function(r) return r.firstUpgrade end)
+	stat("first upgrade", function(r) return r.firstUpgrade end)
 	stat("first Rare+", function(r) return r.firstRare end)
-	stat("6 creatures at once", function(r) return r.six end)
-	for _, id in ipairs(Config.EggOrder) do stat("can afford " .. id, function(r) return r.eggAfford[id] end) end
+	stat("6 creatures", function(r) return r.six end)
+	stat("first sell", function(r) return r.firstSell end)
+	for _, id in ipairs(Config.EggOrder) do stat("afford " .. id, function(r) return r.eggAfford[id] end) end
 	local keys = {}
-	for _, r in ipairs(all) do for k in pairs(r.upgrade) do if k:find("%(R0%)") then keys[k] = true end end end
+	for _, r in ipairs(all) do
+		for k in pairs(r.upgrade) do if k:find("%(R0%)") then keys[k] = true end end
+	end
 	local sorted = {}
 	for k in pairs(keys) do table.insert(sorted, k) end
 	table.sort(sorted)
-	for _, k in ipairs(sorted) do stat("upg " .. k, function(r) return r.upgrade[k] end) end
-	for n = 1, 3 do stat("rebirth " .. n, function(r) return r.rebirth[n] end) end
-	-- "Fresh goal" pacing: longest wait between milestones in the first hour.
-	local gaps = {}
+	for _, k in ipairs(sorted) do stat((k:gsub(" %(R0%)", "")), function(r) return r.upgrade[k] end) end
+	for n = 1, 4 do stat("rebirth " .. n, function(r) return r.rebirth[n] end) end
+	-- Longest wait between milestones in hour 1, and over the 4 h.
+	local gaps, stalled = {}, 0
 	for _, r in ipairs(all) do
 		table.sort(r.miles)
-		local last, worst = 0, 0
+		local last, worst, last4, worst4 = 0, 0, 0, 0
 		for _, m in ipairs(r.miles) do
-			if m > 3600 then break end
-			worst = math.max(worst, m - last)
-			last = m
+			if m <= 3600 then worst = math.max(worst, m - last) last = m end
+			worst4 = math.max(worst4, m - last4)
+			last4 = m
 		end
 		worst = math.max(worst, 3600 - last)
+		worst4 = math.max(worst4, P.horizon - last4)
 		table.insert(gaps, worst)
+		if worst4 >= 3600 then stalled += 1 end
 	end
-	stat("longest no-milestone gap, hr 1", function(r) return nil end)
-	lines[#lines] = string.format("%-30s %s [%s..%s]", "longest goal gap in hour 1", fmtT(pct(gaps, 0.5)), fmtT(pct(gaps, 0.25)), fmtT(pct(gaps, 0.75)))
+	table.insert(lines, string.format("%-26s %s [%s..%s]", "longest goal gap, hour 1", fmtT(pct(gaps, 0.5)), fmtT(pct(gaps, 0.25)), fmtT(pct(gaps, 0.75))))
+	table.insert(lines, string.format("stalled (60+ min with no new goal in 4 h): %d%%", math.floor(stalled / #all * 100 + 0.5)))
 	local inc = {}
 	for _, m in ipairs(SAMPLES) do
 		local xs = {}
 		for _, r in ipairs(all) do if r.income[m] then table.insert(xs, r.income[m]) end end
-		table.insert(inc, string.format("%dm:$%s", m, Config.FormatNumber(pct(xs, 0.5) or 0)))
+		table.insert(inc, string.format("%d:%s", m, Config.FormatNumber(pct(xs, 0.5) or 0)))
 	end
-	table.insert(lines, "income/s median: " .. table.concat(inc, "  "))
+	table.insert(lines, "income/s: " .. table.concat(inc, " "))
+	local placed, lost, stolen, caught, sold, cap = 0, 0, 0, 0, 0, 0
+	for _, r in ipairs(all) do
+		placed += r.placed; lost += r.lost; stolen += r.stolen; caught += r.caught; sold += r.sold; cap += r.captured
+	end
+	table.insert(lines, string.format("per run: eggs placed %.0f, stolen from you %.0f (%.0f%%), you stole %.0f, hunt-caught %.1f, sold %.0f, sightings won %.1f",
+		placed / #all, lost / #all, lost / math.max(1, placed) * 100, stolen / #all, caught / #all, sold / #all, cap / #all))
 	return table.concat(lines, "\n")
 end
 

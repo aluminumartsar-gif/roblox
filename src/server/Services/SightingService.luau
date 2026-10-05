@@ -609,7 +609,15 @@ local function wirePrompt(sighting: Sighting, prompt: ProximityPrompt)
 				interrupt(other, string.format("%s jumped in — your capture was interrupted!", player.DisplayName), player.DisplayName)
 			end
 		end
-		holds[player] = { Began = os.clock(), SightingId = sighting.Id }
+		local hold: Hold = { Began = os.clock(), SightingId = sighting.Id }
+		holds[player] = hold
+		-- Expire it on the server even if HoldEnded never arrives, so an
+		-- abandoned hold can't be cashed in later.
+		task.delay(Config.Prompts.CaptureHold + Config.Steal.HoldMaxOverrun, function()
+			if holds[player] == hold then
+				holds[player] = nil
+			end
+		end)
 	end)
 
 	-- When a hold COMPLETES, Roblox fires HoldEnded before Triggered: only
@@ -632,8 +640,13 @@ local function wirePrompt(sighting: Sighting, prompt: ProximityPrompt)
 		if not hold or hold.SightingId ~= sighting.Id then
 			return -- refused at the start, interrupted, or fired without a hold
 		end
-		if os.clock() - hold.Began < Config.Prompts.CaptureHold - Config.Steal.HoldTolerance then
+		local elapsed = os.clock() - hold.Began
+		if elapsed < Config.Prompts.CaptureHold - Config.Steal.HoldTolerance then
 			warn(string.format("[SAC/Sighting] Rejected %s: capture hold too short (possible exploit)", player.Name))
+			return
+		end
+		if elapsed > Config.Prompts.CaptureHold + Config.Steal.HoldMaxOverrun then
+			warn(string.format("[SAC/Sighting] Rejected %s: stale capture hold (possible exploit)", player.Name))
 			return
 		end
 		local ok, reason = checkCapture(player, sighting)
@@ -787,13 +800,17 @@ local function onCaptureEscaped(carry: Carry, reason: string)
 		return
 	end
 	captures[carry.Id] = nil
+	-- The Brood Mother taking it back isn't "it got away": HuntEvent
+	-- "Caught" already tells everyone, so no server-wide announce then.
+	local takenBack = reason == Config.Hunt.ReclaimReason
 	broadcast("Escaped", {
 		CarryId = entry.CarryId,
 		Name = entry.Name,
 		Label = entry.Label,
 		Rarity = entry.Rarity,
+		TakenBack = takenBack,
 	})
-	if #Players:GetPlayers() > 0 then
+	if not takenBack and #Players:GetPlayers() > 0 then
 		announce(string.format("The %s got away into the woods!", entry.Label), entry.Rarity)
 	end
 	log("capture carry %d escaped (%s)", carry.Id, reason)

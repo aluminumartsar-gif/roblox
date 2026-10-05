@@ -230,13 +230,23 @@ local function renderCarrying()
 	end
 	local model = myCarriedModel()
 	local label = model and model:GetAttribute("ItemLabel") or "stolen item"
-	if model and model:GetAttribute("Source") == "Belt" then
+	local source = model and model:GetAttribute("Source")
+	if source == "Belt" then
 		-- A bought egg: no timer, but anyone can knock it loose.
 		carryBanner.Text = string.format("Carrying %s — take it to your camp's pad!", tostring(label))
 		carryBanner.BackgroundColor3 = Color3.fromRGB(40, 110, 70)
+	elseif source == "Sighting" then
+		-- A captured wild cryptid: no timer while held, but it's lit up.
+		carryBanner.Text = string.format("Carrying %s — get it to your camp's pad! Everyone can see you.", tostring(label))
+		carryBanner.BackgroundColor3 = Color3.fromRGB(90, 60, 140)
 	else
-		local remaining = (model and model:GetAttribute("ReturnAt") or 0) - Workspace:GetServerTimeNow()
-		carryBanner.Text = string.format("Carrying %s — run to your camp's pad! (%s)", tostring(label), formatClock(remaining))
+		local returnAt = model and model:GetAttribute("ReturnAt")
+		if typeof(returnAt) == "number" then
+			local remaining = returnAt - Workspace:GetServerTimeNow()
+			carryBanner.Text = string.format("Carrying %s — run to your camp's pad! (%s)", tostring(label), formatClock(remaining))
+		else
+			carryBanner.Text = string.format("Carrying %s — run to your camp's pad!", tostring(label))
+		end
 		carryBanner.BackgroundColor3 = Color3.fromRGB(150, 90, 20)
 	end
 	carryBanner.Visible = true
