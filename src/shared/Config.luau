@@ -25,7 +25,7 @@ local Config = {}
 -- VERSION / DEBUG
 -- =========================================================================
 
-Config.Version = "0.2.1-step1"
+Config.Version = "0.3.0-step2"
 
 Config.Debug = {
 	-- Master switch for verbose server logging.
@@ -292,27 +292,62 @@ Config.Luck = {
 -- PLOT / NESTS
 -- =========================================================================
 
+-- Starting values for nest count, walk speed, lock duration and vault cap
+-- are level 1 of their tracks in Config.Upgrades — that is the only place
+-- they are defined.
 Config.Plot = {
-	Count = 10,               -- plots in the ring
+	-- Plots in the ring. Set the place's Server Size (max players) to match:
+	-- a player who can't get a plot is turned away with a message.
+	Count = 10,
 	RingRadius = 260,         -- studs from hub centre to plot centre
 	Size = Vector3.new(80, 1, 80),
+	FloorHeight = 1,          -- plot deck top sits this far above the ground
+	WallHeight = 14,          -- comfortably above a character's ~7 stud jump
+	WallThickness = 1.5,
+	DoorWidth = 12,
 	-- Nests
-	StartingNests = 6,
 	MaxNests = 12,
 	NestGridColumns = 3,
 	NestSpacing = 16,
 	-- Owner perks
 	OwnerWalkSpeedBonus = 0.15, -- +15% on your own plot
-	BaseWalkSpeed = 16,
-	-- Door / lock
-	LockDuration = 60,
+	-- Lock. Duration comes from the LockDuration upgrade track.
+	-- The cooldown is measured from the moment the lock is activated, so
+	-- with 60s locks and a 300s cooldown the base is open 4 min of every 5.
 	LockCooldown = 300,
-	ExtendedLockDuration = 180, -- Extended Lock gamepass
-	EmergencyLockBonus = 120,   -- Emergency Lock dev product adds this
-	-- Vault
-	BaseVaultCap = 25000,
-	-- Claim / release
-	ReleaseOnLeave = true,
+	-- false: the HUD Lock button works from anywhere on the map.
+	-- true:  you must be standing on your own plot to lock it.
+	LockRequiresPresence = false,
+	ExtendedLockDuration = 180, -- Extended Lock gamepass (Step 6)
+	EmergencyLockBonus = 120,   -- Emergency Lock dev product adds this (Step 6)
+	-- How often the server re-checks who is standing on which plot (owner
+	-- speed bonus, ejecting intruders from locked plots).
+	EnforceInterval = 0.25,
+}
+
+-- =========================================================================
+-- MAP (built by code from these numbers; see Modules/MapBuilder)
+-- =========================================================================
+
+Config.Map = {
+	-- Seed for tree/rock placement. Same seed = same forest every boot.
+	Seed = 1337,
+	GroundSize = 1300,        -- square, centred on the hub
+	GroundColor = Color3.fromRGB(46, 62, 40),
+	PathColor = Color3.fromRGB(92, 74, 54),
+	PathWidth = 12,
+	HubRadius = 75,
+	-- The Wilds: forest ring outside the plots where sightings spawn.
+	WildsInnerRadius = 345,
+	WildsOuterRadius = 560,
+	WildsTreeCount = 240,
+	WildsRockCount = 40,
+	TreeMinSpacing = 14,
+	-- Scattered trees between neighbouring plots, for the campsite feel.
+	BetweenPlotTreesEach = 3,
+	-- Invisible wall that keeps players inside the map.
+	BoundaryRadius = 600,
+	BoundaryHeight = 120,
 }
 
 -- =========================================================================
@@ -371,9 +406,7 @@ Config.Sightings = {
 	-- Per player online, shift this fraction of Rare weight into Epic+.
 	RarerPerPlayer = 0.03,
 	MaxPlayersForScaling = 20,
-	-- The Wilds spawn ring
-	WildsInnerRadius = 340,
-	WildsOuterRadius = 520,
+	-- Spawn area is The Wilds ring: Config.Map.WildsInnerRadius..OuterRadius.
 	-- VHS effect radius around the sighting.
 	VhsRadius = 120,
 	VhsTint = Color3.fromRGB(196, 214, 196),
@@ -564,7 +597,7 @@ Config.Remotes = {
 	CollectCash       = { Kind = "Event",    Direction = "ClientToServer", MaxPerMinute = 240 },
 	BuyUpgrade        = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 	DoRebirth         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 6 },
-	ToggleLock        = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
+	LockPlot          = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
 	BeginSteal        = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 40 },
 	ClaimCarried      = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 40 },
 	BeginCapture      = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
@@ -610,16 +643,21 @@ Config.Tags = {
 -- ATMOSPHERE (cozy-spooky night woods)
 -- =========================================================================
 
+-- Applied to Lighting by WorldService on every server boot. Fog is done with
+-- the Atmosphere object (Roblox ignores Lighting.FogStart/FogEnd whenever
+-- an Atmosphere exists), so tune Density/Haze for how far you can see.
 Config.Atmosphere = {
 	ClockTime = 0.5,             -- just past midnight
 	Brightness = 1.2,
 	OutdoorAmbient = Color3.fromRGB(46, 52, 66),
 	Ambient = Color3.fromRGB(28, 30, 40),
-	FogColor = Color3.fromRGB(38, 44, 56),
-	FogStart = 60,
-	FogEnd = 480,
+	FogColor = Color3.fromRGB(38, 44, 56),     -- Atmosphere.Color
+	FogDecay = Color3.fromRGB(24, 28, 40),     -- Atmosphere.Decay
 	AtmosphereDensity = 0.42,
 	AtmosphereHaze = 2.2,
+	CampfireColor = Color3.fromRGB(255, 150, 70),
+	CampfireRange = 40,
+	CampfireBrightness = 3,
 	LanternColor = Color3.fromRGB(255, 196, 128),
 	LanternRange = 28,
 	LanternBrightness = 2.4,
@@ -644,9 +682,9 @@ Config.UI = {
 -- =========================================================================
 
 Config.Performance = {
+	-- Applied in Edit mode by tools/place-settings.luau. The streaming radii
+	-- aren't scriptable in current Studio, so Roblox's defaults are used.
 	StreamingEnabled = true,
-	StreamingTargetRadius = 512,
-	StreamingMinRadius = 128,
 	MaxCreaturePartsEach = 12,
 }
 

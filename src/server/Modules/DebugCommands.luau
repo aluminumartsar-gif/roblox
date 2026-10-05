@@ -17,6 +17,8 @@
 	  dbg:Invoke("dump", "PlayerName")
 	  dbg:Invoke("save", "PlayerName")
 	  dbg:Invoke("wipe", "PlayerName")   -- resets to a fresh profile
+	  dbg:Invoke("plots")                -- who owns what, lock state
+	  dbg:Invoke("resetlock", "PlayerName")
 ]]
 
 local Players = game:GetService("Players")
@@ -105,6 +107,38 @@ function DebugCommands.Start()
 			end
 		end)
 		return "wipe ok=" .. tostring(ok)
+	end
+
+	local PlotService = require(Services:WaitForChild("PlotService"))
+
+	function commands.plots()
+		local now = workspace:GetServerTimeNow()
+		local lines = {}
+		for _, plot in ipairs(PlotService.GetPlots()) do
+			table.insert(lines, string.format("Plot %d owner=%s locked=%s (%.0fs) cooldown=%.0fs",
+				plot.Index,
+				plot.Owner and plot.Owner.Name or "-",
+				tostring(PlotService.IsLocked(plot)),
+				math.max(0, plot.LockedUntil - now),
+				math.max(0, plot.LockCooldownUntil - now)))
+		end
+		return table.concat(lines, "\n")
+	end
+
+	-- Clears a player's lock and cooldown so lock tests don't wait 5 min.
+	function commands.resetlock(name)
+		local player = findPlayer(name)
+		local plot = player and PlotService.GetPlot(player)
+		if not plot then
+			return "no plot"
+		end
+		plot.LockedUntil = 0
+		plot.LockCooldownUntil = 0
+		plot.Model:SetAttribute("LockedUntil", 0)
+		plot.Model:SetAttribute("LockCooldownUntil", 0)
+		player:SetAttribute("PlotLockedUntil", 0)
+		player:SetAttribute("PlotLockCooldownUntil", 0)
+		return "lock reset for " .. player.Name
 	end
 
 	local existing = ServerStorage:FindFirstChild("SAC_Debug")

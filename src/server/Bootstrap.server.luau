@@ -11,9 +11,16 @@
 	service produces one clear error instead of a require cascade.
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local RunService = game:GetService("RunService")
+
+-- PlotService spawns each character at its owner's plot once the profile
+-- and plot are ready. Set this before anything can yield, so nobody gets
+-- auto-spawned into a world that isn't built yet. (Also saved as a place
+-- setting by tools/place-settings.luau, as a second line of defence.)
+Players.CharacterAutoLoads = false
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -23,8 +30,10 @@ local ServicesFolder = ServerRoot:WaitForChild("Services")
 
 -- Services start in this order. Add to the list as steps land.
 local SERVICE_ORDER: { string } = {
+	"WorldService",     -- build the map first, before anyone can spawn
 	"DataService",
-	-- Step 2: "PlotService",
+	"MovementService",
+	"PlotService",
 	-- Step 3: "EggService", "IncomeService",
 	-- Step 4: "StealService",
 	-- Step 5: "RebirthService", "UpgradeService",
