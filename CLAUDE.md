@@ -223,6 +223,9 @@ LocalScript, plain `.luau` = ModuleScript.
 - Kit screens not yet used stay as templates (Index → Codex in Step 7;
   Daily, SpinWheel, Rewards, OfflineRewards → Step 7.5).
 - Fast travel (HUD Base/Eggs) is server-side in `TravelService`.
+- Our own screens (not from the kit) are sized in pixels: call
+  `ScreenScale.Apply(frame)` on their top frame so they shrink on phones
+  like the kit does. Test new UI in Test → Device → a phone.
 
 ### Icons
 - The owner's RhosGFX vector icon pack (`../vector-icon-pack.zip`). Its

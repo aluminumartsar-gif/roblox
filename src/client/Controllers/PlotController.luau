@@ -25,6 +25,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 local Icon = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Icon"))
+local ScreenScale = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("ScreenScale"))
 
 local PlotController = {}
 
@@ -115,35 +116,40 @@ local function buildPanel(): (TextButton, TextLabel, TextLabel)
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Panel"
-	-- Top-left, under the Roblox top bar and above the kit HUD's side buttons.
+	-- One compact row, top-left under the Roblox top bar and above the kit
+	-- HUD's side buttons (a column didn't fit there on phones).
 	frame.AnchorPoint = Vector2.new(0, 0)
 	frame.Position = UDim2.new(0.01, 0, 0.015, 0)
-	frame.Size = UDim2.fromOffset(170, 0)
-	frame.AutomaticSize = Enum.AutomaticSize.Y
+	frame.Size = UDim2.fromOffset(0, 0)
+	frame.AutomaticSize = Enum.AutomaticSize.XY
 	frame.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
 	frame.BackgroundTransparency = 0.25
 	frame.Parent = gui
+	ScreenScale.Apply(frame)
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 10)
 	corner.Parent = frame
 	local padding = Instance.new("UIPadding")
-	padding.PaddingTop = UDim.new(0, 8)
-	padding.PaddingBottom = UDim.new(0, 8)
-	padding.PaddingLeft = UDim.new(0, 8)
-	padding.PaddingRight = UDim.new(0, 8)
+	padding.PaddingTop = UDim.new(0, 6)
+	padding.PaddingBottom = UDim.new(0, 6)
+	padding.PaddingLeft = UDim.new(0, 10)
+	padding.PaddingRight = UDim.new(0, 6)
 	padding.Parent = frame
 	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0, 6)
+	layout.Padding = UDim.new(0, 12)
 	layout.Parent = frame
 
 	local nests = Instance.new("TextLabel")
 	nests.Name = "Nests"
 	nests.LayoutOrder = 1
-	nests.Size = UDim2.new(1, 0, 0, 22)
+	nests.Size = UDim2.fromOffset(0, 22)
+	nests.AutomaticSize = Enum.AutomaticSize.X
 	nests.BackgroundTransparency = 1
 	nests.Font = Enum.Font.GothamBold
-	nests.TextSize = 16
+	nests.TextSize = 18
 	nests.TextColor3 = Color3.fromRGB(255, 236, 200)
 	nests.TextXAlignment = Enum.TextXAlignment.Left
 	nests.Text = "Nests -/-"
@@ -153,7 +159,7 @@ local function buildPanel(): (TextButton, TextLabel, TextLabel)
 	local button = Instance.new("TextButton")
 	button.Name = "Lock"
 	button.LayoutOrder = 2
-	button.Size = UDim2.new(1, 0, 0, 44) -- tall enough for a thumb
+	button.Size = UDim2.fromOffset(170, 44) -- tall enough for a thumb
 	button.Font = Enum.Font.GothamBold
 	button.TextSize = 16
 	button.TextColor3 = Color3.new(1, 1, 1)
@@ -168,10 +174,11 @@ local function buildPanel(): (TextButton, TextLabel, TextLabel)
 	local protection = Instance.new("TextLabel")
 	protection.Name = "Protection"
 	protection.LayoutOrder = 0
-	protection.Size = UDim2.new(1, 0, 0, 20)
+	protection.Size = UDim2.fromOffset(0, 20)
+	protection.AutomaticSize = Enum.AutomaticSize.X
 	protection.BackgroundTransparency = 1
 	protection.Font = Enum.Font.GothamBold
-	protection.TextSize = 14
+	protection.TextSize = 16
 	protection.TextColor3 = Color3.fromRGB(140, 210, 255)
 	protection.TextXAlignment = Enum.TextXAlignment.Left
 	protection.Visible = false

@@ -381,7 +381,8 @@ fills the kit's screens; the kit's own shop scripts are not used.
   quick-buys for the Luck Potion and 3-Egg Bundle; buff timers above the cash
 - **Screens:** Store, Rebirth (+ confirm), Egg Shop, Upgrades, Settings
   (sounds on/off). One open at a time; shop screens close when you walk away
-- **Plot panel:** top left — protection timer, nests used, Lock button
+- **Plot panel:** one row, top left — protection timer, nests used, Lock
+  button. Our own UI scales with screen height so it fits phones
 - **Kit screens waiting for later steps:** Index (Codex, Step 7), Daily
   Rewards, Spin Wheel, Playtime Gifts, Offline Earnings (Step 7.5)
 - **Notification feed:** purchases, steals, hatches

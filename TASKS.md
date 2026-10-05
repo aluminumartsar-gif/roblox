@@ -257,7 +257,7 @@ and `PromptGamePassPurchaseFinished` (Studio test purchases need real ids).
 
 ---
 
-## Step 6.5 — STUD UI kit swap `[~]` (owner request, before Step 7)
+## Step 6.5 — STUD UI kit swap `[x]` (owner request, before Step 7)
 
 Owner supplied "Livvy's Orchard STUD UI Pack V3" (`.rbxm`, purchased).
 Audited: 20 scripts, no remote code, no HTTP, no obfuscation; the kit's own
@@ -276,7 +276,10 @@ our server-checked flow.
 - [x] Invite button → Roblox invite prompt
 - [x] Unused kit screens hidden (Gift, Gift Player, Inventory/toolbar, Sell)
 - [x] Old `Components/ShopPanel` removed; plot panel moved top-left
-- [ ] Phone-size check — owner: Test tab → Device → pick a phone, Play
+- [x] Phone-size check (owner ran the phone emulator, 749x368 landscape):
+      kit screens fit; our pixel-sized UI now scales with screen height
+      (`Components/ScreenScale`, `Config.UI.ScreenScale`); plot panel is
+      one row so it clears the side buttons; toasts bolder
 
 ## Step 7.5 — Retention features `[ ]` (owner request)
 
@@ -289,6 +292,8 @@ Kit screens already exist for each; hidden until built.
 
 ## Step 8 — Polish and launch `[ ]`
 
+- [ ] Nest billboards (name/rarity/income) are fixed pixel size and crowd
+      a phone screen — make them smaller or stud-sized
 - [ ] UI pass: HUD, bottom bar, plot panel, notification feed, banner
 - [ ] Free Roblox sounds and particles; unique Secret hatch sound
 - [ ] Global leaderboard

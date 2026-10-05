@@ -801,8 +801,10 @@ Config.UI = {
 	NotificationDuration = 4,
 	MaxNotifications = 4,
 	BannerDuration = 8,
-	-- Bottom bar buttons, in order.
-	BottomButtons = { "Eggs", "Upgrades", "Rebirth", "Codex", "Robux" },
+	-- Our pixel-sized UI (plot panel, buff chips, toasts, steal banners)
+	-- scales with screen height so it fits phones like the kit does:
+	-- scale = screen height / ReferenceHeight, kept between Min and Max.
+	ScreenScale = { ReferenceHeight = 650, Min = 0.7, Max = 1.2 },
 	-- Cash abbreviation suffixes.
 	NumberSuffixes = { "", "K", "M", "B", "T", "Qa", "Qi" },
 }

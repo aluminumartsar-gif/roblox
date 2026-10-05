@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local ScreenScale = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("ScreenScale"))
 
 local NotificationController = {}
 
@@ -53,15 +54,15 @@ function NotificationController.Show(text: string, kind: string?, color: Color3?
 	label.AutomaticSize = Enum.AutomaticSize.X
 	label.Size = UDim2.fromOffset(0, 32)
 	label.BackgroundColor3 = color or KIND_COLORS[kind or "Info"] or KIND_COLORS.Info
+	label.BackgroundTransparency = 0.1
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 17
 	if kind == "Announce" then
 		label.Font = Enum.Font.GothamBlack
 		label.TextSize = 19
 		label.Size = UDim2.fromOffset(0, 38)
 	end
-	label.BackgroundTransparency = 0.1
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.Font = Enum.Font.GothamMedium
-	label.TextSize = 17
 	label.Text = text
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 8)
@@ -96,6 +97,7 @@ function NotificationController.Start()
 	frame.AutomaticSize = Enum.AutomaticSize.Y
 	frame.BackgroundTransparency = 1
 	frame.Parent = gui
+	ScreenScale.Apply(frame)
 
 	local layout = Instance.new("UIListLayout")
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center

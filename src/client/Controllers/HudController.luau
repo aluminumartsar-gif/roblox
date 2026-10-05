@@ -27,6 +27,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 local Components = script.Parent.Parent:WaitForChild("Components")
 local Kit = require(Components:WaitForChild("Kit"))
 local Icon = require(Components:WaitForChild("Icon"))
+local ScreenScale = require(Components:WaitForChild("ScreenScale"))
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 local RobuxShopController = require(script.Parent:WaitForChild("RobuxShopController"))
@@ -86,6 +87,7 @@ local function buildExtras(gui: ScreenGui): ({ [string]: TextLabel }, TextLabel)
 	row.Size = UDim2.fromOffset(0, 30)
 	row.AutomaticSize = Enum.AutomaticSize.X
 	row.Parent = gui
+	ScreenScale.Apply(row)
 	local layout = Instance.new("UIListLayout")
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
