@@ -39,6 +39,23 @@ Config.Debug = {
 }
 
 -- =========================================================================
+-- ECONOMY BASICS
+-- =========================================================================
+
+Config.Economy = {
+	-- A brand-new profile starts with this much cash: enough for a few
+	-- Forest eggs off the belt, so the very first minute has something to do.
+	StartingCash = 300,
+	-- Safety net so nobody can get stuck: a player with no eggs, no
+	-- creatures, nothing in hand, no saved eggs and less cash than the
+	-- cheapest egg gets a free egg placed in a nest.
+	RescueEnabled = true,
+	RescueEggId = "forest",
+	RescueCheckInterval = 5,   -- seconds between checks
+	RescueCooldown = 180,      -- per player, seconds between free eggs
+}
+
+-- =========================================================================
 -- RARITY
 -- Order matters: index 1 is the most common. "Rare and above" for the heat
 -- bonus means every rarity at HeatBonusMinIndex or higher.
@@ -527,6 +544,60 @@ Config.Codex = {
 }
 
 -- =========================================================================
+-- RETENTION (Step 7.5): Daily Rewards, Spin Wheel, Playtime Gifts,
+-- Offline Earnings. Filled in by the retention step.
+-- =========================================================================
+
+Config.Retention = {}
+
+-- =========================================================================
+-- LEADERBOARDS (Step 8)
+-- =========================================================================
+
+Config.Leaderboards = {}
+
+-- =========================================================================
+-- FIRST-JOIN TUTORIAL (Step 8)
+-- =========================================================================
+
+Config.Tutorial = {}
+
+-- =========================================================================
+-- SOUNDS (Step 8). Name -> { Id, Volume, ... }. Only Roblox-hosted audio
+-- that loads in this experience goes here.
+-- =========================================================================
+
+Config.Sounds = {}
+
+-- =========================================================================
+-- FEEDBACK / JUICE (Step 8): hatch reveal, cash popups, effects.
+-- =========================================================================
+
+Config.Feedback = {}
+
+-- =========================================================================
+-- ART (Step 8). Generated meshes for creatures, eggs and props.
+--
+-- Each entry: { Mesh = "rbxassetid://...", Texture = "rbxassetid://...",
+--   Height = studs, Yaw = degrees }. Height is the model's standing height;
+--   Yaw turns the mesh so the creature faces -Z (the way it looks at the
+--   door). ArtService turns these into templates under
+--   ReplicatedStorage.ArtTemplates at boot; ItemVisuals clones them. Anything
+--   missing here (or that fails to load) falls back to the block placeholder,
+--   so a broken asset can never break the game.
+-- =========================================================================
+
+Config.Art = {
+	Creatures = {},
+	Eggs = {},
+	Props = {},
+	-- Boot waits up to this long for the meshes (they load in parallel,
+	-- usually in a second or two). Anything not ready by then uses the
+	-- placeholder for this server's lifetime.
+	LoadTimeout = 20,
+}
+
+-- =========================================================================
 -- REBIRTH
 -- =========================================================================
 
@@ -688,8 +759,11 @@ Config.DevProducts = {
 
 Config.Data = {
 	StoreName = "StealACryptid",
-	-- Bump this to wipe live data. Only do this before launch.
-	StoreScope = "v1",
+	-- Live servers save here. Bump it to wipe live data (only before launch).
+	StoreScope = "live1",
+	-- Studio play tests save here instead, so testing never touches real
+	-- players' saves. ("v1" is where all pre-launch testing was saved.)
+	StudioStoreScope = "v1",
 	AutosaveInterval = 60,
 	LoadRetryCount = 5,
 	LoadRetryBaseDelay = 1,     -- seconds; doubles each retry
@@ -726,10 +800,27 @@ Config.Remotes = {
 	LockPlot          = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
 	-- (Stealing, picking up and the Bat are prompts / a tool / a pad touch,
 	-- all handled server-side, so they need no remotes.)
-	BeginCapture      = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
-	TakePhoto         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 	PromptPurchase    = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 	Travel            = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
+
+	-- ---- Sightings (Step 7) ----
+	-- SightingBanner (above) carries ("Started" | "Captured" | "Ended", info).
+	-- Capturing is a ProximityPrompt, so it needs no client->server remote.
+
+	-- ---- Codex (Step 7) ----
+	TakePhoto         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 40 },
+	CodexDiscovered   = { Kind = "Event",    Direction = "ServerToClient" },
+
+	-- ---- Retention (Step 7.5) ----
+	ClaimDaily        = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
+	SpinWheel         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
+	ClaimPlaytimeGift = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
+	ClaimOffline      = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 10 },
+	RetentionState    = { Kind = "Event",    Direction = "ServerToClient" },
+
+	-- ---- Feedback / juice (Step 8) ----
+	HatchResult       = { Kind = "Event",    Direction = "ServerToClient" },
+	CashCollected     = { Kind = "Event",    Direction = "ServerToClient" },
 }
 
 -- Generic backstop: any single player firing more than this many remotes

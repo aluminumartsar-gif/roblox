@@ -25,17 +25,26 @@ local ControllersFolder = ClientRoot:WaitForChild("Controllers")
 local CONTROLLER_ORDER: { string } = {
 	"ProfileController",
 	"NotificationController",
+	"SoundController",            -- early, so everything after can play sounds
 	-- Screens the HUD opens start before the HUD itself.
 	"RobuxShopController",
 	"RebirthController",
 	"SettingsController",
 	"HudController",
+	-- Screens that claim their own HUD button (HudController.Bind).
+	"CodexController",
+	"DailyRewardsController",
+	"SpinWheelController",
+	"PlaytimeGiftsController",
+	"OfflineEarningsController",
 	"PlotController",
 	"EggBeltController",
 	"UpgradeShopController",
 	"NestVisualsController",
 	"StealController",
-	-- Step 7: "SightingController", "CodexController",
+	"SightingController",
+	"FeedbackController",
+	"TutorialController",         -- last: it points at everything else
 }
 
 local function log(fmt: string, ...: any)

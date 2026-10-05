@@ -1,3 +1,4 @@
 # Toolchain for Steal a Cryptid. Install with: aftman install
 [tools]
 rojo = "rojo-rbx/rojo@7.7.0-rc.1"
+luau-lsp = "JohnnyMorganz/luau-lsp@1.70.1"

@@ -37,7 +37,7 @@ local Server = ServerScriptService:WaitForChild("Server")
 local Modules = Server:WaitForChild("Modules")
 local Services = Server:WaitForChild("Services")
 local EggRoller = require(Modules:WaitForChild("EggRoller"))
-local ItemVisuals = require(Modules:WaitForChild("ItemVisuals"))
+local ItemVisuals = require(Shared:WaitForChild("ItemVisuals"))
 local RemoteGuard = require(Modules:WaitForChild("RemoteGuard"))
 local Notifier = require(Modules:WaitForChild("Notifier"))
 local DataService = require(Services:WaitForChild("DataService"))
@@ -397,6 +397,46 @@ local function tickHeat(dt: number)
 end
 
 --------------------------------------------------------------------------
+-- Rescue (Config.Economy): nobody can get stuck with nothing to do
+--------------------------------------------------------------------------
+
+local lastRescue: { [Player]: number } = {}
+
+local function cheapestStarterEggPrice(): number
+	local cheapest = math.huge
+	for _, egg in pairs(Config.Eggs) do
+		if egg.RequiredRebirths == 0 and egg.Price < cheapest then
+			cheapest = egg.Price
+		end
+	end
+	return cheapest
+end
+
+local function checkRescue()
+	local economy = Config.Economy
+	local cheapest = cheapestStarterEggPrice()
+	for _, plot in ipairs(PlotService.GetPlots()) do
+		local owner = plot.Owner
+		local data = owner and DataService.Get(owner)
+		if owner and data
+			and data.Cash < cheapest
+			and #data.PendingEggs == 0
+			and owner:GetAttribute("Carrying") ~= true
+			and NestService.CountUsed(owner) == 0
+			and (lastRescue[owner] or -math.huge) + economy.RescueCooldown <= os.clock()
+		then
+			local nestIndex = NestService.PlaceEgg(owner, economy.RescueEggId, 0)
+			if nestIndex then
+				lastRescue[owner] = os.clock()
+				Notifier.Send(owner, string.format("The woods left you a gift: a free %s in nest %d!",
+					Config.Eggs[economy.RescueEggId].Name, nestIndex), "Success")
+				log("rescued %s with a free %s", owner.Name, economy.RescueEggId)
+			end
+		end
+	end
+end
+
+--------------------------------------------------------------------------
 -- Start
 --------------------------------------------------------------------------
 
@@ -428,6 +468,22 @@ function NestService.Start()
 			end
 		end
 	end)
+
+	if Config.Economy.RescueEnabled then
+		assert(Config.Eggs[Config.Economy.RescueEggId], "Config.Economy.RescueEggId is not an egg")
+		task.spawn(function()
+			while true do
+				task.wait(Config.Economy.RescueCheckInterval)
+				local ok, err = pcall(checkRescue)
+				if not ok then
+					warn("[SAC/Nest] rescue check errored: " .. tostring(err))
+				end
+			end
+		end)
+		game:GetService("Players").PlayerRemoving:Connect(function(player)
+			lastRescue[player] = nil
+		end)
+	end
 
 	-- Optional boot-time odds check (Config.Debug.RunOddsSimulationOnStart).
 	if Config.Debug.RunOddsSimulationOnStart then

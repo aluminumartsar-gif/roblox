@@ -30,6 +30,7 @@ local ServicesFolder = ServerRoot:WaitForChild("Services")
 
 -- Services start in this order. Add to the list as steps land.
 local SERVICE_ORDER: { string } = {
+	"ArtService",       -- mesh templates first: the map and nests use them
 	"WorldService",     -- build the map first, before anyone can spawn
 	"DataService",
 	"BoostService",
@@ -44,7 +45,11 @@ local SERVICE_ORDER: { string } = {
 	"RebirthService",
 	"MonetizationService",
 	"TravelService",
-	-- Step 7: "SightingService", "CodexService",
+	"SightingService",    -- Step 7: wild cryptids (needs Steal + Bat)
+	"CodexService",       -- Step 7: Field Camera + Codex
+	"RetentionService",   -- Step 7.5: daily, spin, playtime gifts, offline
+	"LeaderboardService", -- Step 8: global boards in the hub
+	"FeedbackService",    -- Step 8: hatch reveal, cash popups, effects
 }
 
 local function log(fmt: string, ...: any)
@@ -159,6 +164,21 @@ local function validateConfig(): (boolean, { string })
 				seenIds[item.Id] = key
 			end
 		end
+	end
+
+	-- Art entries must name real creatures and eggs.
+	for id in pairs(Config.Art.Creatures) do
+		if not Config.CreaturesById[id] then
+			table.insert(problems, string.format("Art.Creatures names unknown creature '%s'", tostring(id)))
+		end
+	end
+	for id in pairs(Config.Art.Eggs) do
+		if not Config.Eggs[id] then
+			table.insert(problems, string.format("Art.Eggs names unknown egg '%s'", tostring(id)))
+		end
+	end
+	if not Config.Eggs[Config.Economy.RescueEggId] then
+		table.insert(problems, string.format("Economy.RescueEggId '%s' is not an egg", tostring(Config.Economy.RescueEggId)))
 	end
 
 	-- Rebirth can only reset what RebirthService knows how to reset.

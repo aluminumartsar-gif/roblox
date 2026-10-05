@@ -23,6 +23,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -529,9 +530,12 @@ function DataService.Start()
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	profileUpdatedRemote = remotes:WaitForChild("ProfileUpdated") :: RemoteEvent
 
+	-- Studio play tests use their own scope so they never touch live saves.
+	local scope = if RunService:IsStudio() then Config.Data.StudioStoreScope else Config.Data.StoreScope
+
 	store = SessionStore.new({
 		Name = Config.Data.StoreName,
-		Scope = Config.Data.StoreScope,
+		Scope = scope,
 		RetryCount = Config.Data.LoadRetryCount,
 		RetryBaseDelay = Config.Data.LoadRetryBaseDelay,
 		StaleAfter = Config.Data.SessionLockStaleAfter,
@@ -541,7 +545,7 @@ function DataService.Start()
 	})
 
 	if store:ProbeAsync() then
-		log("Persistence ON — DataStore '%s' scope '%s'", Config.Data.StoreName, Config.Data.StoreScope)
+		log("Persistence ON — DataStore '%s' scope '%s'", Config.Data.StoreName, scope)
 	else
 		warnf("Persistence OFF — using an in-memory store. Progress will NOT be saved.")
 	end

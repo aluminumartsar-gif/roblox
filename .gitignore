@@ -19,3 +19,6 @@ sourcemap.json
 # Purchased third-party packs (license: no redistribution). Synced into
 # Studio by Rojo from here; never committed. See CLAUDE.md "UI kit".
 /vendor/
+
+# luau-lsp cache (type definitions, sourcemap)
+/tools/.luau/

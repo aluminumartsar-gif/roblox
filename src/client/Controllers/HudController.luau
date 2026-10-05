@@ -38,6 +38,9 @@ local HudController = {}
 
 local localPlayer = Players.LocalPlayer
 
+local hudGui: ScreenGui? = nil
+local alertTemplate: GuiObject? = nil
+
 local BUFFS: { { key: string, icon: string } } = {
 	{ key = "Luck", icon = "Potion" },
 	{ key = "HeatRate", icon = "Bonfire" },
@@ -128,6 +131,93 @@ local function buildExtras(gui: ScreenGui): ({ [string]: TextLabel }, TextLabel)
 	return chips, warning
 end
 
+--------------------------------------------------------------------------
+-- Buttons other controllers own (Codex, Daily, Gifts, Spin)
+--------------------------------------------------------------------------
+
+local function findButtonFrame(name: string): Instance?
+	local gui = hudGui
+	if not gui then
+		return nil
+	end
+	if name == "DailyBtn" then
+		local bottomRight = gui:FindFirstChild("BottomRight")
+		return bottomRight and bottomRight:FindFirstChild("DailyBtn")
+	end
+	local side = gui:FindFirstChild("SideButtons")
+	if not side then
+		return nil
+	end
+	local frame = side:FindFirstChild(name)
+	if not frame and name == "SpinBtn" then
+		-- The kit has no Spin button: make one from the Gift button.
+		local gift = side:FindFirstChild("GiftBtn")
+		if gift then
+			local copy = gift:Clone()
+			copy.Name = "SpinBtn"
+			copy.Parent = side
+			frame = copy
+		end
+	end
+	return frame
+end
+
+--- Shows a HUD button and runs `fn` when it's pressed. Names:
+---   "IndexBtn" (Codex), "GiftBtn" (Playtime Gifts), "DailyBtn" (Daily
+---   Rewards, bottom right), "SpinBtn" (Spin Wheel — a copy of the Gift
+---   button). Optional caption and icon (a Config.Icons name) restyle it.
+--- Call from a controller's Start(); HudController always starts first.
+function HudController.Bind(name: string, fn: () -> (), caption: string?, iconName: string?): Instance?
+	local frame = findButtonFrame(name)
+	if not frame then
+		warn("[SAC/HUD] no HUD button called " .. name)
+		return nil
+	end
+	if frame:IsA("GuiObject") then
+		frame.Visible = true
+	end
+	if name == "DailyBtn" and frame.Parent and frame.Parent:IsA("GuiObject") then
+		frame.Parent.Visible = true
+	end
+	local container = frame:FindFirstChild("Container")
+	local contents = container and container:FindFirstChild("Contents")
+	if caption then
+		Kit.SetText(contents and contents:FindFirstChild("TextLabel"), caption)
+	end
+	local icon = contents and contents:FindFirstChild("Icon")
+	if iconName and icon and icon:IsA("ImageLabel") and Config.Icons[iconName] then
+		icon.Image = Config.Icons[iconName]
+	end
+	onActivated(container, fn)
+	return frame
+end
+
+--- Shows or hides the red "!" badge on a bound button.
+function HudController.SetAlert(name: string, visible: boolean)
+	local frame = findButtonFrame(name)
+	local container = frame and frame:FindFirstChild("Container")
+	if not container then
+		return
+	end
+	local alert = container:FindFirstChild("Alert")
+	if not alert and alertTemplate then
+		local copy = alertTemplate:Clone()
+		copy.Parent = container
+		alert = copy
+	end
+	if alert and alert:IsA("GuiObject") then
+		alert.Visible = visible
+	end
+end
+
+--- Changes a bound button's caption (e.g. to show a countdown).
+function HudController.SetCaption(name: string, text: string)
+	local frame = findButtonFrame(name)
+	local container = frame and frame:FindFirstChild("Container")
+	local contents = container and container:FindFirstChild("Contents")
+	Kit.SetText(contents and contents:FindFirstChild("TextLabel"), text)
+end
+
 function HudController.Start()
 	local gui = Kit.Mount("HUD")
 	gui.Enabled = true
@@ -149,21 +239,35 @@ function HudController.Start()
 	onActivated(sideButton("RebirthBtn"), RebirthController.Open)
 	onActivated(sideButton("SettingsBtn"), SettingsController.Open)
 	onActivated(sideButton("InviteBtn"), invite)
-	onActivated(sideButton("IndexBtn"), function()
-		NotificationController.Show("The Cryptid Codex arrives in the next update!", "Info")
-	end)
-	Kit.Hide(side:FindFirstChild("GiftBtn")) -- Playtime Gifts, Step 7.5
 
-	-- The kit ships "!" badges on Index and Gift. Use one for Rebirth instead.
+	-- The kit ships "!" badges on Index and Gift. Keep a copy as a template
+	-- (any bound button can show one) and give one to Rebirth.
 	local indexContainer = sideButton("IndexBtn")
-	local badgeTemplate = indexContainer and indexContainer:FindFirstChild("Alert")
+	local kitBadge = indexContainer and indexContainer:FindFirstChild("Alert")
+	if kitBadge and kitBadge:IsA("GuiObject") then
+		alertTemplate = kitBadge:Clone()
+	end
 	local rebirthBadge: GuiObject? = nil
 	local rebirthContainer = sideButton("RebirthBtn")
-	if badgeTemplate and rebirthContainer then
-		rebirthBadge = badgeTemplate:Clone() :: GuiObject
-		rebirthBadge.Parent = rebirthContainer
-		badgeTemplate.Visible = false
+	if alertTemplate and rebirthContainer then
+		local badge = alertTemplate:Clone()
+		badge.Visible = false
+		badge.Parent = rebirthContainer
+		rebirthBadge = badge
 	end
+
+	-- Buttons other controllers claim with HudController.Bind: hidden until
+	-- something binds them, so the HUD never shows a button that does nothing.
+	for _, name in ipairs({ "IndexBtn", "GiftBtn" }) do
+		local frame = side:FindFirstChild(name)
+		Kit.Hide(frame)
+		local container = frame and frame:FindFirstChild("Container")
+		local alert = container and container:FindFirstChild("Alert")
+		if alert and alert:IsA("GuiObject") then
+			alert.Visible = false
+		end
+	end
+	hudGui = gui
 
 	-- Top buttons: Base / Eggs fast travel; no selling.
 	local top = gui:WaitForChild("TopButtons")
@@ -206,7 +310,8 @@ function HudController.Start()
 	local potionPrice = setupOffer(gui:FindFirstChild("Item"), "LUCK", "Product", "LuckPotion", "Potion")
 	local bundlePrice = setupOffer(gui:FindFirstChild("StarterPack"), "3 Eggs!", "Product", "EggBundle", nil)
 
-	-- Not used by this game (or not yet).
+	-- Not used by this game. (BottomRight holds the Daily button; it's
+	-- shown when something binds "DailyBtn".)
 	for _, name in ipairs({ "ToolBar", "Inventory", "PLACEHOLDERS", "BottomRight" }) do
 		Kit.Hide(gui:FindFirstChild(name))
 	end

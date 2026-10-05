@@ -88,7 +88,7 @@ end
 function ProfileTemplate.new(): ProfileData
 	return {
 		SchemaVersion = ProfileTemplate.SchemaVersion,
-		Cash = Config.Debug.GrantTestCash and Config.Debug.TestCashAmount or 0,
+		Cash = if Config.Debug.GrantTestCash then Config.Debug.TestCashAmount else Config.Economy.StartingCash,
 		Rebirths = 0,
 		Nests = buildEmptyNests(),
 		Upgrades = buildDefaultUpgrades(),
