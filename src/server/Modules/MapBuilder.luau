@@ -693,8 +693,20 @@ local function buildTerrain(rng: Random): number
 	-- Base slab of grass, top surface exactly at y = 0.
 	terrain:FillBlock(CFrame.new(0, -TERRAIN_DEPTH / 2 - VOXEL_OFFSET, 0), Vector3.new(m.GroundSize, TERRAIN_DEPTH, m.GroundSize), Enum.Material.Grass)
 
+	-- A disc painted as one-voxel strips of FillBlock. (FillCylinder lifts the
+	-- surface it paints by ~2 studs and an air cut can't undo that cleanly —
+	-- measured; FillBlock repaints the top layer and leaves it at y = 0.)
 	local function paintDisc(x: number, z: number, radius: number, material: Enum.Material)
-		terrain:FillCylinder(CFrame.new(x, -PAINT_DEPTH / 2 - VOXEL_OFFSET, z), PAINT_DEPTH, radius, material)
+		local step = 4
+		local dz = -radius + step / 2
+		while dz < radius do
+			local half = math.sqrt(math.max(0, radius * radius - dz * dz))
+			if half > 0.5 then
+				terrain:FillBlock(CFrame.new(x, -PAINT_DEPTH / 2 - VOXEL_OFFSET, z + dz),
+					Vector3.new(half * 2, PAINT_DEPTH, step), material)
+			end
+			dz += step
+		end
 	end
 	local function paintStrip(a: Vector3, b: Vector3, width: number, material: Enum.Material)
 		local from, to = Vector3.new(a.X, 0, a.Z), Vector3.new(b.X, 0, b.Z)
@@ -777,13 +789,13 @@ local function buildTerrain(rng: Random): number
 		paintStrip(dir * trailFrom(), dir * trailTo(), m.TrailWidth, Enum.Material.Ground)
 	end
 
-	-- Rotated fills (plot paint, paths) smear up into the voxel above the
-	-- ground, which piled dirt on top of the camp decks and buried the home
-	-- pads (nobody could claim an egg). Empty every voxel from the one centred
-	-- on y = 0 upward (y -2 .. 10) across the flat middle of the map, so the
-	-- surface there is exactly y = 0. Hills only start beyond
-	-- WildsInnerRadius - 12, so this never touches them.
-	terrain:FillCylinder(CFrame.new(0, 4, 0), 12, m.WildsInnerRadius - 14, Enum.Material.Air)
+	-- Rotated fills (plot paint, paths) can smear up into the voxels above
+	-- the ground, piling dirt on top of the camp decks (that once buried the
+	-- home pads). Empty everything from y = 0 up (0 .. 10) across the flat
+	-- middle of the map. Measured: a cut starting at y = 0 leaves the y = 0
+	-- surface intact, while one starting at y = -2 lowers it to -2. Hills only
+	-- start beyond WildsInnerRadius - 12, so this never touches them.
+	terrain:FillCylinder(CFrame.new(0, 5, 0), 10, m.WildsInnerRadius - 14, Enum.Material.Air)
 
 	return (os.clock() - started) * 1000
 end
