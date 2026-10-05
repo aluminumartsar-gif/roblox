@@ -40,7 +40,8 @@ local SERVICE_ORDER: { string } = {
 	"EggShopService",
 	"StealService",
 	"BatService",
-	-- Step 5: "RebirthService", "UpgradeService",
+	"UpgradeService",
+	"RebirthService",
 	-- Step 6: "MonetizationService",
 	-- Step 7: "SightingService", "CodexService",
 }
@@ -107,6 +108,14 @@ local function validateConfig(): (boolean, { string })
 			table.insert(problems, string.format("Heat.MaxMultiplierByRarity names unknown rarity '%s'", rarity))
 		elseif typeof(multiplier) ~= "number" or multiplier < 1 then
 			table.insert(problems, string.format("Heat.MaxMultiplierByRarity.%s must be a number >= 1", rarity))
+		end
+	end
+
+	-- Rebirth can only reset what RebirthService knows how to reset.
+	local resettable = { Cash = true, Nests = true, Upgrades = true }
+	for _, key in ipairs(Config.Rebirth.Resets) do
+		if not resettable[key] then
+			table.insert(problems, string.format("Rebirth.Resets has unsupported entry '%s' (allowed: Cash, Nests, Upgrades)", tostring(key)))
 		end
 	end
 

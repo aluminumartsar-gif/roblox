@@ -131,9 +131,9 @@ local function tickIncome(dt: number)
 		local owner = plot.Owner
 		local data = owner and DataService.Get(owner)
 		if owner and data then
-			local cap = BoostService.GetVaultCap(owner)
 			for nestIndex, slot in ipairs(data.Nests) do
 				if slot ~= false and slot.Kind == "Creature" and not slot.Away then
+					local cap = BoostService.GetVaultCap(owner, slot)
 					local income = BoostService.GetCreatureIncome(owner, slot)
 					slot.Vault = math.min(cap, slot.Vault + income * dt)
 					local model = NestService.GetVisual(plot.Index, nestIndex)

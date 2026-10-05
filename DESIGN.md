@@ -271,13 +271,24 @@ Stolen eggs keep their heat. That is the entire reason stealing matters.
 - **Each rebirth grants:** +25% income, +10% luck, a new nest glow color
 - **Unlocks:** Sky egg at rebirth 1, Void egg at rebirth 3
 
+As built (Step 5): the REBIRTH button on the plot panel opens a screen
+showing the cost, whether you have a Rare+ at home, and exactly what you
+lose / keep / gain. Rebirth is refused while you're carrying a stolen item
+or while one of your own is out being stolen. The whole server is told
+when someone rebirths.
+
 ---
 
 ## 7. Shops
 
 - **Egg Shop** — a hub building. Browse eggs, see odds, buy.
-- **Upgrade Shop** — nest slots, incubation speed, vault size, lock duration,
-  walk speed. Level tables in `Config.Upgrades`.
+- **Upgrade Shop** — the Upgrades cabin in the hub: nest slots, incubation
+  speed, vault size, lock duration, walk speed. Level tables in
+  `Config.Upgrades`. Bought at the counter; effects apply instantly.
+
+**Vault cap:** each creature holds the Vault Size upgrade's amount, or 10
+minutes of its own income if that's more — so a Mythic ($1.2K/s) holds
+$720K and doesn't stop earning seconds after you collect.
 - **Robux Shop** — UI panel for passes and products.
 
 ---

@@ -127,13 +127,19 @@ function BoostService.GetNestCapacity(player: Player): number
 	return math.min(capacity, Config.Plot.MaxNests)
 end
 
---- Most uncollected cash one creature can hold.
-function BoostService.GetVaultCap(player: Player): number
+--- Most uncollected cash one creature can hold: the Vault Size upgrade, or
+--- Config.Income.MinVaultSeconds of that creature's own income, whichever
+--- is bigger. Without a slot, just the upgrade value.
+function BoostService.GetVaultCap(player: Player, slot: any?): number
 	local data = DataService.Get(player)
 	if not data then
 		return 0
 	end
-	return Config.GetUpgradeValue("VaultSize", data.Upgrades.VaultSize)
+	local cap = Config.GetUpgradeValue("VaultSize", data.Upgrades.VaultSize)
+	if slot and Config.Income.MinVaultSeconds > 0 then
+		cap = math.max(cap, math.floor(BoostService.GetCreatureIncome(player, slot) * Config.Income.MinVaultSeconds))
+	end
+	return cap
 end
 
 function BoostService.Start() end

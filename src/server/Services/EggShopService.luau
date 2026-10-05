@@ -18,7 +18,6 @@
 	Price, odds and requirements always come from Config, never the client.
 ]]
 
-local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
@@ -28,22 +27,12 @@ local Server = ServerScriptService:WaitForChild("Server")
 local Modules = Server:WaitForChild("Modules")
 local Services = Server:WaitForChild("Services")
 local RemoteGuard = require(Modules:WaitForChild("RemoteGuard"))
+local ShopUtil = require(Modules:WaitForChild("ShopUtil"))
 local DataService = require(Services:WaitForChild("DataService"))
 local PlotService = require(Services:WaitForChild("PlotService"))
 local NestService = require(Services:WaitForChild("NestService"))
 
 local EggShopService = {}
-
-local function isAtShop(player: Player, shopId: string): boolean
-	for _, counter in ipairs(CollectionService:GetTagged(Config.Tags.ShopBooth)) do
-		if counter:IsA("BasePart") and counter:GetAttribute("ShopId") == shopId then
-			if RemoteGuard.IsWithinReach(player, counter.Position, Config.Shop.InteractDistance) then
-				return true
-			end
-		end
-	end
-	return false
-end
 
 function EggShopService.Buy(player: Player, eggId: any): RemoteGuard.Result
 	if typeof(eggId) ~= "string" or #eggId > 32 then
@@ -61,7 +50,7 @@ function EggShopService.Buy(player: Player, eggId: any): RemoteGuard.Result
 	if data.Rebirths < egg.RequiredRebirths then
 		return { Ok = false, Message = string.format("%s unlocks at Rebirth %d.", egg.Name, egg.RequiredRebirths) }
 	end
-	if not isAtShop(player, "Eggs") then
+	if not ShopUtil.IsAtShop(player, "Eggs") then
 		return { Ok = false, Message = "Walk up to the Egg Shop to buy." }
 	end
 	if not PlotService.GetPlot(player) then

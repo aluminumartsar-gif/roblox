@@ -135,7 +135,7 @@ LocalScript, plain `.luau` = ModuleScript.
 - Studio-only test hook: `ServerStorage.SAC_Debug:Invoke(command, playerName, ...)`.
   Commands are listed at the top of `Modules/DebugCommands` (status, give,
   dump, save, wipe, plots, resetlock, simulate, giveegg, setheat, hatch,
-  setslot, nests, carries, unprotect, clearcooldown).
+  setslot, nests, carries, unprotect, clearcooldown, snapshot, restore).
   Must be used via a BindableFunction because MCP/command-bar code runs in a
   separate Luau VM and gets its own copies of modules.
 
@@ -179,10 +179,27 @@ LocalScript, plain `.luau` = ModuleScript.
 - Placeholder art is built in `Modules/ItemVisuals`; the art pass replaces
   those builders without touching game logic.
 
+### Shops, upgrades, rebirth
+- Shop-style screens use `Components/ShopPanel` (title, close button,
+  scrolling list, closes when you walk away from the counter).
+- Buying anything at a hub shop checks `ShopUtil.IsAtShop(player, shopId)`.
+- After changing upgrade levels (purchase, rebirth, restore), call
+  `UpgradeService.ApplyEffects(player)` so nests and walk speed update.
+- Rebirth resets exactly `Config.Rebirth.Resets`; add a new resettable key
+  in RebirthService *and* the Bootstrap whitelist together.
+
 ### Test data
 Studio play tests read and write the **same DataStore as the live game**.
 Don't leave debug-spawned items in the owner's save (remove them after
 testing), and bump `Config.Data.StoreScope` before launch to start clean.
+- **Prefer test accounts for destructive tests** (rebirth, wipes): ask the
+  owner to start Test → Clients and Servers with 1 player and test on
+  "Player1". The owner's real save is never touched.
+- If the owner is playing the live game, their save is session-locked by
+  that live server and solo Studio Play will be kicked — that's the lock
+  working. Use a test account instead.
+- `snapshot` / `restore` debug commands exist for when the real save must
+  be used.
 
 ### Gotchas learned the hard way
 - **ProximityPrompt event order:** when a hold completes, Roblox fires

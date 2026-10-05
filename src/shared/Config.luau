@@ -25,7 +25,7 @@ local Config = {}
 -- VERSION / DEBUG
 -- =========================================================================
 
-Config.Version = "0.5.0-step4"
+Config.Version = "0.6.0-step5"
 
 Config.Debug = {
 	-- Master switch for verbose server logging.
@@ -372,6 +372,11 @@ Config.Income = {
 	AbsoluteMaxSingleCollect = 500000000,
 	CollectTouchCooldown = 0.25,
 	AutoCollectInterval = 5, -- Auto Collect gamepass
+	-- Each creature's vault holds at least this many seconds of its own
+	-- income, or the Vault Size upgrade's amount if that's bigger. Stops a
+	-- Mythic/Secret from filling a $25K vault in seconds and then earning
+	-- nothing. Set to 0 to use the Vault Size upgrade alone.
+	MinVaultSeconds = 600,
 	-- Offline earnings are OFF for now; revisit after launch economy data.
 	OfflineEarningsEnabled = false,
 }
@@ -472,10 +477,13 @@ Config.Rebirth = {
 	CostGrowth = 2.2,           -- cost = BaseCost * Growth ^ rebirths
 	IncomeBonusPerRebirth = 0.25, -- +25% income
 	-- Luck per rebirth: Config.Luck.PerRebirthPercent.
-	-- Kept across a rebirth:
-	Keeps = { "Codex", "GamePasses", "Rebirths", "Stats", "PurchaseHistory" },
-	-- Wiped:
+	-- What a rebirth wipes. RebirthService does exactly this list; anything
+	-- not listed (rebirth count, codex, game passes, active potions, stats,
+	-- purchase history) is kept. Supported entries: "Cash", "Nests",
+	-- "Upgrades" — Bootstrap rejects anything else at boot.
 	Resets = { "Cash", "Nests", "Upgrades" },
+	-- Tell the whole server when someone rebirths.
+	Announce = true,
 	-- Cosmetic nest glow per rebirth count (cycles).
 	NestGlowColors = {
 		Color3.fromRGB(255, 214, 140),

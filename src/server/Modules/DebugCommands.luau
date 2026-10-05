@@ -28,6 +28,7 @@
 	  dbg:Invoke("carries")              -- everything currently stolen/in transit
 	  dbg:Invoke("unprotect", "PlayerName")
 	  dbg:Invoke("clearcooldown", "PlayerName")
+	  dbg:Invoke("snapshot", "PlayerName") / dbg:Invoke("restore", "PlayerName")
 ]]
 
 local Players = game:GetService("Players")
@@ -104,21 +105,58 @@ function DebugCommands.Start()
 		return "save ok=" .. tostring(DataService.SaveNow(player))
 	end
 
+	-- Replaces a player's whole profile and redraws everything that shows it.
+	local function replaceProfile(player: Player, replacement: { [string]: any }): boolean
+		local ok = DataService.Mutate(player, function(data)
+			for key in pairs(data) do
+				(data :: any)[key] = nil
+			end
+			for key, value in pairs(replacement) do
+				(data :: any)[key] = value
+			end
+		end)
+		local PlotService = require(Services:WaitForChild("PlotService"))
+		local NestService = require(Services:WaitForChild("NestService"))
+		local MovementService = require(Services:WaitForChild("MovementService"))
+		local plot = PlotService.GetPlot(player)
+		if plot then
+			NestService.RenderPlot(plot)
+		end
+		PlotService.RefreshNests(player)
+		MovementService.Refresh(player)
+		return ok
+	end
+
 	function commands.wipe(name)
 		local player = findPlayer(name)
 		if not player then
 			return "no such player"
 		end
-		local fresh = ProfileTemplate.new()
-		local ok = DataService.Mutate(player, function(data)
-			for key in pairs(data) do
-				(data :: any)[key] = nil
-			end
-			for key, value in pairs(fresh) do
-				(data :: any)[key] = value
-			end
-		end)
-		return "wipe ok=" .. tostring(ok)
+		return "wipe ok=" .. tostring(replaceProfile(player, ProfileTemplate.new()))
+	end
+
+	-- snapshot/restore: run destructive tests (rebirth) on a real save and
+	-- put it back exactly. Snapshots live in server memory only.
+	local snapshots: { [number]: string } = {}
+
+	function commands.snapshot(name)
+		local player = findPlayer(name)
+		local data = player and DataService.Get(player)
+		if not player or not data then
+			return "not loaded"
+		end
+		snapshots[player.UserId] = HttpService:JSONEncode(data)
+		return string.format("snapshot of %s saved (%d bytes)", player.Name, #snapshots[player.UserId])
+	end
+
+	function commands.restore(name)
+		local player = findPlayer(name)
+		if not player or not snapshots[player.UserId] then
+			return "no snapshot"
+		end
+		local restored = HttpService:JSONDecode(snapshots[player.UserId])
+		local ok = replaceProfile(player, ProfileTemplate.Normalize(restored, player.Name .. " (restore)"))
+		return "restore ok=" .. tostring(ok) .. ", save ok=" .. tostring(DataService.SaveNow(player))
 	end
 
 	local PlotService = require(Services:WaitForChild("PlotService"))

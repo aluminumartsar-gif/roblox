@@ -200,7 +200,7 @@ function NestService.RenderNest(plot: PlotRecord, nestIndex: number)
 			model:SetAttribute("Mutation", slot.Mutation)
 		end
 		model:SetAttribute("Vault", math.floor(slot.Vault))
-		model:SetAttribute("VaultCap", BoostService.GetVaultCap(owner))
+		model:SetAttribute("VaultCap", BoostService.GetVaultCap(owner, slot))
 		model:SetAttribute("IncomePerSecond", BoostService.GetCreatureIncome(owner, slot))
 		CollectionService:AddTag(model, Config.Tags.Creature)
 	end

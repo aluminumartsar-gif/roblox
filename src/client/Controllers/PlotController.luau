@@ -24,6 +24,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
+local RebirthController = require(script.Parent:WaitForChild("RebirthController"))
 
 local PlotController = {}
 
@@ -160,6 +161,23 @@ local function buildPanel(): (TextButton, TextLabel, TextLabel)
 	local buttonCorner = Instance.new("UICorner")
 	buttonCorner.CornerRadius = UDim.new(0, 8)
 	buttonCorner.Parent = button
+
+	local rebirth = Instance.new("TextButton")
+	rebirth.Name = "Rebirth"
+	rebirth.LayoutOrder = 3
+	rebirth.Size = UDim2.new(1, 0, 0, 40)
+	rebirth.Font = Enum.Font.GothamBold
+	rebirth.TextSize = 15
+	rebirth.TextColor3 = Color3.new(1, 1, 1)
+	rebirth.BackgroundColor3 = Color3.fromRGB(110, 70, 160)
+	rebirth.Text = "REBIRTH"
+	rebirth.Parent = frame
+	local rebirthCorner = Instance.new("UICorner")
+	rebirthCorner.CornerRadius = UDim.new(0, 8)
+	rebirthCorner.Parent = rebirth
+	rebirth.Activated:Connect(function()
+		RebirthController.Open()
+	end)
 
 	local protection = Instance.new("TextLabel")
 	protection.Name = "Protection"

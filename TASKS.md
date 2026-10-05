@@ -170,18 +170,43 @@ below it (nil at runtime) — any protected player stealing would have errored.
 **Not yet re-verified** (need a fresh 2-player session; next time one runs):
 the instant-steal cheat (its earlier "pass" ran under bug 1, so it proves
 nothing), and the thief-leaves-while-carrying path (same return-home code as
-the timer, which passed).
+the timer, which passed). The `EndProtection` fix was verified at Step 5.
 
 ---
 
-## Step 5 — Rebirth and the Upgrade Shop `[ ]`
+## Step 5 — Rebirth and the Upgrade Shop `[x]`
 
-- [ ] Rebirth: cost curve, Rare+ requirement, reset/keep sets
-- [ ] +25% income and +10% luck per rebirth; nest glow color
-- [ ] Sky egg unlock at 1, Void at 3
-- [ ] Upgrade Shop UI + purchase flow for all five upgrade tracks
+- [x] Rebirth: cost $50K × 2.2^rebirths, needs a Rare+ creature at home,
+      blocked while carrying a stolen item or while one of yours is out
+      being stolen. Resets exactly `Config.Rebirth.Resets` (Cash, Nests,
+      Upgrades); keeps everything else. Saves immediately.
+- [x] +25% income and +10% luck per rebirth (BoostService), new nest glow
+      colour, server-wide announcement
+- [x] Sky egg unlocks at rebirth 1, Void at 3
+- [x] Upgrade Shop: Upgrades cabin prompt → panel (level, current → next,
+      price / MAX) → `BuyUpgrade` (id, not maxed, at counter, cash). Effects
+      apply immediately (nests, walk speed; heat/vault/lock read live).
+- [x] Rebirth screen from the plot panel: cost, Rare+ check, lose / keep /
+      gain, confirm
+- [x] Vault cap rule: each creature holds at least 10 min of its own income
+      (`Config.Income.MinVaultSeconds`) or the Vault Size value, whichever
+      is bigger
+- [x] Shared `Components/ShopPanel` for all three screens; Egg Shop moved
+      onto it
 
-**Test:** rebirth at the threshold, confirm what resets and what survives.
+**Tested on the Player1 test account (all pass):** `EndProtection` fix
+(protection 106s → 0, no error); vault caps $720K / $25K / $36K for Mythic /
+Rare / Epic; upgrade refusals (away from shop, bogus id, too poor, maxed);
+all five tracks bought with effects confirmed (7 nests, speed 18, Yeti vault
+$75K, ×1.15 incubation, lock 135s → MAX); rebirth refused with only a Common;
+rebirth succeeded → cash 0, Rebirths 1, nests empty, upgrades all level 1,
+speed 16, glow colour #2, Yeti income $18.75/s (+25%), saved to DataStore,
+announcement shown; second rebirth refused on cost ($110K); Sky unlocked,
+Void still locked; lock back to 60s; Egg Shop still works on the shared
+panel.
+
+**Needs a 2-player session:** rebirth refused while carrying, and while one
+of your items is out being stolen.
 
 ---
 
@@ -277,30 +302,19 @@ Things only the owner can do. Ticked when done.
   owner keeps a creature's uncollected vault cash when it's stolen; owner
   leaving mid-steal forfeits the item; thief leaving or timing out sends it
   home; anyone's Bat can knock a stolen item loose; stun immunity 1.5s.
+- **Vault cap scales with the creature** (owner didn't pick; Claude's
+  recommendation used as the default at Step 5): each creature holds at
+  least 10 minutes of its own income, or the Vault Size upgrade value if
+  bigger. `Config.Income.MinVaultSeconds = 0` turns it off.
+- **Rebirth is blocked while stealing is in progress** on either side
+  (you're carrying, or one of yours is being carried) — wiping nests mid-
+  steal would make the item vanish for both players.
+- **Rebirth keeps active potions** (they're paid for with Robux).
+- **Upgrades are bought at the Upgrades cabin**, like eggs at the Egg Shop.
 
 ---
 
 ## Open questions for the owner
 
-### 2. Vault cap vs. top-tier income *(balance, before Step 5)*
-
-The vault cap is per creature and starts at $25K (Vault Size upgrade). Time
-for one creature to fill it at base income:
-
-| Rarity    | Income | Fills $25K in |
-|-----------|-------:|--------------:|
-| Common    | $1/s   | ~7 hours      |
-| Rare      | $15/s  | ~28 min       |
-| Epic      | $60/s  | ~7 min        |
-| Legendary | $250/s | ~100 s        |
-| Mythic    | $1.2K/s| ~21 s         |
-| Secret    | $6K/s  | ~4 s          |
-
-So a Mythic or Secret owner loses most of that income unless they stand next
-to it constantly — the jackpot creature feels capped instead of exciting.
-Options: (a) leave it and let the Vault Size upgrade (up to $25M) carry it;
-(b) scale each creature's cap by rarity, e.g. cap = max(Vault Size, income ×
-10 min). Claude leans **(b)** — Vault Size stays meaningful for the common
-middle, and a Secret still pays out like a Secret.
-
+### 2. ~~Vault cap~~ — defaulted at Step 5 to a 10-minute minimum (see decisions log).
 ### 1. ~~Spawn lock~~ — defaulted at Step 4 (see decisions log); change anytime.
