@@ -60,6 +60,8 @@ export type ProfileData = {
 	Buffs: { [string]: number },          -- buffName -> expiry os.time()
 	Stats: { [string]: any },
 	SpawnLockUntil: number,
+	PendingEggs: { string },              -- bought eggs waiting for a free nest
+	PendingMaxHeat: number,               -- Max Heat purchases waiting for an egg
 }
 
 --------------------------------------------------------------------------
@@ -108,6 +110,8 @@ function ProfileTemplate.new(): ProfileData
 			LastJoinAt = 0,
 		},
 		SpawnLockUntil = 0,
+		PendingEggs = {},
+		PendingMaxHeat = 0,
 	}
 end
 
@@ -280,6 +284,21 @@ local function repair(data: ProfileData, context: string): { string }
 	if typeof(data.SpawnLockUntil) ~= "number" then
 		data.SpawnLockUntil = 0
 	end
+
+	-- Paid-for rewards waiting to be applied must stay valid.
+	if typeof(data.PendingEggs) ~= "table" then
+		data.PendingEggs = {}
+	end
+	for i = #data.PendingEggs, 1, -1 do
+		if not Config.Eggs[data.PendingEggs[i]] then
+			fix(string.format("Removed unknown pending egg '%s'", tostring(data.PendingEggs[i])))
+			table.remove(data.PendingEggs, i)
+		end
+	end
+	if typeof(data.PendingMaxHeat) ~= "number" or data.PendingMaxHeat < 0 then
+		data.PendingMaxHeat = 0
+	end
+	data.PendingMaxHeat = math.floor(data.PendingMaxHeat)
 
 	if #fixes > 0 then
 		warn(string.format("[SAC/Profile] Repaired %s: %s", context, table.concat(fixes, "; ")))

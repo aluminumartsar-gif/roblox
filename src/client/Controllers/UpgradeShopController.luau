@@ -15,6 +15,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 local ShopPanel = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("ShopPanel"))
+local Icon = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Icon"))
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
@@ -82,28 +83,31 @@ local function buy(upgradeId: string)
 end
 
 local function build()
-	panel = ShopPanel.new("UpgradeShop", "UPGRADES")
+	panel = ShopPanel.new("UpgradeShop", "UPGRADES", "Upgrade")
 	panel.OnOpen = refresh
 
 	for order, upgradeId in ipairs(Config.UpgradeOrder) do
 		local upgrade = Config.Upgrades[upgradeId]
 		local row = ShopPanel.Row(panel.List, order, 76)
 		row.Name = upgradeId
+		Icon.new(upgrade.Icon or "Upgrade", 42, row, {
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
+		})
 
 		ShopPanel.Label(row, {
 			Name = "UpgradeName", Text = upgrade.DisplayName, Font = Enum.Font.GothamBold, TextSize = 17,
-			Position = UDim2.fromOffset(14, 6), Size = UDim2.new(1, -130, 0, 22),
+			Position = UDim2.fromOffset(62, 6), Size = UDim2.new(1, -178, 0, 22),
 		})
 		ShopPanel.Label(row, {
 			Name = "Description", Text = upgrade.Description, TextSize = 12,
 			TextColor3 = Color3.fromRGB(190, 180, 160), TextWrapped = true,
 			TextYAlignment = Enum.TextYAlignment.Top,
-			Position = UDim2.fromOffset(14, 28), Size = UDim2.new(1, -130, 0, 26),
+			Position = UDim2.fromOffset(62, 28), Size = UDim2.new(1, -178, 0, 26),
 		})
 		local detail = ShopPanel.Label(row, {
 			Name = "Detail", Text = "", TextSize = 13, Font = Enum.Font.GothamBold,
 			TextColor3 = Color3.fromRGB(150, 255, 160),
-			Position = UDim2.fromOffset(14, 54), Size = UDim2.new(1, -130, 0, 18),
+			Position = UDim2.fromOffset(62, 54), Size = UDim2.new(1, -178, 0, 18),
 		})
 		local button = ShopPanel.Button(row, {
 			Name = "Buy", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),

@@ -32,6 +32,7 @@ local CONTROLLER_ORDER: { string } = {
 	"StealController",
 	"UpgradeShopController",
 	"RebirthController",
+	"RobuxShopController",
 	-- Step 7: "SightingController", "CodexController",
 }
 

@@ -83,7 +83,7 @@ local function buy(eggId: string)
 end
 
 local function build()
-	panel = ShopPanel.new("EggShop", "EGG SHOP")
+	panel = ShopPanel.new("EggShop", "EGG SHOP", "Egg")
 	panel.OnOpen = refresh
 
 	for order, eggId in ipairs(Config.EggOrder) do

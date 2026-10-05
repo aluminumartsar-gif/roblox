@@ -146,6 +146,7 @@ local function giveBat(player: Player)
 	local tool = Instance.new("Tool")
 	tool.Name = Config.Bat.Name
 	tool.ToolTip = "Bonk thieves to make them drop what they stole"
+	tool.TextureId = Config.Icons.BaseballBat
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
 	tool.Grip = CFrame.new(0, -1.6, 0)

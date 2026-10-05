@@ -267,6 +267,22 @@ function NestService.SetAway(player: Player, nestIndex: number, away: boolean, t
 	end
 end
 
+--- Sets an egg's heat (Max Heat product) and its label in one go.
+function NestService.SetEggHeat(player: Player, nestIndex: number, heat: number): boolean
+	local slot = NestService.GetSlot(player, nestIndex)
+	if not slot or slot.Kind ~= "Egg" or slot.Away then
+		return false
+	end
+	slot.Heat = math.clamp(heat, 0, Config.Heat.Max)
+	DataService.MarkChanged(player)
+	local plot = PlotService.GetPlot(player)
+	local model = plot and NestService.GetVisual(plot.Index, nestIndex)
+	if model then
+		model:SetAttribute("Heat", slot.Heat)
+	end
+	return true
+end
+
 --- Removes and returns a nest's slot (Step 4: stealing). nil if empty.
 function NestService.TakeSlot(player: Player, nestIndex: number): any
 	local slot = NestService.GetSlot(player, nestIndex)

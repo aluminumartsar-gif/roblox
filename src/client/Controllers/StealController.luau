@@ -24,6 +24,7 @@ local SoundService = game:GetService("SoundService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Icon = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Icon"))
 
 local StealController = {}
 
@@ -244,6 +245,8 @@ function StealController.Start()
 	gui.DisplayOrder = 8
 	alarmBanner = banner(gui, "Alarm", UDim2.new(0.5, 0, 0.22, 0), Color3.fromRGB(190, 30, 40))
 	carryBanner = banner(gui, "Carrying", UDim2.new(0.5, 0, 1, -150), Color3.fromRGB(150, 90, 20))
+	Icon.addLeft(alarmBanner, "Warning", 32)
+	Icon.addLeft(carryBanner, "Grab", 32)
 	gui.Parent = localPlayer:WaitForChild("PlayerGui")
 
 	alarmSound = Instance.new("Sound")

@@ -19,6 +19,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Icon = require(script.Parent:WaitForChild("Icon"))
 
 local ShopPanel = {}
 ShopPanel.__index = ShopPanel
@@ -78,7 +79,7 @@ function ShopPanel.Row(list: Instance, order: number, height: number?): Frame
 	return row
 end
 
-function ShopPanel.new(name: string, title: string): Panel
+function ShopPanel.new(name: string, title: string, iconName: string?): Panel
 	local self = setmetatable({}, ShopPanel) :: any
 
 	local gui = Instance.new("ScreenGui")
@@ -106,6 +107,9 @@ function ShopPanel.new(name: string, title: string): Panel
 		Name = "Title", Text = title, Font = Enum.Font.GothamBlack, TextSize = 22,
 		Size = UDim2.new(1, -70, 0, 44), Position = UDim2.fromOffset(16, 6),
 	})
+	if iconName then
+		Icon.addLeft(titleLabel, iconName, 32, 0)
+	end
 
 	local close = ShopPanel.Button(frame, {
 		Name = "Close", Text = "X", Font = Enum.Font.GothamBlack, TextSize = 20,

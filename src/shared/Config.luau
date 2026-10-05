@@ -25,7 +25,7 @@ local Config = {}
 -- VERSION / DEBUG
 -- =========================================================================
 
-Config.Version = "0.6.0-step5"
+Config.Version = "0.7.0-step6"
 
 Config.Debug = {
 	-- Master switch for verbose server logging.
@@ -506,6 +506,7 @@ Config.UpgradeOrder = { "NestSlots", "IncubationSpeed", "VaultSize", "LockDurati
 Config.Upgrades = {
 	NestSlots = {
 		DisplayName = "Nest Slots",
+		Icon = "Egg",
 		Description = "More nests means more eggs cooking at once.",
 		Levels = {
 			{ Cost = 0,        Value = 6 },
@@ -519,6 +520,7 @@ Config.Upgrades = {
 	},
 	IncubationSpeed = {
 		DisplayName = "Incubation Speed",
+		Icon = "Fire",
 		Description = "Heat builds faster. Value is a multiplier on heat gain.",
 		Levels = {
 			{ Cost = 0,        Value = 1.00 },
@@ -531,6 +533,7 @@ Config.Upgrades = {
 	},
 	VaultSize = {
 		DisplayName = "Vault Size",
+		Icon = "Safe",
 		Description = "How much uncollected cash a creature can hold.",
 		Levels = {
 			{ Cost = 0,        Value = 25000 },
@@ -543,6 +546,7 @@ Config.Upgrades = {
 	},
 	LockDuration = {
 		DisplayName = "Lock Duration",
+		Icon = "Lock",
 		Description = "How long your door stays locked, in seconds.",
 		Levels = {
 			{ Cost = 0,        Value = 60 },
@@ -554,6 +558,7 @@ Config.Upgrades = {
 	},
 	WalkSpeed = {
 		DisplayName = "Walk Speed",
+		Icon = "Speed",
 		Description = "Move faster everywhere. Value is studs/second.",
 		Levels = {
 			{ Cost = 0,        Value = 16 },
@@ -573,13 +578,18 @@ Config.Upgrades = {
 
 Config.GamePassOrder = { "DoubleCash", "ExtraNests", "AutoCollect", "Vip", "ExtendedLock" }
 
+-- RobuxHint is only shown as a label until the real Id is set; once an Id is
+-- set, the price shown comes from Roblox (MarketplaceService), never from here.
 Config.GamePasses = {
-	DoubleCash   = { Id = 0, DisplayName = "2x Cash",       RobuxHint = 399, Description = "All cryptid income doubled, forever." },
-	ExtraNests   = { Id = 0, DisplayName = "+4 Nests",      RobuxHint = 299, Description = "Four extra nest slots on top of your upgrades.", BonusNests = 4 },
-	AutoCollect  = { Id = 0, DisplayName = "Auto Collect",  RobuxHint = 149, Description = "Cash collects itself. No more running laps." },
-	Vip          = { Id = 0, DisplayName = "VIP",           RobuxHint = 599, Description = "Chat tag, +10% luck, gold nests." },
-	ExtendedLock = { Id = 0, DisplayName = "Extended Lock", RobuxHint = 199, Description = "Your base lock lasts 3 minutes instead of 1." },
+	DoubleCash   = { Id = 0, DisplayName = "2x Cash",       RobuxHint = 399, Icon = "LightningBolt", Description = "All cryptid income doubled, forever." },
+	ExtraNests   = { Id = 0, DisplayName = "+4 Nests",      RobuxHint = 299, Icon = "Plus",          Description = "Four extra nest slots on top of your upgrades.", BonusNests = 4 },
+	AutoCollect  = { Id = 0, DisplayName = "Auto Collect",  RobuxHint = 149, Icon = "Magnet",        Description = "Cash collects itself. No more running laps." },
+	Vip          = { Id = 0, DisplayName = "VIP",           RobuxHint = 599, Icon = "Crown",         Description = "VIP chat tag, +10% luck, gold nests." },
+	ExtendedLock = { Id = 0, DisplayName = "Extended Lock", RobuxHint = 199, Icon = "Hourglass",     Description = "Your camp lock lasts 3 minutes instead of 1." },
 }
+
+-- Nest glow colour for VIPs (overrides the rebirth colour).
+Config.VipNestGlow = Color3.fromRGB(255, 200, 60)
 
 Config.DoubleCashMultiplier = 2
 
@@ -588,15 +598,30 @@ Config.DevProductOrder = {
 	"LuckPotion", "NestWarmer", "MaxHeat", "EmergencyLock", "EggBundle",
 }
 
+-- Kinds: "Cash" (Amount), "Buff" (Buff name + Duration; buying again while
+-- active extends it), "Instant" (Effect). See MonetizationService.
 Config.DevProducts = {
-	CashSmall     = { Id = 0, DisplayName = "Pocket Change", RobuxHint =  99, Kind = "Cash",  Amount = 25000 },
-	CashMedium    = { Id = 0, DisplayName = "Stash",         RobuxHint = 399, Kind = "Cash",  Amount = 300000 },
-	CashLarge     = { Id = 0, DisplayName = "Hoard",         RobuxHint = 999, Kind = "Cash",  Amount = 5000000 },
-	LuckPotion    = { Id = 0, DisplayName = "Luck Potion",   RobuxHint =  49, Kind = "Buff",  Buff = "Luck",       Duration = 900 },
-	NestWarmer    = { Id = 0, DisplayName = "Nest Warmer",   RobuxHint =  29, Kind = "Buff",  Buff = "HeatRate",   Duration = 600, Multiplier = 2 },
-	MaxHeat       = { Id = 0, DisplayName = "Max Heat",      RobuxHint =  99, Kind = "Instant", Effect = "MaxHeatOneEgg" },
-	EmergencyLock = { Id = 0, DisplayName = "Emergency Lock",RobuxHint =  49, Kind = "Instant", Effect = "ExtendLock" },
-	EggBundle     = { Id = 0, DisplayName = "3-Egg Bundle",  RobuxHint =  79, Kind = "Instant", Effect = "GrantEggs", EggId = "forest", Count = 3 },
+	CashSmall     = { Id = 0, DisplayName = "Pocket Change", RobuxHint =  99, Icon = "Cash",      Kind = "Cash", Amount = 25000,
+		Description = "$25K cash." },
+	CashMedium    = { Id = 0, DisplayName = "Stash",         RobuxHint = 399, Icon = "CoinStack", Kind = "Cash", Amount = 300000,
+		Description = "$300K cash." },
+	CashLarge     = { Id = 0, DisplayName = "Hoard",         RobuxHint = 999, Icon = "Safe",      Kind = "Cash", Amount = 5000000,
+		Description = "$5M cash." },
+	LuckPotion    = { Id = 0, DisplayName = "Luck Potion",   RobuxHint =  49, Icon = "Potion",    Kind = "Buff", Buff = "Luck", Duration = 900,
+		Description = "+50% luck for 15 minutes." },
+	NestWarmer    = { Id = 0, DisplayName = "Nest Warmer",   RobuxHint =  29, Icon = "Bonfire",   Kind = "Buff", Buff = "HeatRate", Duration = 600, Multiplier = 2,
+		Description = "Eggs heat up 2x faster for 10 minutes." },
+	-- Goes to your most valuable egg that isn't already at max heat. With no
+	-- such egg, it's saved and applied to your next egg automatically.
+	MaxHeat       = { Id = 0, DisplayName = "Max Heat",      RobuxHint =  99, Icon = "Fire",      Kind = "Instant", Effect = "MaxHeatOneEgg",
+		Description = "Instantly max the heat of your best egg." },
+	-- Locks your camp right now for EmergencyLockBonus seconds (ignores the
+	-- cooldown), or adds that much to a lock that's already running.
+	EmergencyLock = { Id = 0, DisplayName = "Emergency Lock",RobuxHint =  49, Icon = "Lock",      Kind = "Instant", Effect = "ExtendLock",
+		Description = "Lock your camp for 2 minutes, right now." },
+	-- Eggs that don't fit are saved and placed as soon as a nest frees up.
+	EggBundle     = { Id = 0, DisplayName = "3-Egg Bundle",  RobuxHint =  79, Icon = "GiftBox",   Kind = "Instant", Effect = "GrantEggs", EggId = "forest", Count = 3,
+		Description = "Three Forest Eggs, straight into your nests." },
 }
 
 -- =========================================================================
@@ -646,7 +671,7 @@ Config.Remotes = {
 	-- all handled server-side, so they need no remotes.)
 	BeginCapture      = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 	TakePhoto         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
-	PromptPurchase    = { Kind = "Event",    Direction = "ClientToServer", MaxPerMinute = 30 },
+	PromptPurchase    = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 }
 
 -- Generic backstop: any single player firing more than this many remotes
@@ -710,6 +735,56 @@ Config.Atmosphere = {
 -- =========================================================================
 -- UI
 -- =========================================================================
+
+-- =========================================================================
+-- ICONS
+-- Image assets from the RhosGFX vector icon pack, uploaded to the owner's
+-- Roblox account. Name -> asset id. UI code refers to icons by name only.
+-- The raw PNGs are licensed for use in this game but NOT for redistribution:
+-- never commit them to the repo or share them.
+-- =========================================================================
+
+Config.Icons = {
+	-- Uploaded for this game (Step 6)
+	Robux = "rbxassetid://111461010960091",
+	Home = "rbxassetid://123278209206320",
+	Lock = "rbxassetid://79542927644203",
+	Upgrade = "rbxassetid://101319211084955",
+	Gamepass = "rbxassetid://97711607224924",
+	Egg = "rbxassetid://96459853179308",
+	Fire = "rbxassetid://79862891039155",
+	BaseballBat = "rbxassetid://113980187844791",
+	Shield = "rbxassetid://115529544163308",
+	Grab = "rbxassetid://97364533673870",
+	Warning = "rbxassetid://112550258471968",
+	Bell = "rbxassetid://78916320743820",
+	Camera = "rbxassetid://89819558395404",
+	Crown = "rbxassetid://129810016065953",
+	Magnet = "rbxassetid://95284966114108",
+	Potion = "rbxassetid://121906053120526",
+	Bonfire = "rbxassetid://93731199519470",
+	Hourglass = "rbxassetid://122764375935062",
+	Speed = "rbxassetid://135674501611736",
+	CoinStack = "rbxassetid://128861081204402",
+	GiftBox = "rbxassetid://77760913775552",
+	LightningBolt = "rbxassetid://98253934440745",
+	Trophy = "rbxassetid://108181704297182",
+	Eye = "rbxassetid://122929953240700",
+	Star = "rbxassetid://122945360107517",
+	CheckMark = "rbxassetid://94964356674369",
+	Safe = "rbxassetid://138634362320979",
+	Plus = "rbxassetid://119968095935919",
+	-- Already on the owner's account from an earlier project
+	Cash = "rbxassetid://135269735731878",
+	Gem = "rbxassetid://126829028564083",
+	Luck = "rbxassetid://109347213399784",
+	Rebirth = "rbxassetid://104402029372536",
+	Shop = "rbxassetid://139879870675401",
+	Settings = "rbxassetid://130100236267631",
+	Book = "rbxassetid://111630944127601",
+	Close = "rbxassetid://106243116040944",
+	Backpack = "rbxassetid://82861236907905",
+}
 
 Config.UI = {
 	NotificationDuration = 4,

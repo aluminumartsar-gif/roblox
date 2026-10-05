@@ -79,6 +79,7 @@ local lastEjectNotice: { [Player]: number } = {}
 -- Defined further down (state -> attributes); declared here so functions
 -- above its definition can call it.
 local publish: (PlotRecord) -> ()
+local ejectIntruders: (PlotRecord) -> ()
 
 local function now(): number
 	return Workspace:GetServerTimeNow()
@@ -188,7 +189,9 @@ function PlotService.RefreshNests(player: Player)
 	local activeCount = BoostService.GetNestCapacity(player)
 	player:SetAttribute("NestCapacity", activeCount)
 	local glowColors = Config.Rebirth.NestGlowColors
-	local glow = glowColors[(data.Rebirths % #glowColors) + 1]
+	local glow = if BoostService.HasPass(player, "Vip")
+		then Config.VipNestGlow
+		else glowColors[(data.Rebirths % #glowColors) + 1]
 	for i, nest in ipairs(plot.Nests) do
 		MapBuilder.SetNestActive(nest, i <= activeCount, glow)
 	end
@@ -324,6 +327,50 @@ end
 
 export type Result = RemoteGuard.Result
 
+--- Moves every non-owner standing inside the plot to just outside its door.
+function ejectIntruders(plot: PlotRecord)
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other ~= plot.Owner then
+			local root = RemoteGuard.GetRoot(other)
+			if root and PlotService.IsInside(plot, root.Position) then
+				(other.Character :: Model):PivotTo(plot.EjectCFrame)
+				Notifier.Send(other, "That camp just locked. You were moved outside.", "Warning")
+			end
+		end
+	end
+end
+
+--- How long this player's lock lasts: the LockDuration upgrade, or the
+--- Extended Lock pass duration if they own it and it's longer.
+function PlotService.GetLockDuration(player: Player): number
+	local data = DataService.Get(player)
+	local duration = Config.GetUpgradeValue("LockDuration", if data then data.Upgrades.LockDuration else 1)
+	if BoostService.HasPass(player, "ExtendedLock") then
+		duration = math.max(duration, Config.Plot.ExtendedLockDuration)
+	end
+	return duration
+end
+
+--- Emergency Lock (dev product): locks the camp right now for `seconds`,
+--- ignoring the cooldown — or adds `seconds` to a lock already running.
+--- It's paid for, so the "not while carrying" rule doesn't apply.
+function PlotService.EmergencyLock(player: Player, seconds: number): boolean
+	local plot = plotByPlayer[player]
+	if not plot then
+		return false
+	end
+	local t = now()
+	if plot.LockedUntil > t then
+		plot.LockedUntil += seconds
+	else
+		plot.LockedUntil = t + seconds
+	end
+	publish(plot)
+	log("%s emergency-locked plot %d until +%ds", player.Name, plot.Index, math.floor(plot.LockedUntil - t))
+	ejectIntruders(plot)
+	return true
+end
+
 function PlotService.TryLock(player: Player): Result
 	local plot = plotByPlayer[player]
 	if not plot then
@@ -352,24 +399,13 @@ function PlotService.TryLock(player: Player): Result
 		end
 	end
 
-	local data = DataService.Get(player)
-	local duration = Config.GetUpgradeValue("LockDuration", if data then data.Upgrades.LockDuration else 1)
+	local duration = PlotService.GetLockDuration(player)
 
 	plot.LockedUntil = t + duration
 	plot.LockCooldownUntil = t + Config.Plot.LockCooldown
 	publish(plot)
 	log("%s locked plot %d for %ds", player.Name, plot.Index, duration)
-
-	-- Clear anyone already inside right away, not on the next tick.
-	for _, other in ipairs(Players:GetPlayers()) do
-		if other ~= player then
-			local root = RemoteGuard.GetRoot(other)
-			if root and PlotService.IsInside(plot, root.Position) then
-				(other.Character :: Model):PivotTo(plot.EjectCFrame)
-				Notifier.Send(other, "That camp just locked. You were moved outside.", "Warning")
-			end
-		end
-	end
+	ejectIntruders(plot)
 
 	return {
 		Ok = true,

@@ -42,7 +42,7 @@ local SERVICE_ORDER: { string } = {
 	"BatService",
 	"UpgradeService",
 	"RebirthService",
-	-- Step 6: "MonetizationService",
+	"MonetizationService",
 	-- Step 7: "SightingService", "CodexService",
 }
 
@@ -108,6 +108,37 @@ local function validateConfig(): (boolean, { string })
 			table.insert(problems, string.format("Heat.MaxMultiplierByRarity names unknown rarity '%s'", rarity))
 		elseif typeof(multiplier) ~= "number" or multiplier < 1 then
 			table.insert(problems, string.format("Heat.MaxMultiplierByRarity.%s must be a number >= 1", rarity))
+		end
+	end
+
+	-- Every icon referenced by name must exist in Config.Icons.
+	local function checkIcon(where: string, name: any)
+		if name ~= nil and not Config.Icons[name] then
+			table.insert(problems, string.format("%s uses unknown icon '%s'", where, tostring(name)))
+		end
+	end
+	for id, up in pairs(Config.Upgrades) do
+		checkIcon("Upgrades." .. id, up.Icon)
+	end
+	for id, pass in pairs(Config.GamePasses) do
+		checkIcon("GamePasses." .. id, pass.Icon)
+	end
+	for id, product in pairs(Config.DevProducts) do
+		checkIcon("DevProducts." .. id, product.Icon)
+		if product.Kind == "Instant" and product.Effect == "GrantEggs" and not Config.Eggs[product.EggId] then
+			table.insert(problems, string.format("DevProducts.%s grants unknown egg '%s'", id, tostring(product.EggId)))
+		end
+	end
+	-- Two products/passes sharing a real Id would make receipts ambiguous.
+	local seenIds: { [number]: string } = {}
+	for _, group in ipairs({ Config.GamePasses, Config.DevProducts }) do
+		for key, item in pairs(group) do
+			if item.Id ~= 0 then
+				if seenIds[item.Id] then
+					table.insert(problems, string.format("Id %d is used by both %s and %s", item.Id, seenIds[item.Id], key))
+				end
+				seenIds[item.Id] = key
+			end
 		end
 	end
 

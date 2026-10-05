@@ -29,6 +29,8 @@
 	  dbg:Invoke("unprotect", "PlayerName")
 	  dbg:Invoke("clearcooldown", "PlayerName")
 	  dbg:Invoke("snapshot", "PlayerName") / dbg:Invoke("restore", "PlayerName")
+	  dbg:Invoke("receipt", "PlayerName", "LuckPotion", purchaseId?)  -- fake dev product purchase
+	  dbg:Invoke("pass", "PlayerName", "Vip", true|false)              -- fake pass ownership
 ]]
 
 local Players = game:GetService("Players")
@@ -296,6 +298,36 @@ function DebugCommands.Start()
 		end
 		RemoteGuard.Cooldowns.Start(player, "Steal", 0)
 		return "steal cooldown cleared for " .. player.Name
+	end
+
+	local MonetizationService = require(Services:WaitForChild("MonetizationService"))
+
+	-- Runs a developer-product purchase through the real idempotent receipt
+	-- code. Pass the same purchaseId twice to test double-grant protection.
+	function commands.receipt(name, productKey, purchaseId)
+		local player = findPlayer(name)
+		if not player then
+			return "no such player"
+		end
+		if not Config.DevProducts[productKey] then
+			return "unknown product: " .. tostring(productKey)
+		end
+		local id = tostring(purchaseId or HttpService:GenerateGUID(false))
+		local decision = MonetizationService.ProcessReceiptForKey(player, id, productKey, Config.DevProducts[productKey].RobuxHint)
+		return string.format("%s (purchase %s) -> %s", productKey, id, decision.Name)
+	end
+
+	-- Pretends a game pass is owned (or not) for this session.
+	function commands.pass(name, passKey, owned)
+		local player = findPlayer(name)
+		if not player then
+			return "no such player"
+		end
+		if not Config.GamePasses[passKey] then
+			return "unknown pass: " .. tostring(passKey)
+		end
+		MonetizationService.DebugSetPass(player, passKey, owned ~= false)
+		return string.format("%s %s %s", player.Name, if owned ~= false then "now owns" else "no longer owns", passKey)
 	end
 
 	function commands.nests(name)

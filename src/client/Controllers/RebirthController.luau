@@ -115,7 +115,7 @@ function RebirthController.Open()
 end
 
 function RebirthController.Start()
-	panel = ShopPanel.new("Rebirth", "REBIRTH")
+	panel = ShopPanel.new("Rebirth", "REBIRTH", "Rebirth")
 	panel.OnOpen = refresh
 
 	costLine = line(1, 40, "")

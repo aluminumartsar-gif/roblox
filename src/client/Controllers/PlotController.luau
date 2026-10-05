@@ -25,6 +25,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 local RebirthController = require(script.Parent:WaitForChild("RebirthController"))
+local Icon = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Icon"))
 
 local PlotController = {}
 
@@ -147,6 +148,7 @@ local function buildPanel(): (TextButton, TextLabel, TextLabel)
 	nests.TextXAlignment = Enum.TextXAlignment.Left
 	nests.Text = "Nests -/-"
 	nests.Parent = frame
+	Icon.addLeft(nests, "Egg", 20, 0)
 
 	local button = Instance.new("TextButton")
 	button.Name = "Lock"
@@ -158,6 +160,7 @@ local function buildPanel(): (TextButton, TextLabel, TextLabel)
 	button.AutoButtonColor = true
 	button.Text = "LOCK CAMP"
 	button.Parent = frame
+	Icon.addLeft(button, "Lock", 28)
 	local buttonCorner = Instance.new("UICorner")
 	buttonCorner.CornerRadius = UDim.new(0, 8)
 	buttonCorner.Parent = button
@@ -172,6 +175,7 @@ local function buildPanel(): (TextButton, TextLabel, TextLabel)
 	rebirth.BackgroundColor3 = Color3.fromRGB(110, 70, 160)
 	rebirth.Text = "REBIRTH"
 	rebirth.Parent = frame
+	Icon.addLeft(rebirth, "Rebirth", 26)
 	local rebirthCorner = Instance.new("UICorner")
 	rebirthCorner.CornerRadius = UDim.new(0, 8)
 	rebirthCorner.Parent = rebirth
@@ -190,6 +194,7 @@ local function buildPanel(): (TextButton, TextLabel, TextLabel)
 	protection.TextXAlignment = Enum.TextXAlignment.Left
 	protection.Visible = false
 	protection.Parent = frame
+	Icon.addLeft(protection, "Shield", 18, 0)
 
 	gui.Parent = localPlayer:WaitForChild("PlayerGui")
 	return button, nests, protection
