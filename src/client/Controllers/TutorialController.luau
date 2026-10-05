@@ -52,6 +52,7 @@ local BeltPath = require(Shared:WaitForChild("BeltPath"))
 local Components = script.Parent.Parent:WaitForChild("Components")
 local ScreenScale = require(Components:WaitForChild("ScreenScale"))
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
+local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
 local TutorialController = {}
 
@@ -785,6 +786,7 @@ function TutorialController.Run()
 		for _, connection in ipairs(connections) do
 			connection:Disconnect()
 		end
+		NotificationController.ReserveTop("Tutorial", nil)
 		setTarget(nil, nil)
 		guide.beam.Enabled = false
 		guide.marker.Enabled = false
@@ -870,6 +872,10 @@ function TutorialController.Run()
 	local function tick()
 		if finished then
 			return
+		end
+		-- Toasts slide in below the panel, never over it.
+		if panel.gui.Enabled then
+			NotificationController.ReserveTop("Tutorial", panel.frame.AbsolutePosition.Y + panel.frame.AbsoluteSize.Y)
 		end
 		local step = STEPS[current]
 		if not step then

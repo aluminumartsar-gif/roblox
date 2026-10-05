@@ -254,7 +254,7 @@ local function spawnEgg(eggId: string, spawnTime: number): BeltEgg
 
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Label"
-	billboard.Size = UDim2.fromScale(4.6, 1.4) -- studs: shrinks with distance
+	billboard.Size = UDim2.fromScale(3.8, 1.15) -- studs: shrinks with distance
 	billboard.StudsOffset = Vector3.new(0, ItemVisuals.EggSize.Y / 2 + 1.1, 0)
 	billboard.LightInfluence = 0
 	billboard.MaxDistance = 90
