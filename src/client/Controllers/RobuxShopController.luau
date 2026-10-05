@@ -3,17 +3,22 @@
 	RobuxShopController
 	StarterPlayerScripts/Client/Controllers/RobuxShopController
 
-	The Robux Shop: a ROBUX button on the right edge opens a panel with the
-	game passes and developer products from Config, each with its icon.
+	The Robux Shop, built on the STUD kit's Store screen. The kit's sections
+	are found by what they contain (not their order), then filled from
+	Config:
 
-	  * Price: fetched from Roblox for configured ids (so it always matches
-	    what the purchase prompt will charge); "SOON" while the id is 0.
-	  * Owned passes show OWNED (from Pass_<Key> player attributes, which the
-	    server sets).
-	  * Buying sends only ("Pass" | "Product", key) to the server, which
-	    checks everything and opens the Roblox purchase prompt itself.
+	  Featured (3 coloured cards)  -> Luck Potion, Nest Warmer, Max Heat
+	  Gamepasses                   -> the 5 game passes
+	  Currency                     -> the 3 cash packs
+	  Starter Pack banner          -> 3-Egg Bundle
+	  "Server Luck" card           -> Emergency Lock (section renamed)
 
-	Also adds the VIP chat tag for any player who owns the VIP pass.
+	Prices come from Roblox once an item's id is set ("SOON" until then);
+	owned passes show OWNED. Buying sends only ("Pass" | "Product", key) to
+	the server, which checks everything and opens the Roblox prompt itself.
+
+	Also: the VIP chat tag, and Open / Buy / PriceText for other UI (the
+	HUD's quick-buy offers use them).
 ]]
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -23,21 +28,28 @@ local TextChatService = game:GetService("TextChatService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
-local Components = script.Parent.Parent:WaitForChild("Components")
-local ShopPanel = require(Components:WaitForChild("ShopPanel"))
-local Icon = require(Components:WaitForChild("Icon"))
+local Kit = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Kit"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
 local RobuxShopController = {}
 
 local localPlayer = Players.LocalPlayer
 
-local GOLD = Color3.fromRGB(255, 200, 60)
+local FEATURED = { "LuckPotion", "NestWarmer", "MaxHeat" }
+local CURRENCY = { "CashSmall", "CashMedium", "CashLarge" }
+-- Which kit pass card each pass uses (the 5th is a copy of the Green card).
+local PASS_CARDS = {
+	DoubleCash = "Gamepass [Green]",
+	ExtraNests = "Gamepass [Purple]",
+	Vip = "Gamepass [Orange]",
+	AutoCollect = "Gamepass [Red]",
+	ExtendedLock = "Gamepass [Green]", -- cloned
+}
 
-type Row = { kind: string, key: string, button: TextButton }
-local rows: { Row } = {}
-local prices: { [string]: number } = {} -- "Pass:Vip" -> Robux, once fetched
-local panel: ShopPanel.Panel
+type Entry = { kind: string, key: string, button: Instance }
+local entries: { Entry } = {}
+local prices: { [string]: number } = {}
+local popup: Kit.Popup
 local busy = false
 
 local function itemFor(kind: string, key: string): any
@@ -46,7 +58,7 @@ end
 
 local function fetchPrice(kind: string, key: string)
 	local item = itemFor(kind, key)
-	if item.Id == 0 then
+	if item.Id == 0 or prices[kind .. ":" .. key] then
 		return
 	end
 	task.spawn(function()
@@ -60,28 +72,20 @@ local function fetchPrice(kind: string, key: string)
 	end)
 end
 
-local function refresh()
-	for _, row in ipairs(rows) do
-		local item = itemFor(row.kind, row.key)
-		if row.kind == "Pass" and localPlayer:GetAttribute("Pass_" .. row.key) then
-			row.button.Text = "OWNED"
-			row.button.BackgroundColor3 = Color3.fromRGB(46, 110, 70)
-		elseif item.Id == 0 then
-			row.button.Text = "SOON"
-			row.button.BackgroundColor3 = Color3.fromRGB(70, 72, 80)
-		else
-			local price = prices[row.kind .. ":" .. row.key]
-			row.button.Text = if price then ("R$ " .. price) else "..."
-			row.button.BackgroundColor3 = Color3.fromRGB(46, 140, 80)
-		end
+--- What a buy button should say for this item right now.
+function RobuxShopController.PriceText(kind: string, key: string): string
+	local item = itemFor(kind, key)
+	if kind == "Pass" and localPlayer:GetAttribute("Pass_" .. key) then
+		return "OWNED"
+	elseif item.Id == 0 then
+		return "SOON"
 	end
+	local price = prices[kind .. ":" .. key]
+	return if price then ("R$" .. price) else "..."
 end
 
-local function buy(kind: string, key: string)
-	if busy then
-		return
-	end
-	if kind == "Pass" and localPlayer:GetAttribute("Pass_" .. key) then
+function RobuxShopController.Buy(kind: string, key: string)
+	if busy or (kind == "Pass" and localPlayer:GetAttribute("Pass_" .. key)) then
 		return
 	end
 	busy = true
@@ -95,89 +99,273 @@ local function buy(kind: string, key: string)
 	elseif not result.Ok then
 		NotificationController.Show(tostring(result.Message or ""), "Error")
 	end
-	-- On success the Roblox purchase prompt is now open; the server thanks
-	-- the player once the purchase actually goes through.
 end
 
-local function section(order: number, text: string)
-	local row = ShopPanel.Row(panel.List, order, 30)
-	row.BackgroundTransparency = 1
-	ShopPanel.Label(row, {
-		Text = text, Font = Enum.Font.GothamBlack, TextSize = 15, TextColor3 = GOLD,
-		Position = UDim2.fromOffset(6, 0), Size = UDim2.new(1, -12, 1, 0),
-	})
+function RobuxShopController.Open()
+	popup:Open()
 end
 
-local function itemRow(order: number, kind: string, key: string)
-	local item = itemFor(kind, key)
-	local row = ShopPanel.Row(panel.List, order, 70)
-	row.Name = kind .. "_" .. key
-	Icon.new(item.Icon or "Robux", 46, row, {
-		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
-	})
-	ShopPanel.Label(row, {
-		Name = "ItemName", Text = item.DisplayName, Font = Enum.Font.GothamBold, TextSize = 17,
-		Position = UDim2.fromOffset(66, 8), Size = UDim2.new(1, -180, 0, 22),
-	})
-	ShopPanel.Label(row, {
-		Name = "Description", Text = item.Description or "", TextSize = 13, TextWrapped = true,
-		TextColor3 = Color3.fromRGB(200, 190, 170), TextYAlignment = Enum.TextYAlignment.Top,
-		Position = UDim2.fromOffset(66, 32), Size = UDim2.new(1, -180, 0, 34),
-	})
-	local button = ShopPanel.Button(row, {
-		Name = "Buy", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.fromOffset(96, 44),
-	})
+local function refresh()
+	for _, entry in ipairs(entries) do
+		Kit.SetButtonText(entry.button, RobuxShopController.PriceText(entry.kind, entry.key))
+	end
+end
+
+local function register(kind: string, key: string, button: Instance?)
+	if not button or not button:IsA("GuiButton") then
+		return
+	end
+	table.insert(entries, { kind = kind, key = key, button = button })
 	button.Activated:Connect(function()
-		buy(kind, key)
+		RobuxShopController.Buy(kind, key)
 	end)
-	table.insert(rows, { kind = kind, key = key, button = button })
 	fetchPrice(kind, key)
 end
 
-local function buildOpenButton()
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "RobuxButton"
-	gui.ResetOnSpawn = false
+local function setIcon(image: Instance?, iconName: string?)
+	if image and iconName and Config.Icons[iconName] and (image:IsA("ImageLabel") or image:IsA("ImageButton")) then
+		image.Image = Config.Icons[iconName]
+	end
+end
 
-	local button = Instance.new("ImageButton")
-	button.Name = "Open"
-	button.AnchorPoint = Vector2.new(1, 0.5)
-	button.Position = UDim2.new(1, -12, 0.45, 0)
-	button.Size = UDim2.fromOffset(72, 72)
-	button.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
-	button.BackgroundTransparency = 0.2
-	button.Image = ""
-	button.Parent = gui
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 14)
-	corner.Parent = button
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = GOLD
-	stroke.Thickness = 2
-	stroke.Parent = button
+--------------------------------------------------------------------------
+-- Filling each kit section
+--------------------------------------------------------------------------
 
-	Icon.new("Robux", 40, button, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6) })
-	local label = Instance.new("TextLabel")
-	label.BackgroundTransparency = 1
-	label.AnchorPoint = Vector2.new(0.5, 1)
-	label.Position = UDim2.new(0.5, 0, 1, -4)
-	label.Size = UDim2.new(1, -4, 0, 16)
-	label.Font = Enum.Font.GothamBlack
-	label.TextScaled = true
-	label.TextColor3 = GOLD
-	label.Text = "ROBUX"
-	label.Parent = button
-
-	button.Activated:Connect(function()
-		if panel:IsOpen() then
-			panel:Close()
-		else
-			panel:Open()
-		end
+local function fillFeatured(content: Instance)
+	local cards = Kit.ChildrenNamed(content, "EggFrame")
+	table.sort(cards, function(a, b)
+		return a.LayoutOrder < b.LayoutOrder
 	end)
+	for i, card in ipairs(cards) do
+		local key = FEATURED[i]
+		if not key then
+			Kit.Hide(card)
+			continue
+		end
+		local product = Config.DevProducts[key]
+		local names = Kit.ChildrenNamed(card, "ItemName")
+		Kit.SetText(names[1], product.DisplayName)
+		for j = 2, #names do
+			Kit.Hide(names[j])
+		end
+		local amounts = Kit.ChildrenNamed(card, "Amount")
+		local label = if product.Kind == "Buff" then string.format("%d minutes", product.Duration // 60) else "Your best egg"
+		Kit.SetText(amounts[1], label)
+		for j = 2, #amounts do
+			Kit.Hide(amounts[j])
+		end
+		local buys = Kit.ChildrenNamed(card, "Buy")
+		for j = 2, #buys do
+			Kit.Hide(buys[j])
+		end
+		register("Product", key, buys[1])
+		local clipping = card:FindFirstChild("ClippingItems")
+		setIcon(clipping and clipping:FindFirstChild("Item"), product.Icon)
+		-- The kit's scrolling preview strip shows its own sample items.
+		Kit.Hide(card:FindFirstChild("Container"))
+	end
+end
 
-	gui.Parent = localPlayer:WaitForChild("PlayerGui")
+-- The kit's card sections are fixed-height boxes laid out for two rows of
+-- cards, with card heights as a fraction of the box. If our cards wrap to
+-- more rows, make the box taller and the cards proportionally shorter
+-- (so each card keeps its on-screen size) instead of letting them spill.
+local KIT_SECTION_ROWS = 2
+
+local function fitRows(content: Instance)
+	local layout = content:FindFirstChildOfClass("UIListLayout")
+	local aspect = content:FindFirstChildOfClass("UIAspectRatioConstraint")
+	if not layout or not aspect then
+		return
+	end
+	local cards: { GuiObject } = {}
+	for _, child in ipairs(content:GetChildren()) do
+		if child:IsA("GuiObject") and child.Visible then
+			table.insert(cards, child)
+		end
+	end
+	local index: { [GuiObject]: number } = {}
+	for i, card in ipairs(cards) do
+		index[card] = i
+	end
+	table.sort(cards, function(a, b)
+		if a.LayoutOrder ~= b.LayoutOrder then
+			return a.LayoutOrder < b.LayoutOrder
+		end
+		return index[a] < index[b]
+	end)
+	local gap = layout.Padding.Scale
+	local rows, x = 0, 0
+	for _, card in ipairs(cards) do
+		local width = card.Size.X.Scale
+		if rows == 0 or x + gap + width > 1.001 then
+			rows += 1
+			x = width
+		else
+			x += gap + width
+		end
+	end
+	if rows <= KIT_SECTION_ROWS then
+		return
+	end
+	local grow = rows / KIT_SECTION_ROWS
+	aspect.AspectRatio /= grow
+	for _, card in ipairs(cards) do
+		card.Size = UDim2.new(card.Size.X.Scale, card.Size.X.Offset, card.Size.Y.Scale / grow, card.Size.Y.Offset)
+	end
+end
+
+local function fillPasses(content: Instance)
+	-- Make the extra card first, while the Green template is untouched.
+	local green = content:FindFirstChild("Gamepass [Green]")
+	local extra = green and green:Clone()
+	if extra then
+		extra.Name = "Gamepass [Extra]"
+		extra.LayoutOrder = 99
+		extra.Parent = content
+	end
+	local iconTemplate = green and green:FindFirstChild("ClippingItems") and green.ClippingItems:FindFirstChild("Icon")
+
+	local used: { [Instance]: boolean } = {}
+	for _, key in ipairs(Config.GamePassOrder) do
+		local pass = Config.GamePasses[key]
+		local card = if key == "ExtendedLock" then extra else content:FindFirstChild(PASS_CARDS[key])
+		if card then
+			used[card] = true
+			local names = Kit.ChildrenNamed(card, "ItemName")
+			Kit.SetText(names[1], pass.DisplayName)
+			Kit.SetText(names[2], pass.Description)
+			for j = 3, #names do
+				Kit.Hide(names[j])
+			end
+			if names[2] then
+				names[2].TextWrapped = true
+			end
+			Kit.Hide(card:FindFirstChild("GiftBtn"))
+			local clipping = card:FindFirstChild("ClippingItems")
+			if clipping and not clipping:FindFirstChild("Icon") and iconTemplate then
+				iconTemplate:Clone().Parent = clipping -- the Red card ships without one
+			end
+			card.Visible = true -- the kit ships the Red card hidden
+			setIcon(clipping and clipping:FindFirstChild("Icon"), pass.Icon)
+			register("Pass", key, card:FindFirstChild("Buy"))
+		end
+	end
+	for _, child in ipairs(content:GetChildren()) do
+		if child:IsA("GuiObject") and not used[child] then
+			child.Visible = false
+		end
+	end
+	fitRows(content)
+end
+
+local function fillCurrency(content: Instance)
+	local cards = {}
+	for _, child in ipairs(content:GetChildren()) do
+		if child:IsA("GuiObject") then
+			table.insert(cards, child)
+		end
+	end
+	-- Order by the amount printed on the kit's sample card ("+$100k" <
+	-- "+$500k" < "+$1M" ...), so the cheapest pack takes the first card.
+	local function amountOf(card: Instance): number
+		local label = card:FindFirstChild("ItemName")
+		local text = if label and label:IsA("TextLabel") then label.Text else ""
+		local number, suffix = text:match("([%d%.]+)%s*([kKmMbB]?)")
+		local value = tonumber(number) or math.huge
+		local scale = ({ k = 1e3, K = 1e3, m = 1e6, M = 1e6, b = 1e9, B = 1e9 })[suffix or ""] or 1
+		return value * scale
+	end
+	table.sort(cards, function(a, b)
+		return amountOf(a) < amountOf(b)
+	end)
+	for i, card in ipairs(cards) do
+		local key = CURRENCY[i]
+		if not key then
+			card.Visible = false
+			continue
+		end
+		local product = Config.DevProducts[key]
+		Kit.SetText(card:FindFirstChild("ItemName"), "+$" .. Config.FormatNumber(product.Amount))
+		Kit.Hide(card:FindFirstChild("GiftBtn"))
+		register("Product", key, card:FindFirstChild("Buy"))
+	end
+end
+
+local function fillStarterPack(content: Instance)
+	local card = content:FindFirstChild("StarterPack")
+	if not card then
+		return
+	end
+	local product = Config.DevProducts.EggBundle
+	Kit.SetText(card:FindFirstChild("ItemName"), product.DisplayName .. "!")
+	Kit.Hide(card:FindFirstChild("GiftBtn"))
+	local clipping = card:FindFirstChild("ClippingItems")
+	if clipping then
+		for _, child in ipairs(clipping:GetChildren()) do
+			if child.Name == "Icon" then
+				setIcon(child, "Egg")
+				-- Each tile carries a sample caption ("+100k", "VIP", ...); the
+				-- second label on the last tile is the "OP!" sticker, kept.
+				Kit.SetText(child:FindFirstChildWhichIsA("TextLabel"), "Egg")
+			end
+		end
+	end
+	register("Product", "EggBundle", card:FindFirstChild("Buy"))
+end
+
+local function fillDefense(content: Instance)
+	local card = content:FindFirstChild("LuckFrame")
+	if not card then
+		return
+	end
+	for _, label in ipairs(card:GetChildren()) do
+		if label.Name == "ItemName" and label:IsA("TextLabel") then
+			if label.Text == "Server Luck" then
+				label.Text = Config.DevProducts.EmergencyLock.DisplayName
+			elseif label.Text:find("minutes") then
+				label.Text = string.format("Lock your camp NOW for %d min", Config.Plot.EmergencyLockBonus // 60)
+			else
+				label.Visible = false -- the "1X > 2X" labels
+			end
+		end
+	end
+	Kit.Hide(card:FindFirstChild("GiftBtn"))
+	local clipping = card:FindFirstChild("ClippingItems")
+	setIcon(clipping and clipping:FindFirstChild("Icon"), "Lock")
+	register("Product", "EmergencyLock", card:FindFirstChild("Buy"))
+end
+
+local function build()
+	local gui = Kit.Mount("Shop")
+	popup = Kit.Popup(gui)
+	popup.OnOpen = refresh
+
+	local list = Kit.Deep(gui, "ScrollingFrame") :: ScrollingFrame
+	Kit.FitCanvas(list)
+	for _, child in ipairs(list:GetChildren()) do
+		if child.Name == "Divider" then
+			local title = child:FindFirstChild("Title")
+			if title and title.Text == "Featured" then
+				title.Text = "Boosts"
+			elseif title and title.Text == "Server Luck" then
+				title.Text = "Defense"
+			end
+		elseif child.Name == "Content" then
+			if child:FindFirstChild("EggFrame") then
+				fillFeatured(child)
+			elseif child:FindFirstChild("Gamepass [Orange]") then
+				fillPasses(child)
+			elseif child:FindFirstChild("StarterPack") then
+				fillStarterPack(child)
+			elseif child:FindFirstChild("LuckFrame") then
+				fillDefense(child)
+			else
+				fillCurrency(child)
+			end
+		end
+	end
 end
 
 --- VIP chat tag, shown on every client for any player who owns VIP.
@@ -194,31 +382,13 @@ local function setupVipTag()
 end
 
 function RobuxShopController.Start()
-	panel = ShopPanel.new("RobuxShop", "ROBUX SHOP", "Robux")
-	panel.OnOpen = refresh
-
-	local order = 0
-	local function nextOrder(): number
-		order += 1
-		return order
-	end
-	section(nextOrder(), "GAME PASSES — forever")
-	for _, key in ipairs(Config.GamePassOrder) do
-		itemRow(nextOrder(), "Pass", key)
-	end
-	section(nextOrder(), "ITEMS")
-	for _, key in ipairs(Config.DevProductOrder) do
-		itemRow(nextOrder(), "Product", key)
-	end
-
-	buildOpenButton()
+	build()
 	setupVipTag()
-
-	-- Owned flags and fetched prices change while the panel may be open.
+	-- Prices arrive and passes get bought while the shop may be open.
 	task.spawn(function()
 		while true do
 			task.wait(0.5)
-			if panel:IsOpen() then
+			if popup:IsOpen() then
 				refresh()
 			end
 		end

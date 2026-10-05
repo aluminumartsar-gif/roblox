@@ -79,6 +79,7 @@ Update them as part of the step they change, not later.
 | `ReplicatedStorage/Shared`                        | `src/shared/`              |
 | `ReplicatedStorage/Shared/Config` (ModuleScript)  | `src/shared/Config.luau`   |
 | `ReplicatedStorage/Shared/Util/*`                 | `src/shared/Util/`         |
+| `ReplicatedStorage/UIKit` (UI kit templates)         | `vendor/stud/STUD.rbxm` (git-ignored) |
 | `ReplicatedStorage/Remotes`                       | created at runtime by the server |
 | `ServerScriptService/Server/Services/*`           | `src/server/Services/`     |
 | `ServerScriptService/Server/Modules/*`            | `src/server/Modules/`      |
@@ -181,8 +182,7 @@ LocalScript, plain `.luau` = ModuleScript.
   those builders without touching game logic.
 
 ### Shops, upgrades, rebirth
-- Shop-style screens use `Components/ShopPanel` (title, close button,
-  scrolling list, closes when you walk away from the counter).
+- Screens are built on the STUD UI kit — see "UI kit" below.
 - Buying anything at a hub shop checks `ShopUtil.IsAtShop(player, shopId)`.
 - After changing upgrade levels (purchase, rebirth, restore), call
   `UpgradeService.ApplyEffects(player)` so nests and walk speed update.
@@ -199,6 +199,30 @@ LocalScript, plain `.luau` = ModuleScript.
   other way. A grant function must not yield.
 - Test without real ids via `SAC_Debug` `receipt` (fake purchase through the
   real code) and `pass` (fake ownership, this session only).
+
+### UI kit (STUD UI Pack V3)
+- The owner's purchased kit. Lives in `vendor/stud/STUD.rbxm`, which is
+  **git-ignored** (third-party, no redistribution). A fresh clone needs the
+  owner to drop the file back there. `imports/` holds audit copies, also
+  ignored.
+- Rojo syncs it to `ReplicatedStorage.UIKit` as templates. Its scripts
+  don't run there. We use only its visual modules (`UIAnimations`,
+  `UIEffects`, `UIScroller`) and **never its shop script** (it prompts
+  purchases client-side and has a bug).
+- `Components/Kit` is the bridge: `Kit.Mount(name)` clones a kit screen into
+  PlayerGui; `Kit.Popup(gui)` gives open/close tweens, one-open-at-a-time,
+  close button and walk-away close; `Kit.FitCanvas(list)` sizes a kit list
+  to its real contents; plus small helpers (`Deep`, `ChildrenNamed`,
+  `SetText`, `SetButtonText`, `SetButtonEnabled`, `Hide`).
+- Controllers find kit parts by name and, where the kit reuses names, by
+  content (a card's sample text, a child it has). If the owner swaps in a
+  newer kit version, re-run a play test and check every screen.
+- Kit sections are fixed-height boxes sized for its sample cards. Adding
+  cards means growing the box (`fitRows` in RobuxShopController) and the
+  list canvas (`Kit.FitCanvas`).
+- Kit screens not yet used stay as templates (Index → Codex in Step 7;
+  Daily, SpinWheel, Rewards, OfflineRewards → Step 7.5).
+- Fast travel (HUD Base/Eggs) is server-side in `TravelService`.
 
 ### Icons
 - The owner's RhosGFX vector icon pack (`../vector-icon-pack.zip`). Its

@@ -25,7 +25,7 @@ local Config = {}
 -- VERSION / DEBUG
 -- =========================================================================
 
-Config.Version = "0.7.0-step6"
+Config.Version = "0.7.5-uikit"
 
 Config.Debug = {
 	-- Master switch for verbose server logging.
@@ -334,6 +334,16 @@ Config.Plot = {
 	-- How often the server re-checks who is standing on which plot (owner
 	-- speed bonus, ejecting intruders from locked plots).
 	EnforceInterval = 0.25,
+}
+
+-- =========================================================================
+-- FAST TRAVEL (the HUD's Base / Shop buttons)
+-- Never while carrying anything: a thief has to walk the loot home.
+-- =========================================================================
+
+Config.Travel = {
+	Enabled = true,
+	Cooldown = 8,      -- seconds between teleports, per player
 }
 
 -- =========================================================================
@@ -672,6 +682,7 @@ Config.Remotes = {
 	BeginCapture      = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 	TakePhoto         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 	PromptPurchase    = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
+	Travel            = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
 }
 
 -- Generic backstop: any single player firing more than this many remotes

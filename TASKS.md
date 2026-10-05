@@ -257,6 +257,36 @@ and `PromptGamePassPurchaseFinished` (Studio test purchases need real ids).
 
 ---
 
+## Step 6.5 — STUD UI kit swap `[~]` (owner request, before Step 7)
+
+Owner supplied "Livvy's Orchard STUD UI Pack V3" (`.rbxm`, purchased).
+Audited: 20 scripts, no remote code, no HTTP, no obfuscation; the kit's own
+shop prompts purchases client-side (and has an IntValue bug) — replaced by
+our server-checked flow.
+
+- [x] Kit stored in `vendor/stud/` (git-ignored), synced by Rojo to
+      `ReplicatedStorage.UIKit` as templates (its scripts can't run there)
+- [x] HUD → kit HUD (cash, side buttons, Base/Eggs fast travel via new
+      `TravelService`, Luck Potion + bundle quick-buys)
+- [x] Robux Shop → kit Store (all 5 passes, 8 products; section grows to
+      fit; list canvas fits contents)
+- [x] Rebirth → kit Rebirth (+ ConfirmationPopup)
+- [x] Egg Shop → kit Item Shop popup; Upgrade Shop → kit Item Upgrades popup
+- [x] Settings → kit Settings (sound toggle)
+- [x] Invite button → Roblox invite prompt
+- [x] Unused kit screens hidden (Gift, Gift Player, Inventory/toolbar, Sell)
+- [x] Old `Components/ShopPanel` removed; plot panel moved top-left
+- [ ] Phone-size check — owner: Test tab → Device → pick a phone, Play
+
+## Step 7.5 — Retention features `[ ]` (owner request)
+
+Kit screens already exist for each; hidden until built.
+
+- [ ] Daily Rewards (escalating daily login rewards)
+- [ ] Spin Wheel (free spin on a timer; extra spins as a Robux product)
+- [ ] Playtime Gifts (gifts unlock the longer a session lasts)
+- [ ] Offline Earnings (share of income while away; Robux "double" option)
+
 ## Step 8 — Polish and launch `[ ]`
 
 - [ ] UI pass: HUD, bottom bar, plot panel, notification feed, banner
@@ -336,6 +366,11 @@ Things only the owner can do. Ticked when done.
   egg, bundle eggs with no nest) are saved and applied automatically later;
   Emergency Lock works even while carrying (it's paid for). Buffs stack by
   extending their time.
+- **UI kit swap now, before Step 7** (owner, after Step 6), so the Codex is
+  built straight into the kit's Index screen.
+- **Retention features wanted** (owner): Daily Rewards, Spin Wheel,
+  Playtime Gifts, Offline Earnings → Step 7.5. (This reverses the Step 3
+  "no offline earnings" default.)
 - **Icons:** owner's RhosGFX pack. Chosen by file name and verified by load
   status; the owner OK'd screenshots of the finished UI. Raw PNGs never go
   in the repo (license forbids redistribution).

@@ -25,14 +25,16 @@ local ControllersFolder = ClientRoot:WaitForChild("Controllers")
 local CONTROLLER_ORDER: { string } = {
 	"ProfileController",
 	"NotificationController",
+	-- Screens the HUD opens start before the HUD itself.
+	"RobuxShopController",
+	"RebirthController",
+	"SettingsController",
 	"HudController",
 	"PlotController",
 	"EggShopController",
+	"UpgradeShopController",
 	"NestVisualsController",
 	"StealController",
-	"UpgradeShopController",
-	"RebirthController",
-	"RobuxShopController",
 	-- Step 7: "SightingController", "CodexController",
 }
 

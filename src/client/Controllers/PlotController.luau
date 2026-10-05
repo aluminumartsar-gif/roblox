@@ -24,7 +24,6 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
-local RebirthController = require(script.Parent:WaitForChild("RebirthController"))
 local Icon = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Icon"))
 
 local PlotController = {}
@@ -116,8 +115,9 @@ local function buildPanel(): (TextButton, TextLabel, TextLabel)
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Panel"
-	frame.AnchorPoint = Vector2.new(0, 0.5)
-	frame.Position = UDim2.new(0, 12, 0.45, 0)
+	-- Top-left, under the Roblox top bar and above the kit HUD's side buttons.
+	frame.AnchorPoint = Vector2.new(0, 0)
+	frame.Position = UDim2.new(0.01, 0, 0.015, 0)
 	frame.Size = UDim2.fromOffset(170, 0)
 	frame.AutomaticSize = Enum.AutomaticSize.Y
 	frame.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
@@ -164,24 +164,6 @@ local function buildPanel(): (TextButton, TextLabel, TextLabel)
 	local buttonCorner = Instance.new("UICorner")
 	buttonCorner.CornerRadius = UDim.new(0, 8)
 	buttonCorner.Parent = button
-
-	local rebirth = Instance.new("TextButton")
-	rebirth.Name = "Rebirth"
-	rebirth.LayoutOrder = 3
-	rebirth.Size = UDim2.new(1, 0, 0, 40)
-	rebirth.Font = Enum.Font.GothamBold
-	rebirth.TextSize = 15
-	rebirth.TextColor3 = Color3.new(1, 1, 1)
-	rebirth.BackgroundColor3 = Color3.fromRGB(110, 70, 160)
-	rebirth.Text = "REBIRTH"
-	rebirth.Parent = frame
-	Icon.addLeft(rebirth, "Rebirth", 26)
-	local rebirthCorner = Instance.new("UICorner")
-	rebirthCorner.CornerRadius = UDim.new(0, 8)
-	rebirthCorner.Parent = rebirth
-	rebirth.Activated:Connect(function()
-		RebirthController.Open()
-	end)
 
 	local protection = Instance.new("TextLabel")
 	protection.Name = "Protection"

@@ -11,3 +11,11 @@ sourcemap.json
 
 # Scratch
 /scratch/
+
+# Third-party models dropped in for inspection/import (may be licensed;
+# never committed)
+/imports/
+
+# Purchased third-party packs (license: no redistribution). Synced into
+# Studio by Rojo from here; never committed. See CLAUDE.md "UI kit".
+/vendor/

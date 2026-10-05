@@ -43,6 +43,7 @@ local SERVICE_ORDER: { string } = {
 	"UpgradeService",
 	"RebirthService",
 	"MonetizationService",
+	"TravelService",
 	-- Step 7: "SightingService", "CodexService",
 }
 

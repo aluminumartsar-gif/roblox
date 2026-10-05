@@ -328,9 +328,9 @@ player's profile *before* granting the reward, and return
 
 ### As built (Step 6)
 
-- **Robux Shop:** gold ROBUX button on the right edge. Passes first, then
-  items, each with an icon and description. Prices come from Roblox once the
-  real IDs are set; until then items show SOON and can't be bought.
+- **Robux Shop:** the Store button on the HUD (kit Store screen since Step
+  6.5): boosts, the egg bundle, Emergency Lock, passes, then cash packs.
+  Prices come from Roblox once the real IDs are set; until then items show SOON and can't be bought.
 - **Max Heat** goes to your most valuable egg that isn't already maxed.
   With no such egg, it's saved and hits your next egg automatically.
 - **Emergency Lock** locks your camp immediately — even during the normal
@@ -371,9 +371,19 @@ upgrades, codex, purchase history, stats.
 
 Must work on a phone. Everything hold-to-interact is a ProximityPrompt.
 
-- **HUD:** cash, rebirths, active buffs
-- **Bottom bar:** Eggs, Upgrades, Rebirth, Codex, Robux
-- **Plot panel:** Lock button + timer, nests used
+The look comes from the owner's purchased STUD UI kit (Step 6.5). Our code
+fills the kit's screens; the kit's own shop scripts are not used.
+
+- **HUD:** cash and rebirth bonus (bottom left, "+" opens the Store); side
+  buttons Store, Index (Codex, Step 7), Rebirth (red "!" when ready),
+  Invite, Settings; top buttons **Base** and **Eggs** fast-travel you home or
+  to the Egg Shop (8s cooldown, not while carrying or stunned); right-side
+  quick-buys for the Luck Potion and 3-Egg Bundle; buff timers above the cash
+- **Screens:** Store, Rebirth (+ confirm), Egg Shop, Upgrades, Settings
+  (sounds on/off). One open at a time; shop screens close when you walk away
+- **Plot panel:** top left — protection timer, nests used, Lock button
+- **Kit screens waiting for later steps:** Index (Codex, Step 7), Daily
+  Rewards, Spin Wheel, Playtime Gifts, Offline Earnings (Step 7.5)
 - **Notification feed:** purchases, steals, hatches
 - **Sighting banner:** with countdown
 
