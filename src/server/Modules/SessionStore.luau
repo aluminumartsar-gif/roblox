@@ -19,6 +19,11 @@
 	before overwriting. A lock whose heartbeat has gone stale (the owning
 	server crashed) can be taken over after StaleAfter seconds.
 
+	Misjudging a lock as stale cannot duplicate data: the old server's next
+	save sees a fresh foreign lock and is refused, and DataService kicks that
+	player. The worst case is losing progress since the old server's last
+	successful save.
+
 	Stored record shape:
 	  {
 	    Data      = <the profile>,
@@ -56,6 +61,8 @@ export type Options = {
 	RetryBaseDelay: number?,
 	StaleAfter: number?,
 	Mock: boolean?,
+	-- Studio only: treat locks left by earlier Studio sessions as dead.
+	TakeOverStudioLocks: boolean?,
 }
 
 --------------------------------------------------------------------------
@@ -96,8 +103,9 @@ function SessionStore.new(options: Options)
 	self.Scope = options.Scope
 	self.RetryCount = options.RetryCount or 5
 	self.RetryBaseDelay = options.RetryBaseDelay or 1
-	self.StaleAfter = options.StaleAfter or 1800
+	self.StaleAfter = options.StaleAfter or 300
 	self.OwnerId = SERVER_OWNER_ID
+	self.TakeOverStudioLocks = options.TakeOverStudioLocks == true and RunService:IsStudio()
 
 	-- key -> true while this server holds the lock
 	self._held = {}
@@ -159,11 +167,25 @@ local function freshRecord(): any
 	return { Data = nil, Lock = nil, CreatedAt = now, UpdatedAt = now }
 end
 
+--- With TakeOverStudioLocks on, a lock left by an earlier Studio play
+--- session counts as dead. Only one Studio test server touches a given
+--- player key at a time, and Studio servers are killed abruptly all the
+--- time (Stop pressed mid-load, crashes). Never true on a live server.
+function SessionStore:_isLeftoverStudioLock(lock: any): boolean
+	return self.TakeOverStudioLocks
+		and RunService:IsStudio()
+		and typeof(lock.Owner) == "string"
+		and string.sub(lock.Owner, 1, 7) == "studio-"
+end
+
 function SessionStore:_lockIsForeign(lock: any): boolean
 	if not lock then
 		return false
 	end
 	if lock.Owner == self.OwnerId then
+		return false
+	end
+	if self:_isLeftoverStudioLock(lock) then
 		return false
 	end
 	local age = os.time() - (tonumber(lock.Heartbeat) or 0)
@@ -186,6 +208,7 @@ function SessionStore:LoadAsync(key: string): LoadResult
 
 	for attempt = 1, self.RetryCount do
 		local blockedBy: any = nil
+		local tookOverFrom: any = nil
 		local isNew = false
 
 		local ok, resultOrErr = pcall(function()
@@ -193,12 +216,17 @@ function SessionStore:LoadAsync(key: string): LoadResult
 				-- Roblox may call this transform more than once (it retries
 				-- on write conflicts), so reset per-call state every time.
 				blockedBy = nil
+				tookOverFrom = nil
 				isNew = false
 				record = record or freshRecord()
 
 				if self:_lockIsForeign(record.Lock) then
 					blockedBy = record.Lock
 					return nil -- cancel the write, do not take the lock
+				end
+
+				if record.Lock and record.Lock.Owner ~= self.OwnerId then
+					tookOverFrom = record.Lock -- dead server's lock; ours now
 				end
 
 				isNew = record.Data == nil
@@ -209,6 +237,10 @@ function SessionStore:LoadAsync(key: string): LoadResult
 		end)
 
 		if ok and not blockedBy then
+			if tookOverFrom then
+				warn(string.format("[SAC/SessionStore] Took over dead lock on '%s' from %s (last heartbeat %ds ago)",
+					key, tostring(tookOverFrom.Owner), os.time() - (tonumber(tookOverFrom.Heartbeat) or 0)))
+			end
 			self._held[key] = true
 			return {
 				Ok = true,

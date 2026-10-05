@@ -227,11 +227,13 @@ local function onPlayerAdded(player: Player)
 	end
 	loading[player] = true
 
+	-- `loading[player]` stays set until this function has finished every
+	-- DataStore call, so shutdown can wait for it. Clear it on every exit.
 	local key = keyFor(player.UserId)
 	local result = store:LoadAsync(key)
-	loading[player] = nil
 
 	if not result.Ok then
+		loading[player] = nil
 		warnf("Could not load %s (%s)", player.Name, tostring(result.Reason))
 		if player.Parent then
 			if result.Reason == "Locked" then
@@ -249,7 +251,21 @@ local function onPlayerAdded(player: Player)
 	else
 		data = result.Data
 	end
-	data = ProfileTemplate.Normalize(data, player.Name)
+
+	-- Normalize mutates in place, so keep an untouched copy: if it throws,
+	-- we hand the lock back with exactly what we loaded, never a half-
+	-- repaired profile.
+	local untouched = ProfileTemplate.DeepCopy(data)
+	local normalized, normalizeErr = pcall(ProfileTemplate.Normalize, data, player.Name)
+	if not normalized then
+		warnf("Normalize FAILED for %s: %s — releasing untouched data", player.Name, tostring(normalizeErr))
+		store:ReleaseAsync(key, untouched)
+		loading[player] = nil
+		if player.Parent then
+			player:Kick("Something went wrong loading your save. It hasn't been changed. Please rejoin.")
+		end
+		return
+	end
 
 	local now = os.time()
 	local stats = data.Stats
@@ -259,11 +275,14 @@ local function onPlayerAdded(player: Player)
 	end
 	stats.LastJoinAt = now
 
-	-- The player may have left while we were loading. We hold the lock,
-	-- so hand it straight back.
-	if not player.Parent then
-		log("%s left during load; releasing", player.Name)
+	-- The player left, or the server started shutting down, while we were
+	-- loading. Either way nobody will release this later (PlayerRemoving
+	-- and BindToClose already ran without a session to release), so we
+	-- hold the lock and must hand it straight back.
+	if shuttingDown or not player.Parent then
+		log("%s: %s during load; releasing", player.Name, shuttingDown and "server closing" or "left")
 		store:ReleaseAsync(key, data)
+		loading[player] = nil
 		return
 	end
 
@@ -278,6 +297,7 @@ local function onPlayerAdded(player: Player)
 		Leaderstats = nil,
 	}
 	sessions[player] = session
+	loading[player] = nil
 
 	buildLeaderstats(session)
 	log("Loaded %s — %s profile, cash=%d, rebirths=%d, joins=%d%s",
@@ -515,6 +535,9 @@ function DataService.Start()
 		RetryCount = Config.Data.LoadRetryCount,
 		RetryBaseDelay = Config.Data.LoadRetryBaseDelay,
 		StaleAfter = Config.Data.SessionLockStaleAfter,
+		-- Studio play tests are often stopped mid-load; don't lock the
+		-- developer out of their own save for minutes afterwards.
+		TakeOverStudioLocks = true,
 	})
 
 	if store:ProbeAsync() then

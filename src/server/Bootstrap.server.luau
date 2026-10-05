@@ -88,6 +88,15 @@ local function validateConfig(): (boolean, { string })
 		end
 	end
 
+	-- Heat multipliers must name real rarities and never shrink a weight.
+	for rarity, multiplier in pairs(Config.Heat.MaxMultiplierByRarity) do
+		if not Config.Rarities[rarity] then
+			table.insert(problems, string.format("Heat.MaxMultiplierByRarity names unknown rarity '%s'", rarity))
+		elseif typeof(multiplier) ~= "number" or multiplier < 1 then
+			table.insert(problems, string.format("Heat.MaxMultiplierByRarity.%s must be a number >= 1", rarity))
+		end
+	end
+
 	-- Upgrade level 1 must always be free, and costs must increase.
 	for _, upgradeId in ipairs(Config.UpgradeOrder) do
 		local up = Config.Upgrades[upgradeId]

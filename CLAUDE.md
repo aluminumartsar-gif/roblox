@@ -164,10 +164,26 @@ The Roblox Studio MCP is connected. Useful tools:
 `Client`). Get `studio_id` from `list_roblox_studios` at the start of a session;
 it changes when Studio restarts.
 
-**Writing scripts into Studio:** write the file in `src/` first, then push it:
-- small change to an existing script → `multi_edit` with the same edit
-- new or heavily rewritten script → `execute_luau` setting `.Source` from a
-  `[==[ ... ]==]` long string (check the file has no `]==]` first)
+**Writing scripts into Studio — Rojo (primary):**
+1. At the start of a session, run `rojo serve default.project.json` from this
+   folder as a background command (port 34872), and ask the owner to click
+   **Connect** in the Rojo plugin. Check `rojo sourcemap` first if the tree
+   changed, so connecting never deletes something that lives only in Studio.
+2. Edit files in `src/` only. Rojo pushes every save into Studio's Edit
+   datamodel within a second or two. Never edit synced scripts in Studio:
+   sync is one-way and Studio edits get overwritten.
+3. Rojo writes to the **Edit** datamodel. Stop any running play test first
+   (or restart it) so the test uses the new code.
+4. Verify with the checksum tools after every batch of edits.
 
-Then verify with the checksum tools. `studio_id` changes every time Studio
-restarts — re-run `list_roblox_studios` at the start of each session.
+Instances that are *not* scripts (map parts, folders under Workspace,
+ServerStorage assets) are not Rojo-managed. Build them with `execute_luau`,
+and keep the code that builds them in `src/` as a builder module so they
+can be regenerated.
+
+**Fallback if Rojo isn't connected:** push via `multi_edit` (small edits) or
+`execute_luau` setting `.Source` from a `[==[ ... ]==]` long string (check the
+file has no `]==]` first), then verify with the checksum tools.
+
+`studio_id` changes every time Studio restarts — re-run
+`list_roblox_studios` at the start of each session.

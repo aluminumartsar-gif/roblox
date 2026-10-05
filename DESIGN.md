@@ -30,14 +30,41 @@ onto your plot right now.
 This is the core decision of the game and everything else serves it.
 
 Each nest has a **Heat** meter that fills from 0 to 100 over 10 minutes. When
-you hatch an egg, the weights of **Rare and above** are multiplied by
+you hatch an egg, each rarity's weight is multiplied by
 
 ```
-1 + 3 · (heat / 100)
+1 + (M − 1) · (heat / 100)
 ```
 
-…then all weights are renormalized. At heat 0 that multiplier is ×1; at heat
-100 it is ×4. You can hatch at any moment via the prompt.
+…where **M** is that rarity's full-heat multiplier, then all weights are
+renormalized. Rarer outcomes climb faster:
+
+| Rarity     | M at full heat |
+|------------|---------------:|
+| Common     | ×1 (no boost)  |
+| Uncommon   | ×1 (no boost)  |
+| Rare       | ×2             |
+| Epic       | ×3             |
+| Legendary  | ×4             |
+| Mythic     | ×5             |
+| Secret     | ×6             |
+
+*(Changed at Step 1 from a flat ×4 on everything Rare+. The flat version
+barely moved high-tier eggs: on a Void egg, max heat changed Legendary odds
+×1.03. Scaling by rarity keeps heat meaningful at every tier.)*
+
+Measured effect on Legendary-or-better odds, heat 0 → 100:
+
+| Egg      | Heat 0 | Heat 100 | Gain  |
+|----------|-------:|---------:|------:|
+| Forest   | 1.50%  | 5.05%    | ×3.36 |
+| Swamp    | 2.00%  | 6.10%    | ×3.05 |
+| Mountain | 4.00%  | 10.24%   | ×2.56 |
+| Deep Sea | 9.00%  | 18.40%   | ×2.04 |
+| Sky      | 19.0%  | 31.2%    | ×1.64 |
+| Void     | 46.0%  | 59.1%    | ×1.29 |
+
+You can hatch at any moment via the prompt.
 
 The tension: **an incubating egg can be stolen at any time, and the thief keeps
 its heat.** A nest at 95 heat is the most valuable and most tempting object on
@@ -45,8 +72,8 @@ the map. Hatch now for worse odds, or wait five more minutes and risk losing it
 entirely? That decision, repeated, is the game.
 
 Luck (from rebirths, VIP, potions, codex pages) multiplies on top of the heat
-bonus, so a max-heat egg on a high-luck account is genuinely spectacular — and
-genuinely worth stealing.
+bonus for every boosted rarity (Rare and up), so a max-heat egg on a high-luck
+account is genuinely spectacular — and genuinely worth stealing.
 
 ### Hook 2 — Sightings
 

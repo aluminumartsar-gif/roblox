@@ -25,7 +25,7 @@ local Config = {}
 -- VERSION / DEBUG
 -- =========================================================================
 
-Config.Version = "0.2.0-step1"
+Config.Version = "0.2.1-step1"
 
 Config.Debug = {
 	-- Master switch for verbose server logging.
@@ -54,8 +54,8 @@ Config.RarityOrder = {
 	"Secret",
 }
 
--- Rarities at this index or greater get the Heat weight multiplier.
-Config.HeatBonusMinRarityIndex = 3 -- Rare
+-- Which rarities heat and luck boost, and by how much, is set per rarity
+-- in Config.Heat.MaxMultiplierByRarity (Rare and above).
 
 Config.Rarities = {
 	Common = {
@@ -256,9 +256,19 @@ Config.Heat = {
 	SecondsToMax = 600, -- 10 minutes
 	-- Server tick rate for heat accrual.
 	TickInterval = 1,
-	-- At full heat, Rare+ weights are multiplied by (1 + Multiplier).
-	-- 1 + 3*(h/100)  ->  x4 at h = 100.
-	MultiplierAtMax = 3.0,
+	-- Weight multiplier each rarity reaches at full heat. Heat scales it
+	-- linearly from x1 at heat 0, then all weights are renormalized:
+	--   multiplier = 1 + (MaxMultiplier - 1) * (heat / Max)
+	-- Rarer outcomes climb faster, so heat keeps pushing odds toward the top
+	-- even on high-tier eggs that are already mostly Rare+.
+	-- Rarities not listed here get no heat (or luck) boost.
+	MaxMultiplierByRarity = {
+		Rare = 2,
+		Epic = 3,
+		Legendary = 4,
+		Mythic = 5,
+		Secret = 6,
+	},
 	-- A stolen egg keeps its heat.
 	ThiefKeepsHeat = true,
 }
@@ -523,7 +533,12 @@ Config.Data = {
 	AutosaveInterval = 60,
 	LoadRetryCount = 5,
 	LoadRetryBaseDelay = 1,     -- seconds; doubles each retry
-	SessionLockStaleAfter = 1800,
+	-- A server that crashed leaves its lock behind. Its heartbeat refreshes
+	-- on every autosave, so after this many seconds of silence the lock is
+	-- treated as dead and the player can load elsewhere. Keep it several
+	-- times AutosaveInterval. Misjudging it cannot duplicate data (see
+	-- SessionStore); it can only cost progress since the last save.
+	SessionLockStaleAfter = 300,
 	BindToCloseTimeout = 25,
 }
 
@@ -669,14 +684,19 @@ end
 
 --- True if this rarity gets the Heat / Luck weight bonus.
 function Config.IsBoostedRarity(rarity: string): boolean
-	return Config.GetRarityIndex(rarity) >= Config.HeatBonusMinRarityIndex
+	return Config.Heat.MaxMultiplierByRarity[rarity] ~= nil
 end
 
---- The multiplier applied to Rare+ weights at a given heat and luck.
+--- The multiplier applied to one rarity's weight at a given heat and luck.
+--- Unboosted rarities (Common, Uncommon) always return 1.
 --- heat: 0..Config.Heat.Max      luckPercent: additive percent, e.g. 25
-function Config.GetBoostMultiplier(heat: number, luckPercent: number?): number
+function Config.GetBoostMultiplier(rarity: string, heat: number, luckPercent: number?): number
+	local maxMultiplier = Config.Heat.MaxMultiplierByRarity[rarity]
+	if not maxMultiplier then
+		return 1
+	end
 	local h = math.clamp(heat or 0, 0, Config.Heat.Max)
-	local heatPart = 1 + Config.Heat.MultiplierAtMax * (h / Config.Heat.Max)
+	local heatPart = 1 + (maxMultiplier - 1) * (h / Config.Heat.Max)
 	local luck = math.clamp(luckPercent or 0, 0, Config.Luck.MaxPercent)
 	return heatPart * (1 + luck / 100)
 end
@@ -687,15 +707,11 @@ function Config.GetRarityChances(eggId: string, heat: number, luckPercent: numbe
 	local egg = Config.Eggs[eggId]
 	assert(egg, "Unknown egg id: " .. tostring(eggId))
 
-	local boost = Config.GetBoostMultiplier(heat, luckPercent)
 	local weighted: { [string]: number } = {}
 	local total = 0
 
 	for _, rarity in ipairs(Config.RarityOrder) do
-		local w = egg.Weights[rarity] or 0
-		if Config.IsBoostedRarity(rarity) then
-			w = w * boost
-		end
+		local w = (egg.Weights[rarity] or 0) * Config.GetBoostMultiplier(rarity, heat, luckPercent)
 		weighted[rarity] = w
 		total += w
 	end

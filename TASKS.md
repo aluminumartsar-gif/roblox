@@ -54,6 +54,16 @@ Simulated second server: load refused (Locked), overwrite refused
 (LostLock), real save untouched. Corrupt-profile repair verified.
 Negative/NaN/infinite cash amounts rejected.
 
+**Post-step fix (stuck session lock):** a play test stopped while the save
+was still loading left its lock behind, locking the player out for up to 30
+min. Fixed three ways: a load that finishes during shutdown now releases
+immediately and shutdown waits for it; dead-lock threshold cut to 5 min
+(heartbeat is every 60s); Studio sessions take over leftover Studio locks
+immediately (opt-in flag, never on live servers). Takeover of a real stuck
+lock verified; live-session protection re-verified. The exact
+stop-mid-load timing can't be reproduced through the MCP (too slow), so
+that path is fixed in code but not directly exercised.
+
 ---
 
 ## Step 2 — Map `[ ]`
@@ -178,42 +188,20 @@ Things only the owner can do. Ticked when done.
 
 ---
 
+## Decisions log
+
+- **Heat bonus scales by rarity** (owner chose option b, after Step 1).
+  Full-heat multipliers: Rare ×2, Epic ×3, Legendary ×4, Mythic ×5,
+  Secret ×6, in `Config.Heat.MaxMultiplierByRarity`. Void egg Legendary+ odds
+  now go 46% → 59% with heat (were 46% → 47%). See DESIGN.md §2.
+- **Rojo is the sync path** (after Step 1). Scripts are edited in `src/`;
+  `rojo serve` pushes them into Studio. Owner clicks Connect once per session.
+
+---
+
 ## Open questions for the owner
 
-### 1. The heat bonus fades out on high-tier eggs
-
-Measured from the real Config at Step 0. Heat multiplies Rare+ weights by ×4 at
-full heat and then renormalizes — so the boost only has room to work when there
-is a lot of Common/Uncommon weight to squeeze out.
-
-| Egg    | Legendary @ heat 0 | @ heat 100 | Effective gain |
-|--------|-------------------:|-----------:|---------------:|
-| Forest | 1.20%              | 3.12%      | **×2.6**       |
-| Void   | 32.0%              | 33.0%      | **×1.03**      |
-
-So Hook 1 — the hatch-now-or-wait decision that the whole game is built on —
-is strong for new players and nearly meaningless for endgame players, who are
-exactly the ones with the most to lose from a steal.
-
-Three ways to go:
-
-- **(a) Leave it.** Heat is an early/mid-game hook; endgame tension comes from
-  raw egg value instead. Simplest, and arguably fine.
-- **(b) Rarity-scaled boost.** Boost each rarity by a factor that grows with its
-  index (Rare ×2, Epic ×3, Legendary ×4, Mythic ×5, Secret ×6 at full heat)
-  instead of one flat ×4 for everything Rare+. The distribution then keeps
-  shifting rightward at every tier.
-- **(c) Rebalance the high eggs.** Give Sky and Void more Common/Uncommon base
-  weight so heat has something to eat, making them high-variance rather than
-  just flatly better.
-
-Claude's recommendation: **(b)**. It is a one-line change in
-`Config.GetBoostMultiplier` plus a per-rarity table, it keeps every existing
-price and weight, and it makes a max-heat Void egg the single most exciting
-object in the game — which is what the steal mechanic needs to stay hot at
-endgame. Not doing it until you say so. **Needed before Step 3.**
-
-### 2. Spawn lock: first join only, or every join? *(needed before Step 4)*
+### 1. Spawn lock: first join only, or every join? *(needed before Step 4)*
 
 The design says "new players get a 5-minute spawn lock." Your nests persist
 between sessions, so a returning player's plot is full of loot the instant
