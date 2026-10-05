@@ -25,7 +25,7 @@ local Config = {}
 -- VERSION / DEBUG
 -- =========================================================================
 
-Config.Version = "0.1.0-step0"
+Config.Version = "0.2.0-step1"
 
 Config.Debug = {
 	-- Master switch for verbose server logging.

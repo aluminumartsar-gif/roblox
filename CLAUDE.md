@@ -112,11 +112,35 @@ LocalScript, plain `.luau` = ModuleScript.
   ownership → distance → cooldown → state.
 
 ### Data
-- Player state lives in one profile table per player, session-locked.
-- Never write to a profile from more than one place; go through the data
-  service.
-- Autosave every `Config.Data.AutosaveInterval`, save on leave, and save in
-  `BindToClose`.
+- Player state lives in one profile table per player, session-locked by
+  `Modules/SessionStore`. **Only `DataService` touches DataStores.**
+- Write through the DataService API, never by poking the table and hoping:
+  - `AddCash(player, amount, reason)` / `TrySpendCash(player, amount, reason)`
+    — validate the amount, update stats + leaderstats, push to the client.
+    `TrySpendCash` is the only way to spend: the check and the deduction
+    cannot be split.
+  - `Mutate(player, fn)` — any other change. Don't yield inside `fn`.
+  - `SaveNow(player)` — after anything the player would be furious to lose
+    (Robux purchases).
+  - `OnBeforeRelease(hook)` — write transient state (e.g. a carried item) back
+    into the profile before the final save.
+  - `ProfileLoaded` signal — start per-player systems here, not on
+    `PlayerAdded` (the profile isn't there yet).
+- **Adding** a profile field: add it to `ProfileTemplate.new()`. Reconcile fills
+  it in for existing players. No version bump.
+- **Changing/removing** a field: bump `SchemaVersion` and add a migration.
+  Never delete old migrations.
+- Nests are a dense array; an empty nest is `false`, never `nil`.
+- If a profile can't load safely, kick. Never play on a blank profile.
+- Studio-only test hook: `ServerStorage.SAC_Debug:Invoke("give"|"dump"|"save"|"wipe"|"status", playerName, ...)`.
+  Must be used via a BindableFunction because MCP/command-bar code runs in a
+  separate Luau VM and gets its own copies of modules.
+
+### Verifying a push
+After pushing scripts to Studio, run `tools/checksum.sh` locally and the body
+of `tools/checksum.luau` in the Edit datamodel. The outputs must be identical
+line for line — that proves the repo and Studio match byte-for-byte, and that
+Studio has no scripts the repo doesn't.
 
 ### Content rules (legal)
 - Common through Legendary are **real folklore cryptids** — public domain.
@@ -140,6 +164,10 @@ The Roblox Studio MCP is connected. Useful tools:
 `Client`). Get `studio_id` from `list_roblox_studios` at the start of a session;
 it changes when Studio restarts.
 
-**Writing scripts into Studio:** generate the file in `src/` first, then push its
-contents into Studio via `execute_luau` (set `.Source`). Keeps the repo
-authoritative.
+**Writing scripts into Studio:** write the file in `src/` first, then push it:
+- small change to an existing script → `multi_edit` with the same edit
+- new or heavily rewritten script → `execute_luau` setting `.Source` from a
+  `[==[ ... ]==]` long string (check the file has no `]==]` first)
+
+Then verify with the checksum tools. `studio_id` changes every time Studio
+restarts — re-run `list_roblox_studios` at the start of each session.

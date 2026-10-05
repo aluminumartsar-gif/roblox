@@ -13,6 +13,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
+local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -22,7 +23,7 @@ local ServicesFolder = ServerRoot:WaitForChild("Services")
 
 -- Services start in this order. Add to the list as steps land.
 local SERVICE_ORDER: { string } = {
-	-- Step 1: "DataService",
+	"DataService",
 	-- Step 2: "PlotService",
 	-- Step 3: "EggService", "IncomeService",
 	-- Step 4: "StealService",
@@ -126,7 +127,7 @@ end
 -- Created here so there is exactly one place remotes come into existence.
 --------------------------------------------------------------------------
 
-local function buildRemotes(): Folder
+local function buildRemotes(): (Folder, number)
 	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 	if not remotes then
 		remotes = Instance.new("Folder")
@@ -212,6 +213,15 @@ end
 log("Boot complete — %d/%d services started in %.1f ms",
 	startedCount, #SERVICE_ORDER, (os.clock() - startClock) * 1000)
 
-if #SERVICE_ORDER == 0 then
-	log("No services yet. This is expected at Step 0.")
+-- Studio-only test hooks. Never runs on a live server.
+if RunService:IsStudio() then
+	local debugModule = ServerRoot:WaitForChild("Modules"):FindFirstChild("DebugCommands")
+	if debugModule then
+		local ok, err = pcall(function()
+			require(debugModule).Start()
+		end)
+		if not ok then
+			warnf("DebugCommands failed: %s", tostring(err))
+		end
+	end
 end

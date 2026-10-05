@@ -27,20 +27,32 @@ commit).
 
 ---
 
-## Step 1 — Data layer `[ ]`
+## Step 1 — Data layer `[x]`
 
-- [ ] ProfileStore if it can be added; otherwise a session-locked DataStore
-      wrapper (UpdateAsync, retry with backoff)
-- [ ] Profile schema: cash, rebirths, nests, upgrades, codex, purchase history,
-      stats, buffs
-- [ ] Autosave every 60s, save on leave, `BindToClose`
-- [ ] `leaderstats`: Cash, Rebirths
-- [ ] Join / leave lifecycle
-- [ ] Profile-updated remote pushing state to the client
+- [x] ProfileStore was not available (not in inventory or Creator Store
+      search), so wrote `SessionStore` — a session-locked DataStore wrapper
+      (lock taken inside the same UpdateAsync as the read, heartbeat, stale
+      takeover after 30 min, exponential backoff, refuses to write if the lock
+      was lost). Falls back to an in-memory store with a red HUD warning if
+      DataStores are unreachable.
+- [x] Profile schema (`ProfileTemplate`): cash, rebirths, 12-slot nests,
+      upgrades, codex, purchases (for idempotent receipts), buffs, stats,
+      spawn lock. Reconcile for added fields, migration chain for changed
+      ones, repair pass for corrupt data.
+- [x] Autosave every 60s (staggered), save + release on leave, `BindToClose`
+- [x] `leaderstats`: Cash, Rebirths
+- [x] Join / leave lifecycle; kicks with a clear message rather than ever
+      playing on a blank profile if a load fails
+- [x] `ProfileUpdated` push to the client (coalesced to one per frame);
+      `ProfileController` caches it client-side; minimal HUD shows cash
+- [x] Studio-only debug hook: `ServerStorage.SAC_Debug` (give/dump/save/wipe/status)
+- [x] `tools/checksum.sh` + `tools/checksum.luau` for repo↔Studio verification
 
-**Test:** join, earn cash, leave, rejoin — data intact.
-**Owner action needed:** *Enable Studio Access to API Services*
-(File → Game Settings → Security).
+**Tested:** join (new profile) → +$12,345 → leave → raw DataStore record
+shows cash saved and lock released → rejoin → cash restored, join count 2.
+Simulated second server: load refused (Locked), overwrite refused
+(LostLock), real save untouched. Corrupt-profile repair verified.
+Negative/NaN/infinite cash amounts rejected.
 
 ---
 
@@ -157,8 +169,7 @@ Dashboard and paste the IDs into `Config`.
 
 Things only the owner can do. Ticked when done.
 
-- [ ] **Enable Studio Access to API Services** — needed for Step 1
-      (File → Game Settings → Security → *Enable Studio Access to API Services*)
+- [x] **Enable Studio Access to API Services** — confirmed working at Step 1
 - [ ] **Allow HTTP Requests** — File → Game Settings → Security (only if we end
       up needing it)
 - [ ] **Two-player test setup** — Test tab → Clients and Servers → Players: 2
@@ -200,4 +211,16 @@ Claude's recommendation: **(b)**. It is a one-line change in
 `Config.GetBoostMultiplier` plus a per-rarity table, it keeps every existing
 price and weight, and it makes a max-heat Void egg the single most exciting
 object in the game — which is what the steal mechanic needs to stay hot at
-endgame. Not doing it until you say so.
+endgame. Not doing it until you say so. **Needed before Step 3.**
+
+### 2. Spawn lock: first join only, or every join? *(needed before Step 4)*
+
+The design says "new players get a 5-minute spawn lock." Your nests persist
+between sessions, so a returning player's plot is full of loot the instant
+they spawn, before they've had a chance to look around.
+
+- **First join only** — literal reading; protects true newcomers.
+- **Every join** — protects anyone who just loaded in. Common in the genre.
+
+Claude's recommendation: **every join**, but shorter for returning players
+(e.g. 5 min first join, 2 min after) — both numbers in Config.

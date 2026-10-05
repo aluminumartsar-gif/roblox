@@ -23,7 +23,8 @@ local ControllersFolder = ClientRoot:WaitForChild("Controllers")
 
 -- Controllers start in this order. Add to the list as steps land.
 local CONTROLLER_ORDER: { string } = {
-	-- Step 1: "HudController",
+	"ProfileController",
+	"HudController",
 	-- Step 3: "EggShopController",
 	-- Step 4: "StealController",
 	-- Step 7: "SightingController", "CodexController",
