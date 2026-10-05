@@ -26,6 +26,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Signal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("Signal"))
 
 local Server = ServerScriptService:WaitForChild("Server")
 local Modules = Server:WaitForChild("Modules")
@@ -36,6 +37,10 @@ local MovementService = require(Services:WaitForChild("MovementService"))
 local StealService = require(Services:WaitForChild("StealService"))
 
 local BatService = {}
+
+--- (target, swinger) whenever a swing stuns someone. SightingService uses it
+--- to break a capture hold.
+BatService.Bonked = Signal.new()
 
 local SWING_SOUND = "rbxasset://sounds/swordslash.wav"
 local CLOSE_RANGE = 3 -- within this, direction doesn't matter
@@ -91,6 +96,7 @@ local function hit(attacker: Player, target: Player, direction: Vector3)
 		knockback(targetRoot, direction)
 	end
 	stun(target)
+	BatService.Bonked:Fire(target, attacker)
 	Notifier.Send(target, "Bonked by " .. attacker.DisplayName .. "!", "Warning")
 end
 

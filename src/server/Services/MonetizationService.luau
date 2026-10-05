@@ -30,6 +30,13 @@
 	checks the product makes sense right now (e.g. a free nest for the egg
 	bundle), and prompts the purchase itself. Prices are never taken from
 	the client.
+
+	Retention (Step 7.5): the Extra Spins and Double Offline Cash products
+	write straight into data.Retention (RetentionService starts later, so it
+	can't be required here); ProductGranted tells RetentionService to refresh
+	the player's screens. RetentionService reuses GrantMaxHeat / ExtendBuff /
+	GrantEggs / GetTotalCreatureIncome so prizes behave exactly like the
+	products.
 ]]
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -38,6 +45,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Signal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("Signal"))
 
 local Server = ServerScriptService:WaitForChild("Server")
 local Modules = Server:WaitForChild("Modules")
@@ -50,6 +58,11 @@ local PlotService = require(Services:WaitForChild("PlotService"))
 local NestService = require(Services:WaitForChild("NestService"))
 
 local MonetizationService = {}
+
+--- Fired as (player, productKey) after a developer product was granted
+--- (RetentionService listens so its screens update after Extra Spins /
+--- Double Offline Cash). Not fired for a retried receipt.
+MonetizationService.ProductGranted = Signal.new()
 
 local ownedPasses: { [Player]: { [string]: boolean } } = {}
 local passKeyById: { [number]: string } = {}
@@ -107,6 +120,22 @@ end
 -- Developer products
 --------------------------------------------------------------------------
 
+--- Cash per second all of the player's creatures at home earn right now
+--- (creatures out being stolen don't count). Used to scale cash rewards.
+function MonetizationService.GetTotalCreatureIncome(player: Player): number
+	local data = DataService.Get(player)
+	if not data then
+		return 0
+	end
+	local total = 0
+	for _, slot in ipairs(data.Nests) do
+		if slot ~= false and slot.Kind == "Creature" and not slot.Away then
+			total += BoostService.GetCreatureIncome(player, slot)
+		end
+	end
+	return total
+end
+
 --- Puts the player's best not-yet-maxed egg at max heat. "Best" = most
 --- expensive egg type; ties go to the coolest egg. Returns true if applied.
 local function applyMaxHeat(player: Player): boolean
@@ -129,6 +158,64 @@ local function applyMaxHeat(player: Player): boolean
 	return NestService.SetEggHeat(player, bestIndex, Config.Heat.Max)
 end
 
+--- Max Heat, as the product does it: the best egg now, or saved for the
+--- next egg. Never yields. Returns true if an egg was heated right away.
+--- (Also used by RetentionService for spin-wheel prizes.)
+function MonetizationService.GrantMaxHeat(player: Player): boolean
+	if applyMaxHeat(player) then
+		return true
+	end
+	DataService.Mutate(player, function(d)
+		d.PendingMaxHeat += 1
+	end)
+	return false
+end
+
+--- Adds time to a buff ("Luck" / "HeatRate"), as the potions do: a running
+--- buff is extended. Never yields. (Also used by RetentionService.)
+function MonetizationService.ExtendBuff(player: Player, buffName: string, duration: number)
+	DataService.Mutate(player, function(d)
+		local now = os.time()
+		d.Buffs[buffName] = math.max(now, d.Buffs[buffName] or 0) + duration
+	end)
+end
+
+--- Puts eggs in free nests; any that don't fit are saved in PendingEggs and
+--- placed when a nest frees up. Never yields. Returns (placed, saved).
+--- (Also used by RetentionService.)
+function MonetizationService.GrantEggs(player: Player, eggId: string, count: number): (number, number)
+	local placed, saved = 0, 0
+	for _ = 1, count do
+		if NestService.PlaceEgg(player, eggId, 0) then
+			placed += 1
+		else
+			DataService.Mutate(player, function(d)
+				table.insert(d.PendingEggs, eggId)
+			end)
+			saved += 1
+		end
+	end
+	return placed, saved
+end
+
+--- Double Offline Cash: what it would pay right now, and why. Mirrors the
+--- grant below, so RequestPurchase can refuse when there's nothing to double.
+local function offlineDoubleAmount(player: Player): (number, string)
+	local data = DataService.Get(player)
+	local retention = data and data.Retention
+	if retention and retention.PendingOffline > 0 then
+		return retention.PendingOffline * 2, "Pending"
+	elseif retention and retention.LastOfflineAmount > 0 then
+		return retention.LastOfflineAmount, "Last"
+	end
+	local offline = Config.Retention.Offline
+	local fallback = math.max(offline.DoubleFallbackBase,
+		math.floor(MonetizationService.GetTotalCreatureIncome(player) * offline.DoubleFallbackMinutes * 60))
+	-- AddCash refuses more than AbsoluteMaxSingleCollect, and a refused
+	-- grant would leave the receipt retrying forever.
+	return math.min(fallback, Config.Retention.MaxCashReward, Config.Income.AbsoluteMaxSingleCollect), "Fallback"
+end
+
 --- Grants a product's reward. Must not yield. Returns a thank-you line.
 local function grantProduct(player: Player, key: string): string
 	local product = Config.DevProducts[key]
@@ -137,19 +224,13 @@ local function grantProduct(player: Player, key: string): string
 		return string.format("+$%s!", Config.FormatNumber(product.Amount))
 
 	elseif product.Kind == "Buff" then
-		DataService.Mutate(player, function(d)
-			local now = os.time()
-			d.Buffs[product.Buff] = math.max(now, d.Buffs[product.Buff] or 0) + product.Duration
-		end)
+		MonetizationService.ExtendBuff(player, product.Buff, product.Duration)
 		return string.format("%s active!", product.DisplayName)
 
 	elseif product.Effect == "MaxHeatOneEgg" then
-		if applyMaxHeat(player) then
+		if MonetizationService.GrantMaxHeat(player) then
 			return "Your best egg is at max heat!"
 		end
-		DataService.Mutate(player, function(d)
-			d.PendingMaxHeat += 1
-		end)
 		return "Max Heat saved — it'll hit your next egg."
 
 	elseif product.Effect == "ExtendLock" then
@@ -157,21 +238,34 @@ local function grantProduct(player: Player, key: string): string
 		return "Camp locked!"
 
 	elseif product.Effect == "GrantEggs" then
-		local placed, saved = 0, 0
-		for _ = 1, product.Count do
-			if NestService.PlaceEgg(player, product.EggId, 0) then
-				placed += 1
-			else
-				DataService.Mutate(player, function(d)
-					table.insert(d.PendingEggs, product.EggId)
-				end)
-				saved += 1
-			end
-		end
+		local placed, saved = MonetizationService.GrantEggs(player, product.EggId, product.Count)
 		if saved > 0 then
 			return string.format("%d egg(s) placed, %d saved for when a nest frees up.", placed, saved)
 		end
 		return string.format("%d eggs placed in your nests!", placed)
+
+	elseif product.Effect == "ExtraSpins" then
+		DataService.Mutate(player, function(d)
+			d.Retention.SpinExtra += product.Count
+		end)
+		return string.format("%d extra spins added to the wheel!", product.Count)
+
+	elseif product.Effect == "DoubleOffline" then
+		-- Read and clear in the same synchronous step as the payment, so a
+		-- Claim racing this receipt can't pay the same cash twice.
+		local amount, source = offlineDoubleAmount(player)
+		assert(DataService.AddCash(player, amount, "robux:" .. key), "AddCash refused")
+		DataService.Mutate(player, function(d)
+			if source == "Pending" then
+				d.Retention.PendingOffline = 0 -- paid twice over just now
+			end
+			-- Doubled either way: nothing is left to double.
+			d.Retention.LastOfflineAmount = 0
+		end)
+		if source == "Fallback" then
+			return string.format("Your offline cash was already doubled, so here's +$%s instead.", Config.FormatNumber(amount))
+		end
+		return string.format("Offline cash doubled: +$%s!", Config.FormatNumber(amount))
 	end
 
 	error("Unhandled product " .. key)
@@ -207,6 +301,8 @@ function MonetizationService.ProcessReceiptForKey(player: Player, purchaseId: st
 		end)
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
+	-- The reward is in the profile now (whether or not the save below works).
+	MonetizationService.ProductGranted:Fire(player, key)
 
 	if not DataService.SaveNow(player) then
 		warn(string.format("[SAC/Robux] Granted %s to %s but the save failed; asking Roblox to retry", key, player.Name))
@@ -297,6 +393,12 @@ function MonetizationService.RequestPurchase(player: Player, kind: any, key: any
 		end
 		if product.Effect == "GrantEggs" and not NestService.FindEmptyNest(player) then
 			return { Ok = false, Message = "You need an empty nest for the bundle — make room first." }
+		end
+		if product.Effect == "DoubleOffline" then
+			local _, source = offlineDoubleAmount(player)
+			if source == "Fallback" then
+				return { Ok = false, Message = "There's no offline cash to double right now." }
+			end
 		end
 		MarketplaceService:PromptProductPurchase(player, product.Id)
 		return { Ok = true }

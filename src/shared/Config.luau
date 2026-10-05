@@ -43,9 +43,10 @@ Config.Debug = {
 -- =========================================================================
 
 Config.Economy = {
-	-- A brand-new profile starts with this much cash: enough for a few
-	-- Forest eggs off the belt, so the very first minute has something to do.
-	StartingCash = 300,
+	-- A brand-new profile starts with this much cash: five Forest eggs off
+	-- the belt, so the tutorial fills most of your nests and the first few
+	-- minutes have something to do. (Was 300; see docs/ECONOMY.md.)
+	StartingCash = 500,
 	-- Safety net so nobody can get stuck: a player with no eggs, no
 	-- creatures, nothing in hand, no saved eggs and less cash than the
 	-- cheapest egg gets a free egg placed in a nest.
@@ -416,9 +417,13 @@ Config.Travel = {
 -- =========================================================================
 
 Config.Map = {
-	-- Seed for tree/rock placement. Same seed = same forest every boot.
+	-- Seed for every random placement (trees, rocks, hills, decor). Same
+	-- seed = same world on every boot and every server.
 	Seed = 1337,
-	GroundSize = 1300,        -- square, centred on the hub
+	-- Square of terrain, centred on the hub. Reaches well past the boundary
+	-- and the edge tree line, so the end of the world is never in view.
+	GroundSize = 1500,
+	-- (Kept for older code; the ground is Terrain now, coloured by TerrainColors.)
 	GroundColor = Color3.fromRGB(46, 62, 40),
 	PathColor = Color3.fromRGB(92, 74, 54),
 	PathWidth = 12,
@@ -426,11 +431,86 @@ Config.Map = {
 	-- The Wilds: forest ring outside the plots where sightings spawn.
 	WildsInnerRadius = 345,
 	WildsOuterRadius = 560,
-	WildsTreeCount = 240,
-	WildsRockCount = 40,
-	TreeMinSpacing = 14,
+	WildsTreeCount = 330,
+	WildsRockCount = 30,      -- small rocks
+	WildsBoulderCount = 22,
+	WildsBushCount = 110,
+	WildsLogCount = 22,       -- fallen logs (jumpable)
+	WildsStumpCount = 16,
+	WildsMushroomCount = 34,  -- glowing teal clusters
+	TreeMinSpacing = 13,      -- trunk to trunk; keeps the woods walkable
 	-- Scattered trees between neighbouring plots, for the campsite feel.
-	BetweenPlotTreesEach = 3,
+	BetweenPlotTreesEach = 4,
+	-- The meadow between the hub and the plot ring: light scatter only.
+	MeadowTreeCount = 18,
+	MeadowBushCount = 40,
+	MeadowRockCount = 14,
+	MeadowMushroomCount = 10,
+	-- A thick tree line past The Wilds so the map edge reads as deep forest.
+	EdgeTreeCount = 90,
+	EdgeTreeOuterRadius = 660,
+	-- Deer trails: clear, dirt-painted lanes from the plot ring out through
+	-- The Wilds (one every TrailEvery plot gaps), so sightings are reachable.
+	TrailEvery = 2,
+	TrailWidth = 8,
+	-- Gentle hills, only in The Wilds (plots, paths and hub stay flat at
+	-- y = 0). Each hill is a cluster of overlapping terrain balls.
+	HillCount = 26,
+	HillBallsEach = { 4, 7 },       -- min, max balls per hill
+	HillBallRadius = { 34, 46 },    -- studs
+	HillBallCap = { 3, 9 },         -- how far each ball pokes above y = 0
+	HillSpread = 26,                -- how far a hill's balls scatter
+	HillMinRadius = 372,            -- no hill centre closer to the hub than this
+	-- A ring of taller mounds past the boundary frames the map edge.
+	EdgeBermBalls = 30,
+	EdgeBermRadius = 60,
+	EdgeBermCap = 16,
+	EdgeBermDistance = 652,         -- ball centres, studs from the hub
+	-- Hub: a cobblestone plaza round the egg belt, dirt round the fire.
+	HubPlazaRadius = 36,
+	HubFireCircleRadius = 18,
+	-- Scale range for trees (1 = the prop's standing height).
+	TreeScale = { 0.8, 1.35 },
+	PineTreeShare = 0.62,           -- the rest are round trees
+	-- Lantern posts along each hub-to-plot path.
+	PathLanternSpacing = 40,
+	-- Fireflies (ParticleEmitters): per emitter volume.
+	FireflyColor = Color3.fromRGB(214, 255, 140),
+	FireflyRate = 5,
+	WildsFireflyPatches = 10,
+	-- Glowing mushrooms: every Nth cluster also lights the ground.
+	MushroomColor = Color3.fromRGB(90, 255, 220),
+	MushroomLightEvery = 3,
+	MushroomLightRange = 10,
+	MushroomLightBrightness = 1.2,
+	-- Plot palisade: vertical logs with pointed tops in front of a solid
+	-- wall core (the core is the real collision, Config.Plot.WallHeight tall).
+	PalisadeLogDiameter = 3,
+	PalisadeLogSpacing = 3.6,
+	-- Nest glow ring (SetNestActive): see-through amounts.
+	NestGlowActiveTransparency = 0.25,
+	NestLidColor = Color3.fromRGB(72, 74, 80), -- stone lid on locked nests
+	HomePadColor = Color3.fromRGB(110, 230, 170),
+	-- CollectionService tag on the hub campfire's fire part (sounds use it).
+	HubCampfireTag = "SAC_HubCampfire",
+	-- Standing height of each prop when it has to be built from parts (no
+	-- mesh template). Meshes use their own height from Config.Art.Props.
+	PropHeights = {
+		PineTree = 26, RoundTree = 18, Bush = 3, Rock = 3, Boulder = 7, Stump = 2,
+		FallenLog = 2, Mushroom = 2.5, Tent = 7, Campfire = 2.5, Lantern = 6,
+		LogBench = 2.5, Crate = 3, Nest = 1.6, Totem = 14, Signpost = 7,
+	},
+	-- Terrain material colours (Workspace.Terrain:SetMaterialColor).
+	TerrainColors = {
+		Grass = Color3.fromRGB(70, 96, 56),
+		LeafyGrass = Color3.fromRGB(58, 84, 50),
+		Ground = Color3.fromRGB(110, 88, 64),
+		Mud = Color3.fromRGB(84, 66, 50),
+		Cobblestone = Color3.fromRGB(116, 112, 106),
+		Rock = Color3.fromRGB(96, 98, 104),
+	},
+	-- Grass/dirt patches painted over the meadow and the woods.
+	TerrainPatchCount = 140,
 	-- Invisible wall that keeps players inside the map.
 	BoundaryRadius = 600,
 	BoundaryHeight = 120,
@@ -452,8 +532,7 @@ Config.Income = {
 	-- Mythic/Secret from filling a $25K vault in seconds and then earning
 	-- nothing. Set to 0 to use the Vault Size upgrade alone.
 	MinVaultSeconds = 600,
-	-- Offline earnings are OFF for now; revisit after launch economy data.
-	OfflineEarningsEnabled = false,
+	-- Offline earnings (Step 7.5) are set up in Config.Retention.Offline.
 }
 
 -- =========================================================================
@@ -511,69 +590,552 @@ Config.Bat = {
 -- SIGHTINGS (Hook 2 — Step 7)
 -- =========================================================================
 
+-- Built in Step 7: Services/SightingService (server) and
+-- Controllers/SightingController (banner, marker, VHS effect).
 Config.Sightings = {
-	Enabled = false, -- turned on in Step 7
+	Enabled = true,
+	-- The first sighting comes this long after the first player loads in
+	-- (a fresh or emptied server); after that, a random gap between
+	-- MinInterval and MaxInterval, counted from when the last one ended
+	-- (captured or escaped). Never while the server is empty.
+	FirstDelay = 120,
 	MinInterval = 360,  -- 6 minutes
 	MaxInterval = 600,  -- 10 minutes
-	Duration = 90,
+	Duration = 90,      -- seconds the wild cryptid stays before it escapes
 	-- Capture hold time: Config.Prompts.CaptureHold.
 	-- Base spawn odds; shifted rarer as the server fills up.
 	BaseWeights = { Rare = 60, Epic = 30, Legendary = 9, Mythic = 1 },
-	-- Per player online, shift this fraction of Rare weight into Epic+.
+	-- For each player online beyond the first, move this fraction of the
+	-- most common rarity's weight (Rare) into the rarer ones (Epic+), in
+	-- proportion to their base weights. Capped at MaxPlayersForScaling.
 	RarerPerPlayer = 0.03,
 	MaxPlayersForScaling = 20,
-	-- Spawn area is The Wilds ring: Config.Map.WildsInnerRadius..OuterRadius.
-	-- VHS effect radius around the sighting.
+
+	-- Where it appears: a random spot in The Wilds ring
+	-- (Config.Map.WildsInnerRadius..WildsOuterRadius), kept EdgeMargin studs
+	-- inside the outer edge. A spot must be open ground: a ray down hits
+	-- something walkable (terrain or a collidable part, not water), the ground
+	-- is no steeper than MaxSlope degrees and no bumpier than MaxBumpiness
+	-- studs across ClearanceRadius, and nothing collidable stands within
+	-- ClearanceRadius x ClearanceHeight of it (parts wider than
+	-- GroundPartMinWidth count as ground, not obstacles). Up to SpawnAttempts
+	-- tries, then the middle of the ring at a random angle.
+	EdgeMargin = 25,
+	SpawnAttempts = 30,
+	ClearanceRadius = 7,
+	ClearanceHeight = 9,
+	MaxSlope = 30,
+	MaxBumpiness = 2.5,
+	GroundPartMinWidth = 80,
+	RaycastFromHeight = 300, -- rays start this high above the spot
+
+	-- How it looks (rarity colour). A light pillar (Beam) rises from the
+	-- wild cryptid so it can be seen across the map at night.
+	PillarHeight = 160,
+	PillarWidth = 4,
+	PillarTransparency = 0.35, -- at the bottom; fades to invisible at the top
+	LightRange = 28,
+	LightBrightness = 3,
+	-- While someone carries a capture home: a shorter pillar over them and
+	-- a rarity-coloured outline visible through walls.
+	CarryPillarHeight = 110,
+	CarryPillarWidth = 2.5,
+
+	-- Knocked out of a carrier's hands: anyone (with a free nest) can grab
+	-- it for this long, then it escapes into the woods for good.
+	DroppedLifetime = 30,
+
+	-- Client-only polish.
+	-- VHS "found footage" effect within VhsRadius of the sighting, full
+	-- strength within VhsFullRadius.
 	VhsRadius = 120,
+	VhsFullRadius = 40,
 	VhsTint = Color3.fromRGB(196, 214, 196),
-	VhsFovWobble = 2.5,
+	VhsSaturation = -0.45,  -- ColorCorrection at full strength
+	VhsContrast = 0.18,
+	VhsBrightness = -0.02,
+	VhsFovWobble = 2.5,     -- degrees, at full strength
+	VhsFovWobbleSpeed = 1.4, -- wobbles per second (roughly)
+	VhsScanlineTransparency = 0.82, -- 1 = invisible
+	VhsGrainDots = 26,       -- specks of grain on screen at once
+	-- SightingAmbience replays this often while you're inside VhsRadius.
+	AmbienceInterval = 12,
+	-- The floating "this way" marker over the sighting (and over a capture
+	-- on its way home) hides once you're this close.
+	MarkerHideWithin = 18,
+	-- The wild cryptid bobs a little on each client (visual only; the
+	-- server keeps it still, because prompts are checked against the
+	-- server's position).
+	IdleBobHeight = 0.35,
+	IdleBobSpeed = 1.6,
 }
 
 -- =========================================================================
 -- CODEX (Hook 3 — Step 7)
 -- =========================================================================
 
+-- Every player gets a Field Camera each spawn. Photographing a cryptid (in
+-- any nest, a wild sighting, or one being carried) logs it in their Codex;
+-- hatching or claiming one logs it too. Completing every creature in a
+-- rarity page grants permanent luck: Config.Luck.CodexPageCompletePercent
+-- per page (BoostService adds it up). The Codex survives rebirth (it is not
+-- in Config.Rebirth.Resets).
 Config.Codex = {
-	Enabled = false,
+	Enabled = true,
 	CameraToolName = "Field Camera",
-	PhotoCooldown = 2,
-	MaxPhotoDistance = 60,
-	-- Completing every creature in a rarity page grants permanent luck:
-	-- the amount is Config.Luck.CodexPageCompletePercent.
+	PhotoCooldown = 2,           -- seconds between photos, per player (server-checked)
+	MaxPhotoDistance = 60,       -- studs from your character to the cryptid
+	                             -- (server allows + Config.Prompts.ServerDistanceSlack)
 	SurvivesRebirth = true,
+
+	-- Aiming (client). If the shot through the pointer / screen centre hits
+	-- no cryptid, the closest one within this many degrees of the centre of
+	-- the screen counts instead (forgiving on phones).
+	FallbackConeDegrees = 14,
+	TargetRefreshInterval = 0.1, -- seconds between viewfinder target checks
+
+	-- Line of sight (server, lenient). Parts more see-through than this,
+	-- and parts you can walk through, don't block a photo.
+	LosIgnoreTransparency = 0.5,
+	LosMaxPierce = 8,            -- see-through parts skipped per ray before giving up
+	LosLenientRise = 4,          -- also try from this many studs above the head
+	                             -- (third-person cameras see a bit higher)
+
+	-- Camera tool look.
+	ToolBodyColor = Color3.fromRGB(38, 38, 44),
+	ToolLensColor = Color3.fromRGB(70, 110, 140),
+
+	-- Feedback timings (client), seconds.
+	ShutterFlashTime = 0.35,
+	NewEntryBannerTime = 3.2,    -- the "NEW CODEX ENTRY" polaroid
+	PageBannerTime = 5,          -- the "<Rarity> page complete!" banner
+	HatchCelebrationDelay = 2.5, -- wait for the hatch reveal before the polaroid
+	MaxQueuedCelebrations = 4,   -- more than this at once collapses into one toast
+
+	-- Codex screen.
+	CardsPerRow = 5,
+	CardCameraFov = 30,
+	CardCameraPadding = 1.1,     -- >1 leaves a little space round the creature
+	EvidenceTint = Color3.fromRGB(255, 240, 214),     -- warm "old photo" tint
+	EvidenceAmbient = Color3.fromRGB(140, 130, 118),
+	EvidenceLight = Color3.fromRGB(255, 236, 205),
+	EvidenceBorder = Color3.fromRGB(236, 226, 204),
+	ScanlineTransparency = 0.82, -- 1 = no scanlines
+	SecretGlitchInterval = 0.12, -- how often the Secret's photo flickers
+
+	-- One line per creature for its Codex file. Folklore facts in our own
+	-- words for Common..Legendary; Mythic and Secret are this game's own.
+	Blurbs = {
+		jackalope = "A jackrabbit with antelope horns. Old Western campfire tales say it can copy voices and sings along with cowboys after dark.",
+		hodag = "A horned, spike-backed brute from the Wisconsin logging camps. Loggers swore you could smell it before you saw it.",
+		drop_bear = "Australia's meat-eating cousin of the koala, said to drop out of gum trees onto visitors. Locals keep a straight face about it.",
+		snallygaster = "A winged, beaked terror of Maryland's hills. Barns there were once painted with seven-pointed stars to keep it away.",
+		gremlin = "Airmen in the Second World War blamed these tiny pests for every engine that sputtered and every tool that went missing.",
+		wolpertinger = "A Bavarian hare with antlers, wings and fangs. They say it only shows itself at dusk, under a full moon.",
+
+		chupacabra = "The 'goat-sucker' of Puerto Rico, first reported in 1995 after farm animals turned up drained in the night.",
+		nightcrawler = "Just a pair of white legs, strolling along on their own. First spotted on a home security camera in Fresno, California.",
+		loveland_frog = "A four-foot frog that walks upright, reported beside a road in Loveland, Ohio. One witness said it carried a sparking wand.",
+		goatman = "Half man, half goat, said to haunt the back roads of Maryland. Blamed for every strange noise in the woods.",
+		bray_road = "A wolf-like beast seen walking on two legs along a quiet country road near Elkhorn, Wisconsin.",
+		squonk = "A warty, miserable creature of Pennsylvania's hemlock forests. Corner one and it dissolves into a puddle of its own tears.",
+
+		yeti = "The 'Abominable Snowman' of the Himalayas, known mostly from huge footprints pressed into the high mountain snow.",
+		ogopogo = "A long, humped serpent said to live in Okanagan Lake in British Columbia. Boaters still keep an eye on the water.",
+		dover_demon = "Seen over two nights in 1977 in Dover, Massachusetts: a thin, pale thing with a huge melon-shaped head and glowing eyes.",
+		flatwoods = "A towering figure with a spade-shaped hood, met by a group of kids on a hilltop in Flatwoods, West Virginia, in 1952.",
+		jersey_devil = "A winged, hoofed creature of New Jersey's Pine Barrens, said to be the thirteenth child of a woman called Mother Leeds.",
+
+		mothman = "A man-sized figure with great wings and glowing red eyes, reported around Point Pleasant, West Virginia, in 1966.",
+		bigfoot = "The big, shy ape-man of North American forests, also called Sasquatch. Plenty of footprints, never a clear photo. Until now?",
+		thunderbird = "A giant bird from the stories of many Indigenous peoples of North America, whose wingbeats were said to roll like thunder.",
+		bunyip = "From Aboriginal Australian stories: a creature that lurks in swamps, creeks and billabongs, heard booming in the night.",
+		death_worm = "A fat red worm said to live under the sands of the Gobi Desert. Herders warn it can spit poison from a distance.",
+
+		nessie = "The long-necked resident of Loch Ness, Scotland. Its most famous photo, from 1934, turned out to be a toy submarine.",
+		kraken = "A sea monster from the tales of Norwegian sailors, so enormous it could be mistaken for an island.",
+		ningen = "A huge, pale, human-shaped thing said to drift in the icy seas near Antarctica, glimpsed at night from passing ships.",
+		mokele_mbembe = "Said to live in the swamps of the Congo River basin. Its name is often translated as 'one who stops the flow of rivers'.",
+
+		the_static = "It turns up as snow on every screen nearby. When the picture comes back, it is standing a little closer.",
+		the_signal = "A tall shape that hums at the edge of radio range. Campers who tune in hear their own voices answering back.",
+		the_hollow = "A gap in the dark, shaped like something with arms. Lanterns dim as it passes, and the crickets go quiet.",
+
+		redacted = "FILE INCOMPLETE. Every photo of this subject develops blank. The field notes stop halfway through a sentence.",
+	},
 }
 
 -- =========================================================================
 -- RETENTION (Step 7.5): Daily Rewards, Spin Wheel, Playtime Gifts,
--- Offline Earnings. Filled in by the retention step.
+-- Offline Earnings. RetentionService decides and grants everything on the
+-- server; the screens only show it.
+--
+-- A reward is { Items = { item, item, ... }, Label = "optional text" }.
+-- Item kinds:
+--   { Kind = "Cash", Base = 500, Minutes = 5 }
+--       max(Base, Minutes of the player's current creature income), so cash
+--       stays worth having at every stage. Capped at MaxCashReward.
+--   { Kind = "Egg", EggId = "swamp", Count = 1 }
+--       goes in a free nest, else is saved for the next free nest. An egg the
+--       player hasn't unlocked yet becomes the best egg they have unlocked.
+--   { Kind = "Buff", Buff = "Luck" | "HeatRate", Duration = 600 }
+--       same as the Luck Potion / Nest Warmer; adds time to a running one.
+--   { Kind = "MaxHeat", Count = 1 }
+--       same as the Max Heat product (best egg, else saved for the next egg).
 -- =========================================================================
 
-Config.Retention = {}
+export type RetentionItem = {
+	Kind: string,
+	Base: number?,
+	Minutes: number?,
+	EggId: string?,
+	Count: number?,
+	Buff: string?,
+	Duration: number?,
+}
+export type RetentionReward = {
+	Items: { RetentionItem },
+	Label: string?,      -- shown instead of the generated text
+	Weight: number?,     -- spin wheel only: relative chance
+	Announce: boolean?,  -- spin wheel only: tell the whole server
+	Minutes: number?,    -- playtime gifts only: unlocks after this many minutes
+}
+
+local dailyRewards: { RetentionReward } = {
+	{ Items = { { Kind = "Cash", Base = 500, Minutes = 3 } } },
+	{ Items = { { Kind = "Egg", EggId = "swamp", Count = 1 } } },
+	{ Items = { { Kind = "Cash", Base = 2000, Minutes = 8 } } },
+	{ Items = { { Kind = "Buff", Buff = "Luck", Duration = 900 } } },
+	{ Items = { { Kind = "Cash", Base = 5000, Minutes = 15 } } },
+	{ Items = { { Kind = "Egg", EggId = "mountain", Count = 1 }, { Kind = "Buff", Buff = "HeatRate", Duration = 900 } } },
+	-- Day 7: the big one.
+	{ Items = {
+		{ Kind = "Cash", Base = 25000, Minutes = 45 },
+		{ Kind = "Egg", EggId = "deepsea", Count = 1 },
+		{ Kind = "Buff", Buff = "Luck", Duration = 1800 },
+	} },
+}
+
+-- One prize per slot on the kit's wheel (it has 6), clockwise from the top.
+local spinPrizes: { RetentionReward } = {
+	{ Weight = 30, Items = { { Kind = "Cash", Base = 300, Minutes = 2 } } },
+	{ Weight = 16, Items = { { Kind = "Egg", EggId = "mountain", Count = 1 } } },
+	{ Weight = 24, Items = { { Kind = "Cash", Base = 1500, Minutes = 8 } } },
+	{ Weight = 16, Label = "Boost Pack", Items = {
+		{ Kind = "Buff", Buff = "Luck", Duration = 600 },
+		{ Kind = "Buff", Buff = "HeatRate", Duration = 600 },
+	} },
+	{ Weight = 8, Items = { { Kind = "MaxHeat", Count = 1 } } },
+	{ Weight = 6, Announce = true, Items = { { Kind = "Cash", Base = 10000, Minutes = 30 } } },
+}
+
+-- Unlock one after another during a single visit (the clock restarts every
+-- time you join a server).
+local playtimeGifts: { RetentionReward } = {
+	{ Minutes = 2,  Items = { { Kind = "Cash", Base = 200, Minutes = 1 } } },
+	{ Minutes = 5,  Items = { { Kind = "Cash", Base = 500, Minutes = 2 } } },
+	{ Minutes = 10, Items = { { Kind = "Egg", EggId = "swamp", Count = 1 } } },
+	{ Minutes = 15, Items = { { Kind = "Cash", Base = 1500, Minutes = 5 } } },
+	{ Minutes = 25, Items = { { Kind = "Buff", Buff = "HeatRate", Duration = 600 } } },
+	{ Minutes = 40, Items = { { Kind = "Cash", Base = 5000, Minutes = 10 } } },
+	{ Minutes = 60, Items = { { Kind = "Egg", EggId = "mountain", Count = 1 }, { Kind = "Buff", Buff = "Luck", Duration = 900 } } },
+}
+
+Config.Retention = {
+	-- Biggest single cash reward (daily, spin, gift, offline). Must stay
+	-- below Config.Income.AbsoluteMaxSingleCollect or the grant is refused.
+	MaxCashReward = 200000000,
+	-- Claims save at once, but never more often than this per player.
+	SaveDebounce = 6,
+	-- The server re-sends everyone's retention state this often (keeps the
+	-- income-scaled cash amounts on the screens current).
+	StatePushInterval = 60,
+	-- Icon (Config.Icons name) shown for each reward kind / buff.
+	Icons = { Cash = "Cash", Egg = "Egg", Luck = "Potion", HeatRate = "Bonfire", MaxHeat = "Fire" },
+	-- Short names for buffs in reward text.
+	BuffNames = { Luck = "Luck Potion", HeatRate = "Nest Warmer" },
+
+	Daily = {
+		Enabled = true,
+		-- A day is a UTC calendar day (os.time() // DayLength). Claim on the
+		-- day after your last claim to keep the streak; miss a day and it
+		-- starts again at day 1. After day 7 it goes round again.
+		DayLength = 86400,
+		Rewards = dailyRewards,     -- exactly 7 (the kit screen has 7 cards)
+		AutoOpenDelay = 3,          -- seconds after joining before the screen pops up
+		ClaimCooldown = 1,
+	},
+
+	Spin = {
+		Enabled = true,
+		FreeEvery = 4 * 3600,       -- one free spin every 4 hours (a new player has one ready)
+		Prizes = spinPrizes,
+		-- Seconds between spins; the server refuses spins faster than this.
+		-- Keep it no longer than SpinTime, or a spin pressed the moment the
+		-- wheel stops gets refused.
+		Cooldown = 4,
+		SpinTime = 4,               -- how long the wheel turns (the server tells you the prize after this)
+		ExtraTurns = 5,             -- client: full turns before it settles
+		-- Client: where the wheel's pointer is, in degrees clockwise from the
+		-- top. Change this if the prize lands next to the pointer, not under it.
+		PointerAngle = 0,
+		-- Client: which of the kit's wheel colours to show
+		-- ("SpinWheelPink", "SpinWheelOrange" or "SpinWheelRainbow").
+		WheelStyle = "SpinWheelOrange",
+	},
+
+	Playtime = {
+		Enabled = true,
+		Gifts = playtimeGifts,
+		ClaimCooldown = 0.5,
+	},
+
+	Offline = {
+		Enabled = true,
+		MinAwaySeconds = 300,       -- away less than 5 minutes: nothing
+		MaxHours = 8,               -- at most 8 hours count
+		Fraction = 0.25,            -- share of normal creature income earned while away
+		HeartbeatInterval = 60,     -- how often "last seen" is written while online
+		-- Wait this long after joining before working out offline cash, so
+		-- game passes (2x Cash) have been checked.
+		ComputeDelay = 5,
+		-- If a Double purchase arrives with nothing left to double, this is
+		-- given instead: max(Base, Minutes of creature income).
+		DoubleFallbackBase = 2000,
+		DoubleFallbackMinutes = 5,
+		ClaimCooldown = 1,
+	},
+}
 
 -- =========================================================================
 -- LEADERBOARDS (Step 8)
 -- =========================================================================
 
-Config.Leaderboards = {}
+Config.Leaderboards = {
+	Enabled = true,
+	-- CollectionService tag on each board's screen part (MapBuilder builds
+	-- three wooden boards in the hub). The part's "Board" attribute is one
+	-- of the keys in Order.
+	BoardTag = "SAC_Leaderboard",
+	Order = { "Cash", "Rebirths", "Steals" },
+	-- Store: OrderedDataStore name (prefixed with Config.Data.StoreName; the
+	-- scope is the same as DataService: StudioStoreScope in Studio).
+	Boards = {
+		Cash = { Title = "TOP EARNERS", Subtitle = "All-time cash earned", Store = "LB_TotalCash", Prefix = "$" },
+		Rebirths = { Title = "MOST REBIRTHS", Subtitle = "Fresh starts taken", Store = "LB_Rebirths", Prefix = "" },
+		Steals = { Title = "MASTER THIEVES", Subtitle = "Cryptids stolen", Store = "LB_Steals", Prefix = "" },
+	},
+	TopCount = 10,
+	-- Each online player's scores are written once per UpdateInterval
+	-- (spread out across players), and once more when they leave.
+	UpdateInterval = 120,
+	-- The boards re-read the top lists this often.
+	RefreshInterval = 60,
+	FirstRefreshDelay = 6,    -- seconds after boot before the first read
+	ShutdownFlushTimeout = 8, -- server close waits this long for leave-writes
+	RankColors = {
+		Color3.fromRGB(255, 210, 90),  -- 1st
+		Color3.fromRGB(214, 220, 232), -- 2nd
+		Color3.fromRGB(222, 150, 96),  -- 3rd
+	},
+	RowColor = Color3.fromRGB(255, 236, 206),
+}
 
 -- =========================================================================
 -- FIRST-JOIN TUTORIAL (Step 8)
+-- Client only (TutorialController). Shown to anyone who has never hatched
+-- an egg; each step ticks itself off from the player's real progress, so
+-- nothing is saved and no remote is needed.
 -- =========================================================================
 
-Config.Tutorial = {}
+Config.Tutorial = {
+	Enabled = true,
+	CheckInterval = 0.25,       -- seconds between progress checks / re-aiming the guide
+	StepDoneDelay = 1.6,        -- how long "Nice!" shows before the next step
+	-- Instruction panel (our own UI; ScreenScale shrinks it on phones).
+	PanelTop = 0.125,           -- fraction of screen height: just under the kit HUD's Base/Eggs buttons
+	PanelWidth = 470,           -- pixels at Config.UI.ScreenScale.ReferenceHeight
+	DisplayOrder = 2,           -- over the kit HUD (1), under kit popups (5), steal banners (8), toasts (10)
+	SkipConfirmTime = 3,        -- seconds the "tap again to skip" prompt waits for a second tap
+	-- 3D guide: a glowing line from you to the target plus a bouncing arrow over it.
+	BeamColorNear = Color3.fromRGB(255, 214, 120), -- the player's end
+	BeamColorFar = Color3.fromRGB(120, 255, 180),  -- the target's end
+	BeamWidth = 0.7,
+	BeamHideDistance = 9,       -- studs: hide the line once you're this close
+	MarkerHeight = 9,           -- studs above the target (clears the egg/creature labels)
+	MarkerBounce = 1.2,         -- studs up and down
+	MarkerBounceSpeed = 3.5,    -- radians per second
+	MarkerSize = 56,            -- pixels
+	-- Egg belt step: further than this from the belt, the guide points at
+	-- the arch; closer, at the nearest egg you can buy.
+	BeltNearDistance = 45,
+	ArchOutside = 8,            -- studs outside the belt ring for the arch target
+	EggMinRideLeft = 4,         -- don't point at an egg about to sink into the end burrow
+	-- "Take it home" step: seconds after your hands empty before the panel
+	-- says you lost the egg (claiming at the pad empties them a moment
+	-- before the filled nest shows up here).
+	LostEggGrace = 1,
+}
 
 -- =========================================================================
 -- SOUNDS (Step 8). Name -> { Id, Volume, ... }. Only Roblox-hosted audio
 -- that loads in this experience goes here.
+--
+-- Played by name through the client's SoundController:
+--   SoundController.Play("CashCollect")            -- 2D (UI / "in your head")
+--   SoundController.PlayAt("BatHit", position)     -- 3D, in the world
+-- A name missing from this table is silently ignored, so a typo never
+-- breaks a feature (Studio prints a warning once).
+--
+-- Fields: Id (rbxassetid), Volume (0..1), PlaybackSpeed (pitch, 1 = normal),
+-- Looped, RollOff (3D only: studs at which it fades out completely).
+-- Every id here is free public audio from Roblox's own library, Pro Sound
+-- Effects, APM Music or Daily Sounds (checked public at Step 8). To swap a
+-- sound, paste a new id; Studio's console lists any that fail to load.
 -- =========================================================================
 
-Config.Sounds = {}
+Config.Sounds = {
+	-- UI
+	UIClick          = { Id = "rbxassetid://15675032796",  Volume = 0.35 },                       -- Roblox UI Small Click
+	UIOpen           = { Id = "rbxassetid://17208405682",  Volume = 0.35 },                       -- Roblox GUI Swipe
+	Purchase         = { Id = "rbxassetid://17208380755",  Volume = 0.6 },                        -- Roblox GUI Purchase
+	Notify           = { Id = "rbxassetid://17208372272",  Volume = 0.35 },                       -- Roblox GUI Notification Low
+	Error            = { Id = "rbxassetid://17208353912",  Volume = 0.45 },                       -- Roblox GUI Negative
+	-- Cash
+	CashCollect      = { Id = "rbxassetid://130378474223829", Volume = 0.5 },                     -- Daily Sounds Coin Pickup
+	-- Hatching: the crack, then one sting per rarity (rarer = bigger)
+	HatchCrack       = { Id = "rbxassetid://9113959343",   Volume = 0.8 },                        -- Crack Egg Crunchy (PSE)
+	HatchCommon      = { Id = "rbxassetid://15675055424",  Volume = 0.6 },                        -- Roblox UI Cute Pop
+	HatchRare        = { Id = "rbxassetid://17208327798",  Volume = 0.7 },                        -- Roblox GUI Aura
+	HatchEpic        = { Id = "rbxassetid://15675043410",  Volume = 0.7 },                        -- Roblox UI Tonal Stinger
+	HatchLegendary   = { Id = "rbxassetid://1836286949",   Volume = 0.7 },                        -- APM "Top Ranking 1"
+	HatchMythic      = { Id = "rbxassetid://1841354419",   Volume = 0.75 },                       -- APM "Supernaturalizer Hit 2"
+	HatchSecret      = { Id = "rbxassetid://9038129814",   Volume = 0.8, PlaybackSpeed = 0.85 },  -- APM "Ghosting The Machine" (detuned)
+	-- Stealing and the Bat
+	StealAlarm       = { Id = "rbxassetid://80890994815283", Volume = 0.6 },                      -- Daily Sounds Warning Beeps
+	StealSuccess     = { Id = "rbxassetid://1840076509",   Volume = 0.6 },                        -- APM "Through the Roof" sting
+	BatHit           = { Id = "rbxassetid://9125380872",   Volume = 0.7, RollOff = 90 },          -- PSE wood bat whack
+	Pickup           = { Id = "rbxassetid://17208323435",  Volume = 0.5 },                        -- Roblox GUI Equip
+	Drop             = { Id = "rbxassetid://96795857757261", Volume = 0.5 },                      -- Daily Sounds Power Down
+	LockOn           = { Id = "rbxassetid://9114144270",   Volume = 0.7, RollOff = 70 },          -- PSE deadbolt turn
+	LockOff          = { Id = "rbxassetid://9114144264",   Volume = 0.6, PlaybackSpeed = 1.15, RollOff = 70 }, -- PSE deadbolt (higher)
+	-- Rebirth
+	Rebirth          = { Id = "rbxassetid://1836370627",   Volume = 0.7 },                        -- APM "Realisation"
+	-- Sightings (Step 7)
+	SightingHorn     = { Id = "rbxassetid://5692517175",   Volume = 0.6, PlaybackSpeed = 0.8 },   -- low foghorn
+	SightingAmbience = { Id = "rbxassetid://9114244977",   Volume = 0.45, Looped = true, RollOff = 160 }, -- PSE "Electric Forest" ghostly bed
+	CaptureSuccess   = { Id = "rbxassetid://1836369905",   Volume = 0.7 },                        -- APM "Thats It"
+	-- Codex (Step 7)
+	CameraShutter    = { Id = "rbxassetid://17208312548",  Volume = 0.6 },                        -- Roblox GUI Camera Shutter
+	CodexNew         = { Id = "rbxassetid://17208361335",  Volume = 0.5 },                        -- Roblox GUI Notification High
+	PageComplete     = { Id = "rbxassetid://1836370010",   Volume = 0.7 },                        -- APM "Blap 2"
+	-- Retention (Step 7.5)
+	DailyClaim       = { Id = "rbxassetid://9113849492",   Volume = 0.6 },                        -- PSE coins jingle
+	SpinTick         = { Id = "rbxassetid://15675059323",  Volume = 0.3, PlaybackSpeed = 1.2 },   -- Roblox UI Bright Click
+	SpinWin          = { Id = "rbxassetid://15675043410",  Volume = 0.7, PlaybackSpeed = 1.1 },   -- Roblox UI Tonal Stinger (higher)
+	GiftClaim        = { Id = "rbxassetid://17208204604",  Volume = 0.6 },                        -- Roblox GUI Bubble
+	-- Music and ambience (loops). Music obeys the Music setting; everything
+	-- else obeys the Sounds setting.
+	MusicMain        = { Id = "rbxassetid://15675069601",  Volume = 0.18, Looped = true, Group = "Music" }, -- Roblox UI Loop Calm Music
+	AmbientNight     = { Id = "rbxassetid://9112835631",   Volume = 0.22, Looped = true },        -- PSE night: cricket + owls
+	Campfire         = { Id = "rbxassetid://9112780462",   Volume = 0.55, Looped = true, RollOff = 45 }, -- PSE fireplace crackle
+	Owl              = { Id = "rbxassetid://9117181540",   Volume = 0.3, RollOff = 200 },         -- PSE owl hooting (random, far off)
+}
 
 -- =========================================================================
 -- FEEDBACK / JUICE (Step 8): hatch reveal, cash popups, effects.
+-- Read by FeedbackController, NestVisualsController, SoundController,
+-- NotificationController and FeedbackService.
 -- =========================================================================
 
-Config.Feedback = {}
+Config.Feedback = {
+	-- Hatch reveal (the celebration on the hatcher's screen)
+	HatchRevealDuration = 3.2,       -- seconds before it closes itself (tap skips)
+	HatchRevealBigDuration = 4.2,    -- Legendary and better stay up a little longer
+	HatchQueueMax = 3,               -- hatches waiting to be shown; extra ones are skipped
+	HatchStingDelay = 0.25,          -- gap between the shell crack and the rarity sting
+	HatchRevealMinTime = 0.4,        -- taps before this don't skip (no accidental skips)
+	HatchRevealQueuedFactor = 0.6,   -- with more hatches waiting, each reveal is this much shorter
+	-- Which Config.Sounds sting plays for each rarity.
+	HatchStings = {
+		Common = "HatchCommon", Uncommon = "HatchCommon", Rare = "HatchRare", Epic = "HatchEpic",
+		Legendary = "HatchLegendary", Mythic = "HatchMythic", Secret = "HatchSecret",
+	},
+	BigRarityIndex = 5,              -- this rarity index and up (Legendary+) gets shake, confetti, aura
+	RayCount = 10,                   -- light rays behind the creature
+	RaySpinSpeed = 25,               -- degrees per second
+	CreatureSpinSpeed = 1.1,         -- radians per second in the viewport
+	ShakeDuration = 0.45,            -- Legendary+ camera shake
+	ShakeStrength = 0.35,            -- studs of camera offset at the start of the shake
+	ConfettiCount = 46,              -- pieces of confetti for Legendary+
+	SecretAccent = Color3.fromRGB(255, 50, 60), -- Secret's own colour is near-black; text and glow use this
+	-- World burst at the nest when something hatches
+	BurstParticles = 40,             -- your own hatch
+	BurstParticlesRemote = 22,       -- someone else's Legendary+ hatch, seen from nearby
+	RemoteBurstMaxDistance = 260,    -- studs; further away than this you don't see others' bursts
+	BurstLifetime = 1.4,
+	BurstSpeed = NumberRange.new(8, 18), -- studs per second the sparks fly out
+	BatDustParticles = 10,           -- puff where a bat lands
+	BatDustColor = Color3.fromRGB(235, 225, 200),
+
+	-- Cash popups
+	CashPopupRise = 4,               -- studs the "+$X" floats up
+	CashPopupTime = 1.1,             -- seconds on screen
+	CashPopupMaxDistance = 120,      -- don't draw popups further away than this
+	CashSoundGap = 0.09,             -- at most one coin sound this often
+	CashStreakWindow = 1.5,          -- collects closer together than this raise the coin pitch
+	CashStreakPitchStep = 0.05,
+	CashStreakPitchMax = 1.4,
+	CashCountUpTime = 0.45,          -- HUD cash counts up to the new value over this long
+	CashPunchScale = 1.15,           -- HUD cash label grows to this, then settles
+	CashBigAmount = 10000,           -- popups this big or bigger are gold and larger
+	CashColor = Color3.fromRGB(120, 255, 140),
+	CashBigColor = Color3.fromRGB(255, 214, 90),
+	CashBurstParticles = 8,          -- little gold sparks per collect
+
+	-- Nest labels (sized in studs, so they shrink with distance)
+	NestLabelMaxDistance = 70,       -- labels hide further away than this
+	NestLabelGap = 0.8,              -- studs between the top of the model and the label
+	CreatureLabelSize = Vector2.new(6.5, 2.0),     -- width, height (studs): name + income
+	CreatureLabelOwnSize = Vector2.new(6.5, 3.0),  -- your own creature: + vault bar
+	EggLabelSize = Vector2.new(5.5, 2.0),          -- name + heat bar
+	NestLabelMaxTextSize = 30,       -- px cap so labels aren't enormous when you stand right next to them
+
+	-- Life: idle motion for creatures and eggs in nests (client only)
+	IdleMaxDistance = 90,            -- only animate within this many studs of the camera
+	IdleBobHeight = 0.12,            -- studs of breathing bob
+	IdleBobSpeed = 1.6,              -- radians per second
+	IdleYawDegrees = 9,              -- slow look-around, each side
+	IdleYawSpeed = 0.35,
+	EggWobbleHeat = 80,              -- eggs at or above this heat wobble
+	EggWobbleDegrees = 6,            -- at max heat
+	EggWobbleSpeed = 14,
+	AuraRate = 5,                    -- Legendary+ aura particles per second
+
+	-- Toasts
+	ToastSlideTime = 0.25,
+	ToastIcons = { Info = "Bell", Success = "CheckMark", Warning = "Warning", Error = "Warning", Announce = "Star" },
+	ToastSounds = { Info = "Notify", Success = "Notify", Warning = "Notify", Error = "Error", Announce = "Notify" },
+	ToastSoundQuietFor = 0.5,        -- a toast stays silent if another sound started this recently
+	-- Sound playback
+	SoundVoicesPerName = 4,          -- copies of one sound that can overlap
+	DefaultRollOff = 100,            -- 3D sounds fade out completely by this many studs
+	DefaultRollOffMin = 10,          -- ...and start fading beyond this
+	SoundMaxLifetime = 20,           -- safety clean-up for one-shot 3D sounds
+	StudioSoundCheck = true,         -- in Studio, print which Config.Sounds ids failed to load
+	AlarmRepeatGap = 1.1,            -- seconds between StealAlarm repeats (the clip is about 1s)
+	-- Ambience
+	OwlMinInterval = 45,             -- a far-off owl hoots every 45..110 seconds
+	OwlMaxInterval = 110,
+	OwlDistance = NumberRange.new(60, 100), -- studs away from you, in a random direction
+	OwlHeight = 20,                  -- up in the trees
+	MusicFadeTime = 2,
+	-- Hub campfire crackle: plays on the parts MapBuilder tags with
+	-- Config.Map.HubCampfireTag (the hub fire's core). If none has streamed
+	-- in yet, it sits at the hub centre, where the campfire is.
+	CampfireTag = Config.Map.HubCampfireTag,
+	CampfireHeight = 2,
+}
 
 -- =========================================================================
 -- ART (Step 8). Generated meshes for creatures, eggs and props.
@@ -588,13 +1150,91 @@ Config.Feedback = {}
 -- =========================================================================
 
 Config.Art = {
-	Creatures = {},
+	-- Prompts, QA notes and how to regenerate: docs/ART.md.
+	Creatures = {
+		jackalope = { Mesh = "rbxassetid://131681255958586", Texture = "rbxassetid://79054338605187", Height = 3, Yaw = 0 },
+		hodag = { Mesh = "rbxassetid://112139235538943", Texture = "rbxassetid://111351156320288", Height = 3, Yaw = 0 },
+		drop_bear = { Mesh = "rbxassetid://78702348110149", Texture = "rbxassetid://102984468658933", Height = 3, Yaw = 0 },
+		snallygaster = { Mesh = "rbxassetid://94810624728859", Texture = "rbxassetid://140476442674641", Height = 3, Yaw = 0 },
+		gremlin = { Mesh = "rbxassetid://122939913645135", Texture = "rbxassetid://103548199248869", Height = 3, Yaw = 0 },
+		wolpertinger = { Mesh = "rbxassetid://135528267883620", Texture = "rbxassetid://93241747302662", Height = 3, Yaw = 0 },
+		chupacabra = { Mesh = "rbxassetid://130689751068861", Texture = "rbxassetid://83735307547478", Height = 3.6, Yaw = 0 },
+		nightcrawler = { Mesh = "rbxassetid://132300026238480", Texture = "rbxassetid://126215002906504", Height = 3.6, Yaw = 0 },
+		loveland_frog = { Mesh = "rbxassetid://112903869774176", Texture = "rbxassetid://113847998897304", Height = 3.6, Yaw = 0 },
+		goatman = { Mesh = "rbxassetid://106004579622983", Texture = "rbxassetid://124830824690754", Height = 3.6, Yaw = 0 },
+		bray_road = { Mesh = "rbxassetid://80700709050180", Texture = "rbxassetid://77749288711735", Height = 3.6, Yaw = 0 },
+		squonk = { Mesh = "rbxassetid://130028451418667", Texture = "rbxassetid://128347868467618", Height = 3.6, Yaw = 0 },
+		yeti = { Mesh = "rbxassetid://71417033105011", Texture = "rbxassetid://81052759386079", Height = 4.4, Yaw = 0 },
+		ogopogo = { Mesh = "rbxassetid://119501796851037", Texture = "rbxassetid://131581534909188", Height = 4.4, Yaw = 0 },
+		dover_demon = { Mesh = "rbxassetid://127820108357810", Texture = "rbxassetid://128404826249463", Height = 4.4, Yaw = 0 },
+		flatwoods = { Mesh = "rbxassetid://95978287199268", Texture = "rbxassetid://114948872465345", Height = 4.4, Yaw = 0 },
+		jersey_devil = { Mesh = "rbxassetid://133077204186004", Texture = "rbxassetid://112001839476144", Height = 4.4, Yaw = 0 },
+	},
 	Eggs = {},
-	Props = {},
+	Props = {
+		BroodMother = { Mesh = "rbxassetid://82525672471592", Texture = "rbxassetid://92308619353136", Height = 16, Yaw = 0 },
+		BroodNest = { Mesh = "rbxassetid://92051071995688", Texture = "rbxassetid://136342658450558", Height = 4, Yaw = 0 },
+	},
 	-- Boot waits up to this long for the meshes (they load in parallel,
 	-- usually in a second or two). Anything not ready by then uses the
 	-- placeholder for this server's lifetime.
 	LoadTimeout = 20,
+}
+
+-- =========================================================================
+-- THE HUNT — the Brood Mother (the scary twist)
+-- Every few minutes the night deepens and the Brood Mother, the mother of
+-- every cryptid egg in the woods, comes out of The Wilds to take her eggs
+-- back. She hunts whoever is carrying an egg (a stolen one or a fresh one
+-- off the belt). Camps and the hub campfire's light are safe: she won't
+-- cross into them. If she catches you she takes the egg back (a stolen egg
+-- goes home to its owner; anything else is gone) and you're stunned.
+-- =========================================================================
+
+Config.Hunt = {
+	Enabled = true,
+	Name = "The Brood Mother",
+	FirstDelay = 240,          -- seconds after the first player loads
+	MinInterval = 420,         -- between hunts (start to start)
+	MaxInterval = 600,
+	WarningTime = 10,          -- lights flicker and she wails before she emerges
+	Duration = 70,             -- how long she hunts
+	LeaveTime = 6,             -- sinking back into the woods
+
+	-- Movement. Players walk at 16 and carry eggs at 16 * 0.85 (belt) or
+	-- 16 * 0.75 (stolen), so a carrier caught in the open is in trouble.
+	Speed = 15,
+	ChaseSpeedBonus = 2,       -- extra speed while she's chasing a carrier
+	TurnSpeed = 4,             -- how fast she swings toward a new heading (rad/s)
+	HoverHeight = 0,           -- feet this far above the ground under her
+	TickRate = 15,             -- server position updates per second
+
+	-- Senses
+	SenseRadius = 260,         -- she smells eggs this far away
+	StalkRadius = 90,          -- she'll go after empty-handed players this close
+	CatchRadius = 6,
+	VictimCooldown = 25,       -- seconds before she goes after the same player again
+	RetargetInterval = 0.5,
+
+	-- Where she can't go
+	SafeInCamps = true,        -- never enters a camp (any camp)
+	CampfireSafeRadius = 70,   -- never enters this far from the hub centre (the fire keeps her back)
+
+	-- Getting caught
+	StunDuration = 2.5,
+	KnockbackVelocity = 45,
+
+	-- Client-side dread (HuntController)
+	DreadRadius = 140,         -- heartbeat / vignette start at this distance
+	ShakeRadius = 35,          -- camera shake inside this distance
+	DimLights = 0.45,          -- Lighting brightness multiplier while she hunts
+	FogDensityBonus = 0.18,    -- thicker fog while she hunts
+	Color = Color3.fromRGB(255, 70, 60), -- her eye / banner colour
+	ModelHeight = 16,          -- fallback model size (the mesh is Config.Art.Props.BroodMother)
+
+	-- Don't start a hunt while a wild sighting is running (and vice versa
+	-- the sighting scheduler waits); retry after this long.
+	BusyRetry = 30,
 }
 
 -- =========================================================================
@@ -725,6 +1365,8 @@ Config.DoubleCashMultiplier = 2
 Config.DevProductOrder = {
 	"CashSmall", "CashMedium", "CashLarge",
 	"LuckPotion", "NestWarmer", "MaxHeat", "EmergencyLock", "EggBundle",
+	-- Step 7.5: sold only from their own screens (Spin Wheel, Offline popup).
+	"ExtraSpins", "OfflineDouble",
 }
 
 -- Kinds: "Cash" (Amount), "Buff" (Buff name + Duration; buying again while
@@ -751,6 +1393,15 @@ Config.DevProducts = {
 	-- Eggs that don't fit are saved and placed as soon as a nest frees up.
 	EggBundle     = { Id = 0, DisplayName = "3-Egg Bundle",  RobuxHint =  79, Icon = "GiftBox",   Kind = "Instant", Effect = "GrantEggs", EggId = "forest", Count = 3,
 		Description = "Three Forest Eggs, straight into your nests." },
+	-- Step 7.5 (retention). Sold from the Spin Wheel and the Offline Earnings
+	-- popup, not the Store. Granted by MonetizationService.
+	ExtraSpins    = { Id = 0, DisplayName = "3 Extra Spins", RobuxHint =  49, Icon = "Luck",      Kind = "Instant", Effect = "ExtraSpins", Count = 3,
+		Description = "Three more spins of the prize wheel." },
+	-- Pays the waiting offline cash twice over. If it was already claimed,
+	-- pays it once more (the second half); with nothing to double, a small
+	-- cash gift (Config.Retention.Offline.DoubleFallback*).
+	OfflineDouble = { Id = 0, DisplayName = "Double Offline Cash", RobuxHint = 25, Icon = "Cash", Kind = "Instant", Effect = "DoubleOffline",
+		Description = "Double what your cryptids earned while you were away." },
 }
 
 -- =========================================================================
@@ -804,7 +1455,10 @@ Config.Remotes = {
 	Travel            = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
 
 	-- ---- Sightings (Step 7) ----
-	-- SightingBanner (above) carries ("Started" | "Captured" | "Ended", info).
+	-- SightingBanner (above) carries (phase, info) to everyone: "Started",
+	-- "Captured", "Dropped", "PickedUp", "Claimed", "Escaped"; and to one
+	-- player, "Interrupted" (their capture hold was broken). See
+	-- Services/SightingService for each info table.
 	-- Capturing is a ProximityPrompt, so it needs no client->server remote.
 
 	-- ---- Codex (Step 7) ----
@@ -819,8 +1473,21 @@ Config.Remotes = {
 	RetentionState    = { Kind = "Event",    Direction = "ServerToClient" },
 
 	-- ---- Feedback / juice (Step 8) ----
+	-- HatchResult: (creatureId, rarity, mutation, heat, nestPosition) to the hatcher.
+	-- CashCollected: (amount, position) to the collector.
+	-- FeedbackCue: (cue, info) — small presentation-only events:
+	--   "BatHit" {Position} to everyone; "HatchBurst" {Position, Rarity, UserId}
+	--   to everyone (Legendary+); "Bought" / "Taken" {Stolen} / "Claimed"
+	--   {Stolen} / "Rebirth" {Rebirths} to the one player.
 	HatchResult       = { Kind = "Event",    Direction = "ServerToClient" },
 	CashCollected     = { Kind = "Event",    Direction = "ServerToClient" },
+	FeedbackCue       = { Kind = "Event",    Direction = "ServerToClient" },
+
+	-- ---- The Hunt (the Brood Mother) ----
+	-- HuntEvent: (phase, info) to everyone: "Warning", "Started", "Caught",
+	-- "Ended". Her position is replicated through ReplicatedStorage.HuntState
+	-- attributes, not a remote.
+	HuntEvent         = { Kind = "Event",    Direction = "ServerToClient" },
 }
 
 -- Generic backstop: any single player firing more than this many remotes
@@ -871,19 +1538,39 @@ Config.Tags = {
 -- an Atmosphere exists), so tune Density/Haze for how far you can see.
 Config.Atmosphere = {
 	ClockTime = 0.5,             -- just past midnight
-	Brightness = 1.2,
-	OutdoorAmbient = Color3.fromRGB(46, 52, 66),
-	Ambient = Color3.fromRGB(28, 30, 40),
-	FogColor = Color3.fromRGB(38, 44, 56),     -- Atmosphere.Color
-	FogDecay = Color3.fromRGB(24, 28, 40),     -- Atmosphere.Decay
-	AtmosphereDensity = 0.42,
-	AtmosphereHaze = 2.2,
+	GeographicLatitude = 30,     -- tilts the moon so it hangs over the woods
+	Brightness = 1.6,            -- strength of the moonlight
+	-- Cold blue moonlight and shadow fill; still bright enough on a phone.
+	OutdoorAmbient = Color3.fromRGB(70, 80, 108),
+	Ambient = Color3.fromRGB(40, 42, 58),
+	ColorShiftTop = Color3.fromRGB(120, 146, 200),    -- tint of the moonlight
+	ColorShiftBottom = Color3.fromRGB(0, 0, 0),
+	ExposureCompensation = 0.25,
+	EnvironmentDiffuseScale = 0.35,
+	EnvironmentSpecularScale = 0.25,
+	FogColor = Color3.fromRGB(44, 52, 70),     -- Atmosphere.Color
+	FogDecay = Color3.fromRGB(26, 30, 46),     -- Atmosphere.Decay
+	AtmosphereDensity = 0.4,
+	AtmosphereOffset = 0.2,                    -- thicker fog toward the horizon
+	AtmosphereHaze = 2,
+	-- Sky (built-in properties only, no images): stars and a big moon.
+	StarCount = 3000,
+	MoonAngularSize = 16,
+	-- Post effects. Bloom makes neon and fire glow; ColorCorrection grades.
+	BloomIntensity = 0.7,
+	BloomSize = 30,
+	BloomThreshold = 1.5,
+	ColorBrightness = 0.03,
+	ColorContrast = 0.1,
+	ColorSaturation = 0.05,
+	ColorTint = Color3.fromRGB(246, 244, 255),
+	SunRaysEnabled = false,     -- no sun at 2am
 	CampfireColor = Color3.fromRGB(255, 150, 70),
 	CampfireRange = 40,
 	CampfireBrightness = 3,
 	LanternColor = Color3.fromRGB(255, 196, 128),
-	LanternRange = 28,
-	LanternBrightness = 2.4,
+	LanternRange = 26,
+	LanternBrightness = 2.2,
 }
 
 -- =========================================================================

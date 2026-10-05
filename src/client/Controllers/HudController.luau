@@ -21,6 +21,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SocialService = game:GetService("SocialService")
+local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
@@ -323,10 +324,53 @@ function HudController.Start()
 	local snapshotServerTime = os.time()
 	local snapshotClock = os.clock()
 
+	-- Cash change animation (Step 8 juice): gains count up and the label
+	-- bounces; spending snaps straight to the new value.
+	local shownCash: number? = nil
+	local cashCounter = Instance.new("NumberValue")
+	local cashTween: Tween? = nil
+	local cashPunch: UIScale? = nil
+	if cashText and cashText:IsA("GuiObject") and not cashText:FindFirstChildOfClass("UIScale") then
+		local punch = Instance.new("UIScale")
+		punch.Name = "CashPunch"
+		punch.Parent = cashText
+		cashPunch = punch
+	end
+	cashCounter.Changed:Connect(function(value)
+		Kit.SetText(cashText, "$" .. Config.FormatNumber(math.floor(value + 0.5)))
+	end)
+	local function animateCash(cash: number)
+		local previous = shownCash
+		if previous == cash then
+			return -- another field changed; let a running count-up finish
+		end
+		shownCash = cash
+		if cashTween then
+			cashTween:Cancel()
+			cashTween = nil
+		end
+		if previous == nil or cash <= previous then
+			cashCounter.Value = cash
+			Kit.SetText(cashText, "$" .. Config.FormatNumber(cash))
+			return
+		end
+		cashCounter.Value = math.max(cashCounter.Value, previous)
+		local countUp = TweenService:Create(cashCounter,
+			TweenInfo.new(Config.Feedback.CashCountUpTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Value = cash })
+		countUp:Play()
+		cashTween = countUp
+		local punch = cashPunch
+		if punch then
+			punch.Scale = Config.Feedback.CashPunchScale
+			TweenService:Create(punch, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+		end
+	end
+
 	local function render(snapshot: { [string]: any })
 		local cash = tonumber(snapshot.Cash) or 0
 		local rebirths = tonumber(snapshot.Rebirths) or 0
-		Kit.SetText(cashText, "$" .. Config.FormatNumber(cash))
+		animateCash(cash)
 		if rebirths > 0 then
 			Kit.SetText(statusText, string.format("Rebirth %d  ·  +%d%% cash", rebirths,
 				math.floor(rebirths * Config.Rebirth.IncomeBonusPerRebirth * 100 + 0.5)))

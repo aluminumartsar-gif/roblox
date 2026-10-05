@@ -92,6 +92,36 @@ Every 6–10 minutes, a wild cryptid spawns somewhere in The Wilds and stays for
 
 A sighting is a scheduled server-wide fight that everybody sees coming.
 
+#### As built (Step 7)
+
+- **When:** the first one 2 minutes after the first player loads into a
+  fresh server, then 6–10 minutes after the previous one ended (caught or
+  escaped). One at a time, and none while the server is empty (if everyone
+  leaves, a live one escapes).
+- **Odds:** Rare 60 / Epic 30 / Legendary 9 / Mythic 1. For every player
+  beyond the first (up to 20), 3% of the Rare weight moves into Epic and up
+  (in proportion): a full server rolls about Rare 26 / Epic 56 /
+  Legendary 17 / Mythic 2. `SAC_Debug
+  sightings` prints the odds right now.
+- **Where:** a random open spot in The Wilds — on walkable ground, not too
+  steep, not inside a tree or rock — found by raycasts, so it keeps working
+  when the map art changes. A tall light pillar in the rarity colour marks
+  it across the map, the banner gives a rough direction ("north-east Wilds,
+  behind Alex's camp"), and a floating marker with the distance points the
+  way.
+- **Capturing:** hold Capture for 5 seconds. Starting a hold breaks anyone
+  else's (they're told who), and getting bonked by a Bat or losing health
+  breaks yours. You need a free nest and empty hands to start.
+- **Carrying it home:** over your head, slowed like a thief, outlined
+  through walls with its own light pillar — everyone sees you. No timer
+  while you hold it. Knocked loose, anyone with a free nest can grab it for
+  30 seconds before it escapes for good; leaving the game loses it (it's
+  dropped for the others to grab, or escapes). On your pad it goes into a free nest (full nests: you're told to
+  make room). You can't lock your camp or fast-travel while carrying it.
+- **VHS:** within 120 studs the screen tints, loses colour, gains
+  scanlines, grain, a "REC" timecode and a slight FOV wobble, strongest
+  within 40 studs; it fades away when you leave or the sighting ends.
+
 ### Hook 3 — Codex *(Step 7)*
 
 A camera tool photographs any cryptid on any plot — yours or someone else's —
@@ -101,6 +131,34 @@ Completing a rarity page grants a permanent luck bonus. The Codex **survives
 rebirth**, so it is the one thing that always accumulates. It also gives a
 non-violent reason to walk onto someone else's plot, which makes every visitor
 ambiguous.
+
+#### As built (Step 7)
+
+- **Field Camera:** every player gets one each spawn, next to the Bat.
+  Holding it shows a camcorder viewfinder (corner brackets, blinking REC,
+  a battery that recharges between shots, the night clock) and names the
+  cryptid you're aiming at, outlined in its rarity colour, with "NEW! Not
+  in your Codex yet" when it would be a new entry. Click (PC) or tap
+  (phone) to take a photo: white flash and shutter sound every time.
+- **What counts:** any cryptid in any nest (yours or anyone's), a wild
+  sighting, or one someone is carrying. Within 60 studs, with a clear view
+  (walls block; people, glass and see-through things don't), one photo
+  every 2 seconds. On a phone you don't need to be exact: the cryptid
+  nearest the middle of the screen counts.
+- **Logged automatically, too:** anything you hatch, and anything you
+  bring home (stolen or captured). Already-known cryptids are skipped
+  silently.
+- **New entry:** a "NEW CODEX ENTRY" polaroid drops onto the screen.
+  **Page complete** (every cryptid of one rarity): a gold banner,
+  "+5% luck forever", announced to the whole server and saved at once.
+  7 pages = up to +35% luck, kept through rebirth.
+- **Codex screen** (HUD Index button, red "!" when something new was
+  logged): a card per cryptid as an old evidence photo, or a black
+  silhouette with "???" until you log it. The Secret's photo is always
+  glitched and redacted. Filter buttons per rarity show progress
+  ("Rare 3/5"); the header shows pages complete and the luck they give;
+  search by name. Tap a card for its file: rarity, income, a one-line
+  field note (Config.Codex.Blurbs), and whether you've photographed it.
 
 ---
 
@@ -198,8 +256,10 @@ egg's chance.
 4. **Earn.** Each creature fills its own vault with cash. Walk into it to
    collect. A full vault stops filling.
 
-Heat and income only tick while you're in the server; nothing accrues
-offline (eggs keep the heat they had when you left).
+Heat and income only tick while you're in the server (eggs keep the heat
+they had when you left). Since Step 7.5 a quarter of your creature income
+for the time away is paid as **offline cash** when you come back — see
+"Retention (as built)" in §8.
 
 ---
 
@@ -366,6 +426,59 @@ player's profile *before* granting the reward, and return
 - **Potions** stack: buying another while one is running adds its time.
   Active potions show on the HUD with a countdown.
 - **VIP:** gold [VIP] chat tag, +10% luck, gold nest glow.
+
+### Retention (as built, Step 7.5)
+
+Four reasons to come back, all decided on the server (`RetentionService`)
+and tuned in `Config.Retention`. The screens are the kit's DailyRewards,
+SpinWheel, Rewards and OfflineRewardsPopup.
+
+**Rewards** are lists of items, shared by all four features:
+- **Cash** scales with you: the bigger of a fixed amount and N minutes of
+  your current creature income (creatures at home), capped at $200M. So
+  day-1 cash is worth having at $50/s and at $50K/s.
+- **Eggs** go in a free nest, or are saved and placed when one frees up.
+  An egg above your rebirth level becomes the best egg you *have* unlocked.
+- **Luck Potion / Nest Warmer time** — adds to a running potion, exactly
+  like buying one.
+- **Max Heat** — your best egg, or saved for your next egg (as the product).
+
+**Daily Rewards** (HUD Daily button, bottom right; pops up once on joining
+when there's one to claim, after the offline popup)
+- One claim per UTC day. Claim the next day to keep the streak; miss a day
+  and you're back to day 1. After day 7 it starts again.
+- Day 1 $500 / 3 min · Day 2 Swamp Egg · Day 3 $2K / 8 min · Day 4 Luck
+  Potion 15m · Day 5 $5K / 15 min · Day 6 Mountain Egg + Nest Warmer 15m ·
+  **Day 7** $25K / 45 min + Deep Sea Egg + Luck Potion 30m.
+- 7 cards: ticked when claimed, "TODAY" (pulsing) when claimable — tap it.
+
+**Spin Wheel** (HUD Spin button)
+- One free spin every 4 hours of real time; a new player has one ready.
+  More from the **3 Extra Spins** product (sold on the wheel screen).
+- 6 prizes (the kit wheel has 6 slots), clockwise from the top: small cash
+  30%, Mountain Egg 16%, medium cash 24%, Boost Pack (Luck + Warmer 10m)
+  16%, Max Heat 8%, jackpot cash 6% (announced to the server).
+- The server rolls and pays at once; the wheel then spins to land on the
+  prize. The win message arrives when the wheel stops.
+
+**Playtime Gifts** (HUD Gift button: countdown, "Claim!" when ready)
+- Unlock at 2, 5, 10, 15, 25, 40 and 60 minutes into a visit; each opens
+  once per visit and the clock restarts on every join.
+- Small cash, a Swamp Egg, a Nest Warmer, and at 60 minutes a Mountain Egg
+  + Luck Potion.
+
+**Offline Earnings**
+- Away 5 minutes or more: 25% of your creature income for the time away,
+  up to 8 hours. Saved the moment you join (a crash can't lose it), and
+  stacks if you leave without claiming.
+- Popup: "your cryptids earned $X" → **CLAIM!** or **CLAIM 2x** (the
+  **Double Offline Cash** product). Bought after claiming, Double pays the
+  same amount again; with nothing to double the shop refuses, and a
+  receipt that still arrives pays a small cash gift instead.
+
+**New dev products** (both `Id = 0` until created): 3 Extra Spins (~R$49),
+Double Offline Cash (~R$25). They're sold only on their own screens, not in
+the Store — Double only makes sense with offline cash waiting.
 
 ---
 

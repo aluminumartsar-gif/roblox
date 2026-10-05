@@ -107,6 +107,9 @@ function RebirthService.Rebirth(player: Player): RemoteGuard.Result
 
 	task.spawn(DataService.SaveNow, player)
 
+	-- The rebirther's flash + fanfare (FeedbackController): presentation only.
+	RemoteGuard.GetClientEvent("FeedbackCue"):FireClient(player, "Rebirth", { Rebirths = rebirths })
+
 	if Config.Rebirth.Announce then
 		RemoteGuard.GetClientEvent("GlobalAnnounce"):FireAllClients(
 			string.format("%s reached Rebirth %d!", player.DisplayName, rebirths), "Legendary")

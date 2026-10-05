@@ -24,6 +24,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
+local SoundController = require(script.Parent:WaitForChild("SoundController"))
 local Icon = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Icon"))
 local ScreenScale = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("ScreenScale"))
 
@@ -65,6 +66,12 @@ local function updateDoor(door: BasePart)
 		return
 	end
 	doorStates[door] = { locked = locked, mine = mine }
+
+	-- Someone else's door clunking shut/open nearby. (Your own lock plays
+	-- in the plot panel's tick; the first sighting of a door is silent.)
+	if previous and previous.locked ~= locked and not mine then
+		SoundController.PlayAt(if locked then "LockOn" else "LockOff", door)
+	end
 
 	if locked then
 		door.Transparency = if mine then 0.8 else 0.25
@@ -278,6 +285,9 @@ function PlotController.Start()
 	renderNests(nestsLabel, ProfileController.Get())
 
 	-- Doors and the countdown both depend on the clock, so tick them.
+	-- Your own camp's lock sound plays on the switch (from any lock source:
+	-- button, stump prompt, Emergency Lock).
+	local wasLocked: boolean? = nil
 	task.spawn(function()
 		while true do
 			for _, door in ipairs(CollectionService:GetTagged(Config.Tags.Door)) do
@@ -285,6 +295,11 @@ function PlotController.Start()
 					updateDoor(door)
 				end
 			end
+			local lockedNow = (localPlayer:GetAttribute("PlotLockedUntil") or 0) > now()
+			if wasLocked ~= nil and lockedNow ~= wasLocked then
+				SoundController.Play(if lockedNow then "LockOn" else "LockOff")
+			end
+			wasLocked = lockedNow
 			renderLockButton(lockButton)
 			renderProtection(protectionLabel)
 			task.wait(0.2)

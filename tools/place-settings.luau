@@ -47,11 +47,34 @@ local ok, err = pcall(function()
 		end
 	end
 
-	-- Map preview. Clone the module so we always run the current source, not
-	-- a copy the command bar cached earlier.
+	-- Map preview (terrain + parts) and the night lighting. Clone the module
+	-- so we always run the current source, not a copy the command bar cached
+	-- earlier. There are no mesh templates in Edit mode, so props use their
+	-- part-built fallbacks here; live servers use the meshes.
 	local MapBuilder = require(ServerScriptService.Server.Modules.MapBuilder:Clone())
+	MapBuilder.ApplyAtmosphere()
+	table.insert(log, "applied Config.Atmosphere to Lighting")
 	local map, plots = MapBuilder.Build(Workspace)
 	table.insert(log, string.format("built map preview: %d plots, %d instances", #plots, #map:GetDescendants()))
+	local stats = MapBuilder.LastStats
+	if stats then
+		local counts = {}
+		for name, n in pairs(stats.Parts) do
+			table.insert(counts, name .. " " .. n)
+		end
+		table.sort(counts)
+		table.insert(log, string.format("terrain %.0f ms, total %.0f ms, %d parts (%s), %d lights",
+			stats.TerrainMs, stats.TotalMs, stats.TotalParts, table.concat(counts, ", "), stats.Lights))
+	end
+
+	-- Grass blades on the Grass terrain material. Scripts can't set this
+	-- (Terrain.Decoration isn't scriptable), so just report it.
+	local okDecoration, decoration = pcall(function()
+		return (Workspace.Terrain :: any).Decoration
+	end)
+	table.insert(log, if okDecoration
+		then "Terrain.Decoration=" .. tostring(decoration)
+		else "Terrain.Decoration: tick it by hand (Explorer > Terrain > Properties > Decoration)")
 end)
 
 freshShared:Destroy()

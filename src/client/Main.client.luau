@@ -43,6 +43,7 @@ local CONTROLLER_ORDER: { string } = {
 	"NestVisualsController",
 	"StealController",
 	"SightingController",
+	"HuntController",
 	"FeedbackController",
 	"TutorialController",         -- last: it points at everything else
 }

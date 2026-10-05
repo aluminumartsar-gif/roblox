@@ -27,6 +27,16 @@
 	(or PendingEggs if they filled up); leaving mid-carry saves it to
 	PendingEggs, since it was paid for.
 
+	Wild cryptids captured at a Sighting (SightingService, Step 7) are a
+	carry with Source = "Sighting": no owner, carried OVERHEAD like a stolen
+	item at Config.Steal.CarrySpeedMultiplier, no timer while held. Knocked
+	loose, anyone (with a free nest) can grab it for
+	Config.Sightings.DroppedLifetime seconds, then it escapes; it also
+	escapes if its carrier leaves. Reaching your pad puts it in a free nest
+	(refused, like a steal, while your nests are full). SightingService
+	decorates the model (SetDecorator) and listens to ItemTaken / ItemDropped
+	/ Claimed / CaptureEscaped for the server-wide banner.
+
 	Where the item lives while it's out (this is what keeps it dupe-safe):
 	the OWNER's profile keeps the slot, marked Away. Nothing is added to the
 	thief until the claim, and the claim removes it from the owner in the
@@ -65,7 +75,7 @@ type PlotRecord = PlotService.PlotRecord
 
 export type Carry = {
 	Id: number,
-	Source: string,          -- "Steal" (from a nest) or "Belt" (bought off the egg belt)
+	Source: string,          -- "Steal" (from a nest), "Belt" (bought off the egg belt) or "Sighting" (captured in the Wilds)
 	Owner: Player?,          -- nil once the owner has left (forfeited)
 	OwnerUserId: number,
 	OwnerName: string,
@@ -83,6 +93,15 @@ local StealService = {}
 StealService.ItemTaken = Signal.new()
 --- (thief, carry, nestIndex) after a claim.
 StealService.Claimed = Signal.new()
+--- (carrier, carry) after a carry is knocked loose and lands on the ground.
+StealService.ItemDropped = Signal.new()
+--- (carry, reason) when a captured wild cryptid (Source "Sighting") is lost
+--- for good: lay on the ground too long, or its carrier left.
+StealService.CaptureEscaped = Signal.new()
+
+-- Source -> function(model, carry) that dresses up every model built for
+-- that kind of carry (carried or dropped). Set with SetDecorator.
+local decorators: { [string]: (Model, any) -> () } = {}
 
 local carries: { [number]: Carry } = {}
 local carryByCarrier: { [Player]: Carry } = {}
@@ -201,8 +220,22 @@ local function buildItemModel(carry: Carry): Model
 		model:SetAttribute("ReturnAt", carry.ReturnAtServer)
 	end
 	model:SetAttribute("CarryId", carry.Id)
+	local decorate = decorators[carry.Source]
+	if decorate then
+		-- Purely visual: a broken decorator must never break a carry.
+		local ok, err = pcall(decorate, model, carry)
+		if not ok then
+			warn("[SAC/Steal] carry decorator errored: " .. tostring(err))
+		end
+	end
 	CollectionService:AddTag(model, Config.Tags.CarriedItem)
 	return model
+end
+
+--- Registers `fn(model, carry)` to dress up every model built for carries
+--- with this Source (e.g. SightingService adds a light pillar + outline).
+function StealService.SetDecorator(source: string, fn: (Model, any) -> ())
+	decorators[source] = fn
 end
 
 local function destroyModel(carry: Carry)
@@ -308,6 +341,16 @@ local function returnHome(carry: Carry, reason: string)
 		return
 	end
 
+	if carry.Source == "Sighting" then
+		-- A wild cryptid has no home to run to: it's gone, back to the woods.
+		if carrier and carrier.Parent == Players then
+			Notifier.Send(carrier, string.format("The %s slipped away into the woods.", itemLabel(carry.Slot)), "Warning")
+		end
+		log("captured carry %d escaped (%s)", carry.Id, reason)
+		StealService.CaptureEscaped:Fire(carry, reason)
+		return
+	end
+
 	local owner = carry.Owner
 	if owner and owner.Parent == Players then
 		local immuneUntil = os.time() + Config.Steal.SameItemImmunity
@@ -405,9 +448,23 @@ function StealService.Drop(player: Player, reason: string)
 		model:SetAttribute("ReturnAt", carry.ReturnAtServer)
 		Notifier.Send(player, string.format("You dropped the %s! Grab it before someone else does.", itemLabel(carry.Slot)), "Warning")
 		log("belt egg carry %d dropped by %s (%s)", carry.Id, player.Name, reason)
+		StealService.ItemDropped:Fire(player, carry)
 		return
 	end
 
+	if carry.Source == "Sighting" then
+		-- A captured wild cryptid on the loose: anyone's, until it escapes.
+		local lifetime = Config.Sightings.DroppedLifetime
+		carry.ReturnAt = os.clock() + lifetime
+		carry.ReturnAtServer = serverNow() + lifetime
+		model:SetAttribute("ReturnAt", carry.ReturnAtServer)
+		Notifier.Send(player, string.format("You dropped the %s! Grab it before it runs off.", itemLabel(carry.Slot)), "Warning")
+		log("captured carry %d dropped by %s (%s)", carry.Id, player.Name, reason)
+		StealService.ItemDropped:Fire(player, carry)
+		return
+	end
+
+	StealService.ItemDropped:Fire(player, carry)
 	Notifier.Send(player, string.format("You dropped the %s!", itemLabel(carry.Slot)), "Warning")
 	if carry.Owner then
 		Notifier.Send(carry.Owner, string.format("Your %s was knocked loose — grab it back!", itemLabel(carry.Slot)), "Warning")
@@ -437,9 +494,40 @@ local function claimBeltEgg(player: Player, carry: Carry)
 	StealService.Claimed:Fire(player, carry, nestIndex or 0)
 end
 
+--- A captured wild cryptid reaches its carrier's pad. It only ever existed
+--- in the carry, so adding it here once (synchronously, then forgetting
+--- the carry) can't duplicate it.
+local function claimCapture(player: Player, carry: Carry)
+	local nestIndex = NestService.FindEmptyNest(player)
+	if not nestIndex then
+		throttledNotice(player, "No empty nest! Hatch something or make room, quick.")
+		return
+	end
+	local now = os.time()
+	local slot = ProfileTemplate.DeepCopy(carry.Slot)
+	slot.AcquiredAt = now
+	slot.LastIncomeAt = now
+	slot.Vault = 0
+	NestService.SetSlot(player, nestIndex, slot)
+	DataService.Mutate(player, function(d)
+		d.Stats.CapturesWon = (d.Stats.CapturesWon or 0) + 1
+	end)
+	releaseCarrier(carry)
+	forget(carry)
+
+	Notifier.Send(player, string.format("You brought the %s home! It's in nest %d.", itemLabel(carry.Slot), nestIndex), "Success")
+	log("%s claimed captured carry %d (%s) into nest %d", player.Name, carry.Id, itemLabel(carry.Slot), nestIndex)
+	task.spawn(DataService.SaveNow, player)
+	StealService.Claimed:Fire(player, carry, nestIndex)
+end
+
 local function claim(player: Player, carry: Carry)
 	if carry.Source == "Belt" then
 		claimBeltEgg(player, carry)
+		return
+	end
+	if carry.Source == "Sighting" then
+		claimCapture(player, carry)
 		return
 	end
 	local nestIndex = NestService.FindEmptyNest(player)
@@ -692,7 +780,9 @@ function StealService.TryPickup(player: Player, carry: Carry, began: number?)
 		return
 	end
 
-	if carry.Source == "Belt" then
+	-- Belt eggs and captured wild cryptids have no owner: whoever grabs one
+	-- carries it, with no timer while it's held.
+	if carry.Source == "Belt" or carry.Source == "Sighting" then
 		if carryByCarrier[player] then
 			throttledNotice(player, "You're already carrying something.")
 			return
@@ -707,8 +797,12 @@ function StealService.TryPickup(player: Player, carry: Carry, began: number?)
 		end
 		carry.ReturnAt = math.huge -- in someone's hand again: no timer
 		carry.ReturnAtServer = math.huge
-		Notifier.Send(player, string.format("You grabbed a %s! Take it to your camp's pad.", itemLabel(carry.Slot)), "Success")
-		log("%s picked up belt egg carry %d", player.Name, carry.Id)
+		if carry.Source == "Belt" then
+			Notifier.Send(player, string.format("You grabbed a %s! Take it to your camp's pad.", itemLabel(carry.Slot)), "Success")
+		else
+			Notifier.Send(player, string.format("You grabbed the %s! Get it to your camp's pad — everyone can see you.", itemLabel(carry.Slot)), "Success")
+		end
+		log("%s picked up %s carry %d", player.Name, carry.Source, carry.Id)
 		StealService.ItemTaken:Fire(player, carry)
 		return
 	end
@@ -774,6 +868,52 @@ function StealService.CarryBought(player: Player, eggId: string): boolean
 end
 
 --------------------------------------------------------------------------
+-- Wild cryptids captured at a Sighting
+--------------------------------------------------------------------------
+
+--- Puts a freshly captured wild cryptid over `player`'s head. It becomes
+--- theirs when they reach their pad (claimCapture); a bat hit or death
+--- drops it for anyone to grab. Returns false (nothing changed) if the
+--- player is already carrying, the creature is unknown, or they have no
+--- living character — the caller then leaves the sighting where it is.
+function StealService.CarryCaptured(player: Player, creatureId: string, rarity: string): boolean
+	local def = Config.CreaturesById[creatureId]
+	if carryByCarrier[player] or not def or def.Rarity ~= rarity then
+		return false
+	end
+	local now = os.time()
+	nextCarryId += 1
+	local carry: Carry = {
+		Id = nextCarryId,
+		Source = "Sighting",
+		Owner = nil,
+		OwnerUserId = 0,
+		OwnerName = "",
+		NestIndex = 0,
+		-- Same shape as NestService's newCreatureSlot.
+		Slot = {
+			Kind = "Creature",
+			CreatureId = creatureId,
+			Rarity = rarity,
+			Heat = 0,
+			Vault = 0,
+			AcquiredAt = now,
+			LastIncomeAt = now,
+		},
+		ReturnAt = math.huge,
+		ReturnAtServer = math.huge,
+		Carrier = nil,
+		Model = nil,
+	}
+	if not attachToCarrier(carry, player) then
+		return false
+	end
+	carries[carry.Id] = carry
+	log("%s captured a wild %s (carry %d)", player.Name, creatureId, carry.Id)
+	return true
+end
+
+--------------------------------------------------------------------------
 -- Start
 --------------------------------------------------------------------------
 
@@ -823,12 +963,15 @@ function StealService.Start()
 		end
 	end
 
-	-- You can't lock your own camp while carrying stolen goods. (A bought
-	-- egg is fine.)
+	-- You can't lock your own camp while carrying stolen goods or a captured
+	-- wild cryptid (carrying = vulnerable). A bought egg is fine.
 	PlotService.AddLockCheck(function(player: Player)
 		local carry = carryByCarrier[player]
 		if carry and carry.Source == "Steal" then
 			return false, "You can't lock your camp while carrying a stolen item."
+		end
+		if carry and carry.Source == "Sighting" then
+			return false, "You can't lock your camp while carrying a wild cryptid."
 		end
 		return true, nil
 	end)
@@ -885,7 +1028,8 @@ function StealService.Start()
 		end
 	end)
 
-	-- Thief leaving: the item goes home.
+	-- Thief leaving: the item goes home. (A captured wild cryptid has no
+	-- home: returnHome lets it escape.)
 	Players.PlayerRemoving:Connect(function(player)
 		local carry = carryByCarrier[player]
 		if carry and carry.Source == "Belt" then
@@ -928,7 +1072,9 @@ function StealService.DebugState(): string
 	local lines = {}
 	for id, carry in pairs(carries) do
 		table.insert(lines, string.format("carry %d: %s from %s nest %d, %s, returns in %.0fs",
-			id, itemLabel(carry.Slot), if carry.Source == "Belt" then "the belt" else carry.OwnerName, carry.NestIndex,
+			id, itemLabel(carry.Slot),
+			if carry.Source == "Belt" then "the belt" elseif carry.Source == "Sighting" then "the Wilds" else carry.OwnerName,
+			carry.NestIndex,
 			if carry.Carrier then ("carried by " .. carry.Carrier.Name) else "dropped",
 			carry.ReturnAt - os.clock()))
 	end

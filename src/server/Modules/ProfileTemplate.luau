@@ -62,6 +62,20 @@ export type ProfileData = {
 	SpawnLockUntil: number,
 	PendingEggs: { string },              -- bought eggs waiting for a free nest
 	PendingMaxHeat: number,               -- Max Heat purchases waiting for an egg
+	Retention: RetentionData,             -- Step 7.5 (RetentionService)
+}
+
+-- Daily rewards, spin wheel and offline earnings (RetentionService). All
+-- times are os.time() values. Playtime gifts are per server visit, so they
+-- live in server memory, not here.
+export type RetentionData = {
+	DailyLastDay: number,      -- UTC day number (os.time() // DayLength) of the last daily claim; 0 = never
+	DailyStreak: number,       -- which day of the 7-day cycle was claimed last (0..7)
+	SpinNextFreeAt: number,    -- the free spin is ready from this time (0 = ready now)
+	SpinExtra: number,         -- bought spins not used yet
+	LastSeenAt: number,        -- last time this player was known to be online
+	PendingOffline: number,    -- offline cash waiting to be claimed
+	LastOfflineAmount: number, -- the last offline cash claimed (what "Double" pays again)
 }
 
 --------------------------------------------------------------------------
@@ -112,6 +126,15 @@ function ProfileTemplate.new(): ProfileData
 		SpawnLockUntil = 0,
 		PendingEggs = {},
 		PendingMaxHeat = 0,
+		Retention = {
+			DailyLastDay = 0,
+			DailyStreak = 0,
+			SpinNextFreeAt = 0, -- a brand-new player has a free spin ready
+			SpinExtra = 0,
+			LastSeenAt = 0,
+			PendingOffline = 0,
+			LastOfflineAmount = 0,
+		},
 	}
 end
 
@@ -299,6 +322,43 @@ local function repair(data: ProfileData, context: string): { string }
 		data.PendingMaxHeat = 0
 	end
 	data.PendingMaxHeat = math.floor(data.PendingMaxHeat)
+
+	-- Retention (Step 7.5): every field a whole, finite, non-negative number.
+	if typeof(data.Retention) ~= "table" then
+		fix("Retention was not a table, reset")
+		data.Retention = ProfileTemplate.new().Retention
+	end
+	local retention = data.Retention :: any
+	for key, default in pairs(ProfileTemplate.new().Retention :: any) do
+		local value = retention[key]
+		if typeof(value) ~= "number" or value ~= value or value == math.huge or value < 0 then
+			if value ~= nil then
+				fix(string.format("Retention.%s was %s, reset", key, tostring(value)))
+			end
+			retention[key] = default
+		else
+			retention[key] = math.floor(value)
+		end
+	end
+	local retentionConfig = Config.Retention
+	retention.DailyStreak = math.clamp(retention.DailyStreak, 0, #retentionConfig.Daily.Rewards)
+	-- Times in the future can only come from a bad clock or bad data.
+	if retention.LastSeenAt > now then
+		retention.LastSeenAt = now
+	end
+	if retention.DailyLastDay > now // retentionConfig.Daily.DayLength then
+		fix("Retention.DailyLastDay was in the future, reset")
+		retention.DailyLastDay = 0
+		retention.DailyStreak = 0
+	end
+	if retention.SpinNextFreeAt > now + retentionConfig.Spin.FreeEvery then
+		retention.SpinNextFreeAt = now + retentionConfig.Spin.FreeEvery
+	end
+	-- Waiting offline cash may be paid twice over by the Double product, so
+	-- it must stay under half of what one AddCash accepts.
+	local maxPending = math.min(retentionConfig.MaxCashReward, Config.Income.AbsoluteMaxSingleCollect // 2)
+	retention.PendingOffline = math.min(retention.PendingOffline, maxPending)
+	retention.LastOfflineAmount = math.min(retention.LastOfflineAmount, maxPending)
 
 	if #fixes > 0 then
 		warn(string.format("[SAC/Profile] Repaired %s: %s", context, table.concat(fixes, "; ")))

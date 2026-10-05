@@ -3,11 +3,15 @@
 	WorldService
 	ServerScriptService/Server/Services/WorldService
 
-	Sets the night lighting from Config.Atmosphere and builds the map with
-	MapBuilder. Starts first, so the world exists before anyone spawns.
+	Sets the night lighting from Config.Atmosphere and builds the world
+	(terrain + map) with MapBuilder. Starts right after ArtService (whose
+	mesh templates the map clones), before anyone can spawn.
+
+	The boot log prints the terrain time, total build time and part counts
+	per category, so performance regressions show up in every play test.
+	Studio: SAC_Debug "mapstats" prints the same.
 ]]
 
-local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Workspace = game:GetService("Workspace")
@@ -19,38 +23,33 @@ local WorldService = {}
 
 local plots: { Model } = {}
 
-local function applyLighting()
-	local a = Config.Atmosphere
-	Lighting.ClockTime = a.ClockTime
-	Lighting.Brightness = a.Brightness
-	Lighting.Ambient = a.Ambient
-	Lighting.OutdoorAmbient = a.OutdoorAmbient
-	Lighting.FogColor = a.FogColor
-
-	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
-	if not atmosphere then
-		atmosphere = Instance.new("Atmosphere")
-		atmosphere.Parent = Lighting
-	end
-	assert(atmosphere)
-	atmosphere.Density = a.AtmosphereDensity
-	atmosphere.Haze = a.AtmosphereHaze
-	atmosphere.Color = a.FogColor
-	atmosphere.Decay = a.FogDecay
-	atmosphere.Glare = 0
-end
-
 --- Plot models in index order.
 function WorldService.GetPlots(): { Model }
 	return plots
 end
 
-function WorldService.Start()
-	applyLighting()
+--- One line describing the last build: timings, part counts, lights.
+function WorldService.DescribeBuild(): string
+	local stats = MapBuilder.LastStats
+	if not stats then
+		return "map not built yet"
+	end
+	local names = {}
+	for name in pairs(stats.Parts) do
+		table.insert(names, name)
+	end
+	table.sort(names)
+	local counts = {}
+	for _, name in ipairs(names) do
+		table.insert(counts, string.format("%s %d", name, stats.Parts[name]))
+	end
+	return string.format("terrain %.0f ms, total %.0f ms, %d parts (%s), %d lights, props %d mesh / %d part-built",
+		stats.TerrainMs, stats.TotalMs, stats.TotalParts, table.concat(counts, ", "),
+		stats.Lights, stats.MeshProps, stats.FallbackProps)
+end
 
-	local started = os.clock()
-	local map, builtPlots = MapBuilder.Build(Workspace)
-	plots = builtPlots
+function WorldService.Start()
+	MapBuilder.ApplyAtmosphere()
 
 	-- Runtime objects (eggs, creatures, carried items) live here, never
 	-- inside Map, so a map rebuild can't take them with it.
@@ -60,8 +59,13 @@ function WorldService.Start()
 		runtime.Parent = Workspace
 	end
 
-	print(string.format("[SAC/World] Map built: %d plots, %d parts in %.0f ms",
-		#plots, #map:GetDescendants(), (os.clock() - started) * 1000))
+	local _, builtPlots = MapBuilder.Build(Workspace)
+	plots = builtPlots
+
+	print(string.format("[SAC/World] Map built: %d plots — %s", #plots, WorldService.DescribeBuild()))
+	if #plots ~= Config.Plot.Count then
+		warn(string.format("[SAC/World] Expected %d plots, built %d", Config.Plot.Count, #plots))
+	end
 end
 
 return WorldService

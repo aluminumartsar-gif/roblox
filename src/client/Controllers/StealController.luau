@@ -20,23 +20,21 @@
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SoundService = game:GetService("SoundService")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Icon = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Icon"))
 local ScreenScale = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("ScreenScale"))
+local SoundController = require(script.Parent:WaitForChild("SoundController"))
 
 local StealController = {}
 
 local localPlayer = Players.LocalPlayer
 
-local ALARM_SOUND = "rbxasset://sounds/electronicpingshort.wav"
 local OUTLINE = Color3.fromRGB(255, 50, 50)
 
 local alarmBanner: TextLabel
 local carryBanner: TextLabel
-local alarmSound: Sound
 
 type AlarmState = { Phase: string, Info: { [string]: any }, Until: number? }
 local alarmState: AlarmState? = nil
@@ -110,9 +108,11 @@ end
 
 local function playAlarm(times: number)
 	task.spawn(function()
-		for _ = 1, times do
-			alarmSound:Play()
-			task.wait(0.25)
+		for i = 1, times do
+			SoundController.Play("StealAlarm")
+			if i < times then
+				task.wait(Config.Feedback.AlarmRepeatGap)
+			end
 		end
 	end)
 end
@@ -141,14 +141,14 @@ local function onAlarm(phase: string, info: { [string]: any })
 			setOutline(target, true)
 		end
 		alarmState = { Phase = phase, Info = info, Until = os.clock() + 6 }
-		playAlarm(3)
+		playAlarm(2)
 	elseif phase == "Stopped" then
 		if alarmState and alarmState.Phase == "Started" then
 			alarmState = nil
 		end
 	elseif phase == "Stolen" or phase == "Dropped" then
 		alarmState = { Phase = phase, Info = info, Until = nil }
-		playAlarm(if phase == "Stolen" then 4 else 2)
+		playAlarm(if phase == "Stolen" then 3 else 1)
 	elseif phase == "Claimed" or phase == "Returned" then
 		alarmState = { Phase = phase, Info = info, Until = os.clock() + 4 }
 	end
@@ -258,12 +258,6 @@ function StealController.Start()
 	ScreenScale.Apply(alarmBanner)
 	ScreenScale.Apply(carryBanner)
 	gui.Parent = localPlayer:WaitForChild("PlayerGui")
-
-	alarmSound = Instance.new("Sound")
-	alarmSound.Name = "StealAlarm"
-	alarmSound.SoundId = ALARM_SOUND
-	alarmSound.Volume = 0.8
-	alarmSound.Parent = SoundService
 
 	local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("StealAlarm") :: RemoteEvent
 	remote.OnClientEvent:Connect(function(phase, info)

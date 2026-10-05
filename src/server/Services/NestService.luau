@@ -13,7 +13,8 @@
 	    Written straight into the profile without a client push (it changes
 	    every second); clients read it from the egg model's Heat attribute.
 	  * Hatch: the egg's prompt, owner only. Rolls on the server with the
-	    egg's current heat and the owner's luck, swaps the slot to a creature.
+	    egg's current heat and the owner's luck, swaps the slot to a creature,
+	    and fires HatchResult to the hatcher for the reveal (Step 8).
 
 	Model attributes (read by the client's NestVisualsController):
 	  all:      Kind ("Egg"|"Creature"), OwnerUserId, PlotIndex, NestIndex
@@ -334,6 +335,18 @@ function NestService.Hatch(player: Player, nestIndex: number): EggRoller.HatchRe
 	local plot = PlotService.GetPlot(player)
 	if plot then
 		NestService.RenderNest(plot, nestIndex)
+	end
+
+	-- The hatcher's celebration (FeedbackController): presentation only.
+	-- (pcall: a missing nest anchor must never cut the hatch short — the
+	-- slot is already a creature, and the log/toast/Hatched below must run.)
+	if player.Parent ~= nil then
+		local okCf, itemCf = pcall(function()
+			return if plot then NestService.GetItemCFrame(plot, nestIndex) else nil
+		end)
+		local nestPosition = if okCf and itemCf then itemCf.Position else nil
+		RemoteGuard.GetClientEvent("HatchResult"):FireClient(player,
+			result.CreatureId, result.Rarity, result.Mutation, heat, nestPosition)
 	end
 
 	local def = Config.CreaturesById[result.CreatureId]

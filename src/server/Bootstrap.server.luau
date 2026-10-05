@@ -46,6 +46,7 @@ local SERVICE_ORDER: { string } = {
 	"MonetizationService",
 	"TravelService",
 	"SightingService",    -- Step 7: wild cryptids (needs Steal + Bat)
+	"HuntService",        -- the Brood Mother (needs Steal, Plot, Movement)
 	"CodexService",       -- Step 7: Field Camera + Codex
 	"RetentionService",   -- Step 7.5: daily, spin, playtime gifts, offline
 	"LeaderboardService", -- Step 8: global boards in the hub

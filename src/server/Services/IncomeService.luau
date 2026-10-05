@@ -16,6 +16,8 @@
 	    per-nest cooldown. The amount paid is the server's own vault value,
 	    so it can never exceed what the creature actually earned.
 	  * Auto Collect pass (Step 6): collects every AutoCollectInterval.
+	  * Every collect fires CashCollected (amount, position) to the owner;
+	    the "+$X" popup and coin sound are FeedbackController's (Step 8).
 
 	Vault values are written straight into the profile each tick without a
 	client push; the creature model's Vault attribute carries the display.
@@ -24,7 +26,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
-local Debris = game:GetService("Debris")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
@@ -47,28 +48,15 @@ local COLLECT_REACH = 8
 -- player -> nestIndex -> os.clock() of last collect
 local lastCollect: { [Player]: { [number]: number } } = {}
 
-local function popup(model: Model, amount: number)
-	local body = model.PrimaryPart
-	if not body then
+--- Tells the collector's client to show "+$X" at the creature (the popup,
+--- coin sound and HUD bounce are FeedbackController's job).
+local function popup(player: Player, model: Model, amount: number)
+	if player.Parent ~= Players then
 		return
 	end
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "CollectPopup"
-	billboard.Size = UDim2.fromOffset(140, 36)
-	billboard.StudsOffsetWorldSpace = Vector3.new(0, body.Size.Y / 2 + 4, 0)
-	billboard.AlwaysOnTop = true
-	billboard.LightInfluence = 0
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamBlack
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(120, 255, 140)
-	label.TextStrokeTransparency = 0.3
-	label.Text = "+$" .. Config.FormatNumber(amount)
-	label.Parent = billboard
-	billboard.Parent = body
-	Debris:AddItem(billboard, 1.2)
+	local cf, size = model:GetBoundingBox()
+	local top = cf.Position + Vector3.new(0, size.Y / 2, 0)
+	RemoteGuard.GetClientEvent("CashCollected"):FireClient(player, amount, top)
 end
 
 --- Pays out one creature's vault to its owner. Returns the amount paid.
@@ -91,7 +79,7 @@ function IncomeService.Collect(player: Player, nestIndex: number): number
 	local model = plot and NestService.GetVisual(plot.Index, nestIndex)
 	if model then
 		model:SetAttribute("Vault", math.floor(slot.Vault))
-		popup(model, amount)
+		popup(player, model, amount)
 	end
 	return amount
 end
