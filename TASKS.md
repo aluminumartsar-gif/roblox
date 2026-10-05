@@ -347,15 +347,21 @@ spin ready, gift timers running, offline away 191s → nothing pending).
       reveal, cash popups, idle life, toast polish
 - [x] Global leaderboards (cash earned, rebirths, steals) in the hub
 - [x] First-join tutorial
-- [x] Art pass: generated scary meshes for the cryptids, the Brood Mother and
-      her nest (eggs and props in progress — `docs/ART.md`)
+- [x] Art pass: 54 generated meshes — 30 scary cryptids, 6 eggs, 16 props,
+      the Brood Mother and her nest (`docs/ART.md`); all load in ~2s
 - [x] World pass: terrain, palisade camps, dressed hub, dense Wilds, night
       lighting, player lanterns
 - [x] Studio and live saves separated (`StudioStoreScope` / `StoreScope =
       live1`) — live launches on clean saves
-- [~] Anti-exploit audit, data-integrity and runtime review (multi-agent
-      review + adversarial verification)
-- [~] Economy re-simulation for the new design (`docs/ECONOMY.md`)
+- [x] Anti-exploit audit, data-integrity and runtime review: 4 review lenses,
+      every finding adversarially verified — 23 of 26 confirmed and fixed
+      (carry teleport, fast-travel race, hold expiry, fake pass ownership,
+      spawn-protection refresh, shutdown losing stolen eggs, release-save
+      retries, owner-first claim saves, phone input, layering)
+- [x] Economy re-simulation for the new design (`docs/ECONOMY.md`): rebirth
+      $400K x 2.3, trimmed playtime gifts — first rebirth ~30 min
+- [x] Terrain height fixed (it buried every home pad 2 studs deep — eggs
+      could not be claimed); hub, camps and paths measured flat at y = 0
 - [ ] Mobile check on a phone-sized viewport (Test → Device)
 - [ ] Launch checklist (`docs/LAUNCH.md`): icon, thumbnails, description,
       Creator Dashboard monetization
@@ -379,6 +385,11 @@ characters are supposed to be scary."
 - [x] Economy: flatter egg prices, cheaper upgrades, $1,500 after rebirth,
       starting cash $500, rescue egg
 
+**Final solo play test (fresh profile):** $500 start → tutorial → Eggs fast
+travel → bought a Forest egg off the belt → carried it home → claimed on
+the pad → it hatched by itself → collected → tips card → Codex → Spin Wheel
+(landed on the prize the server rolled) — no errors.
+
 **Tested solo:** the owner's v1 save migrated cleanly; a Forest egg at 85%
 glowed, pillared, hatched by itself into a Goatman with the reveal; Sell paid
 vault + 60s; Hunt warning → emergence → chase ("SHE'S COMING FOR YOU") →
@@ -392,7 +403,10 @@ before and restored after.
 Things only the owner can do. Ticked when done.
 
 - [x] **Enable Studio Access to API Services** — confirmed working at Step 1
-- [x] **Click Connect in the Rojo plugin** each session
+- [x] **Click Connect in the Rojo plugin** each session (Claude starts
+      `rojo serve`; a background command stops after 2 hours — if Studio
+      stops syncing, run `rojo serve default.project.json` yourself in this
+      folder and click Connect)
 - [ ] **Terrain grass blades:** Explorer → Workspace → Terrain → Properties →
       tick **Decoration** (scripts can't set it)
 - [ ] **Save the place** (File → Save to Roblox) after the map preview is

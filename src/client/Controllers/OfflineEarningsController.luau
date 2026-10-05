@@ -185,7 +185,8 @@ function OfflineEarningsController.Start()
 			popup:Close()
 		elseif lastPending <= 0 or popup:IsOpen() then
 			render()
-			if not popup:IsOpen() then
+			-- Not over the first-join tutorial; the loop below opens it after.
+			if not popup:IsOpen() and localPlayer:GetAttribute("TutorialActive") ~= true then
 				popup:Open()
 			end
 		end
@@ -197,7 +198,8 @@ function OfflineEarningsController.Start()
 	task.spawn(function()
 		while true do
 			task.wait(REOPEN_CHECK_INTERVAL)
-			if pending() > 0 and not popup:IsOpen() and not Retention.OtherPopupOpen(popup.Gui) then
+			if pending() > 0 and not popup:IsOpen() and not Retention.OtherPopupOpen(popup.Gui)
+				and localPlayer:GetAttribute("TutorialActive") ~= true then
 				popup:Open()
 			elseif popup:IsOpen() then
 				render()

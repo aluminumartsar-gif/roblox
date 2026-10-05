@@ -362,6 +362,9 @@ local function autoOpenOnce()
 	end
 	local deadline = os.clock() + 120
 	while os.clock() < deadline do
+		if Players.LocalPlayer:GetAttribute("TutorialActive") == true then
+			return -- the tutorial started meanwhile: leave it be
+		end
 		local s = state
 		local offline = s and s.Offline
 		-- The server works out this visit's offline cash a few seconds after
