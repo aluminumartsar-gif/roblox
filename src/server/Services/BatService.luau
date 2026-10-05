@@ -11,7 +11,8 @@
 	    Config.Bat.StunDuration, then can't be stunned again for
 	    Config.Bat.StunImmunity (no stun-locking)
 	  * if the target is carrying a stolen item, they drop it
-	    (any swinger if Config.Bat.AnyoneCanDisarm, else only the owner)
+	    (any swinger if Config.Bat.AnyoneCanDisarm, else only the owner);
+	    an egg bought off the belt is knocked loose by anyone
 	  * no damage
 
 	Knockback uses a LinearVelocity constraint: player characters are
@@ -78,7 +79,7 @@ end
 local function hit(attacker: Player, target: Player, direction: Vector3)
 	-- Knock loose anything they're carrying.
 	local carry = StealService.GetCarry(target)
-	if carry and (Config.Bat.AnyoneCanDisarm or carry.OwnerUserId == attacker.UserId) then
+	if carry and (carry.Source == "Belt" or Config.Bat.AnyoneCanDisarm or carry.OwnerUserId == attacker.UserId) then
 		StealService.Drop(target, "bat by " .. attacker.Name)
 	end
 

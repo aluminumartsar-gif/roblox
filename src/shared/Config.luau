@@ -25,7 +25,7 @@ local Config = {}
 -- VERSION / DEBUG
 -- =========================================================================
 
-Config.Version = "0.7.5-uikit"
+Config.Version = "0.7.6-belt"
 
 Config.Debug = {
 	-- Master switch for verbose server logging.
@@ -244,6 +244,54 @@ Config.Eggs = {
 		Color = Color3.fromRGB( 42,  32,  56),
 		Weights = { Common =  0.00, Uncommon =  4.00, Rare = 16.00, Epic = 34.00, Legendary = 32.00, Mythic = 12.50, Secret = 1.50 },
 	},
+}
+
+-- =========================================================================
+-- EGG BELT
+-- Eggs are bought off a circular conveyor belt around the hub campfire,
+-- first come first served. Which egg comes out is random (EggWeights), so
+-- the rare eggs really are rare. A bought egg is carried home in your hand
+-- and only becomes yours when you reach your camp's pad; a bat hit knocks
+-- it loose and anyone can grab it.
+-- =========================================================================
+
+Config.Belt = {
+	Enabled = true,
+	SpawnInterval = 2,          -- seconds between eggs
+	-- Chance of each egg coming out of the burrow (relative weights; the
+	-- odds board at the belt shows them as percentages). Eggs a player
+	-- hasn't unlocked yet (RequiredRebirths) still ride past them.
+	EggWeights = { forest = 50, swamp = 26, mountain = 14, deepsea = 6.5, sky = 2.8, void = 0.7 },
+	-- Eggs that make a server-wide announcement when they come out.
+	AnnounceEggs = { sky = true, void = true },
+	-- Name colour on each egg's floating label.
+	LabelColors = {
+		forest = Color3.fromRGB(235, 235, 225),
+		swamp = Color3.fromRGB(140, 230, 120),
+		mountain = Color3.fromRGB(120, 180, 255),
+		deepsea = Color3.fromRGB(190, 120, 255),
+		sky = Color3.fromRGB(255, 210, 80),
+		void = Color3.fromRGB(255, 80, 120),
+	},
+
+	-- Shape. The belt circles the hub campfire.
+	Radius = 22,                -- centre line of the belt, studs from the fire
+	Width = 4.5,
+	Height = 1.6,               -- belt surface above the ground
+	ArcDegrees = 320,           -- how far round an egg rides; the rest is the burrow gap
+	GapCenterDegrees = 90,      -- where the gap (burrows + arch) sits; 90 faces the hub spawn
+	SlatCount = 80,             -- moving slats drawn on the belt
+
+	-- Timing of one egg's ride.
+	RiseTime = 1.2,             -- climbing out of the start burrow
+	TravelTime = 30,            -- riding the belt (can be bought only now)
+	SinkTime = 1.2,             -- sinking into the end burrow
+
+	-- Carrying a bought egg home.
+	CarryScale = 0.55,          -- egg size in your hand
+	CarrySpeedMultiplier = 0.85,
+	DroppedEggLifetime = 30,    -- a knocked-loose egg vanishes after this
+	MaxEggs = 40,               -- safety cap on eggs alive at once
 }
 
 -- =========================================================================
@@ -673,7 +721,6 @@ Config.Remotes = {
 	-- Client -> server intents (all validated + rate limited server-side)
 	-- (Hatching is a ProximityPrompt and collecting is a touch; both are
 	-- handled server-side, so neither needs a remote.)
-	BuyEgg            = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 60 },
 	BuyUpgrade        = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 	DoRebirth         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 6 },
 	LockPlot          = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
@@ -697,6 +744,7 @@ Config.Prompts = {
 	MaxActivationDistance = 12,   -- must match the server distance check
 	ServerDistanceSlack = 4,      -- server allows MaxActivationDistance + slack
 	ShopOpenHold = 0,             -- opening a shop panel is a tap
+	BeltBuyHold = 0.4,            -- buying an egg off the belt
 	HatchHold = 0.5,
 	StealHold = 3,
 	CaptureHold = 5,
@@ -716,6 +764,9 @@ Config.Tags = {
 	PlotPad = "SAC_PlotPad",
 	Door = "SAC_Door",
 	ShopBooth = "SAC_ShopBooth",
+	BeltEgg = "SAC_BeltEgg",
+	BeltSlat = "SAC_BeltSlat",
+	Burrow = "SAC_Burrow",
 	WildCryptid = "SAC_WildCryptid",
 }
 

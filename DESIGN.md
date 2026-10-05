@@ -145,26 +145,50 @@ schema carries a Mutation field from day one so enabling it needs no migration.
 
 ### Eggs
 
-Higher tiers shift the base odds toward rarer outcomes. Buying an egg places it
-in an empty nest. **No empty nest = blocked with a message** (never a silent
-failure, never a lost purchase).
+Higher tiers shift the base odds toward rarer outcomes. Eggs come off the
+**egg belt** (below); which egg comes out is random, so the higher tiers really
+are rare. **No empty nest = blocked with a message** (never a silent failure,
+never a lost purchase).
 
-| Egg       | Price   | Unlock      |
-|-----------|--------:|-------------|
-| Forest    | $100    | —           |
-| Swamp     | $1K     | —           |
-| Mountain  | $10K    | —           |
-| Deep Sea  | $100K   | —           |
-| Sky       | $1M     | Rebirth 1+  |
-| Void      | $25M    | Rebirth 3+  |
+| Egg       | Price   | Unlock      | Belt chance |
+|-----------|--------:|-------------|------------:|
+| Forest    | $100    | —           | 50%         |
+| Swamp     | $1K     | —           | 26%         |
+| Mountain  | $10K    | —           | 14%         |
+| Deep Sea  | $100K   | —           | 6.5%        |
+| Sky       | $1M     | Rebirth 1+  | 2.8%        |
+| Void      | $25M    | Rebirth 3+  | 0.7%        |
 
-Exact per-egg weight tables live in `Config.Eggs`.
+Exact per-egg weight tables live in `Config.Eggs`; belt chances in
+`Config.Belt.EggWeights`.
 
-### How the egg loop works (as built in Step 3)
+### The egg belt (Step 6.6, owner request — replaced the Egg Shop)
 
-1. **Buy** at the Egg Shop counter in the hub — you must be standing there.
-   The panel shows each egg's price and its Legendary-or-better odds at heat
-   0 vs full heat. The egg appears in your first free nest at home.
+A circular conveyor belt round the hub campfire. Every 2 seconds a random egg
+climbs out of a glowing burrow, rides about 30 seconds round the ring, and
+sinks into a second burrow at the end. An arch over the gap between the
+burrows is the way in to the campfire; an odds board beside it shows each
+egg's chance.
+
+- **First come, first served.** Hold the egg's Buy prompt (0.4s) while it
+  rides past. The first player to finish gets it; it leaves the belt.
+- **Carry it home.** The egg goes in your left hand (you walk a little
+  slower). It only becomes yours when you step on your camp's pad — then it
+  goes in a free nest.
+- **Knock it loose.** Anyone who bats you knocks the egg out of your hand.
+  It lands on the ground and **anyone** can grab it (including you) for 30
+  seconds; after that it's gone. You paid, so you lose the cash.
+- One egg in your hands at a time; you need a free nest to buy or grab one.
+- Eggs above your rebirth level still ride past, showing "Rebirth N"
+  instead of a price, and can't be bought.
+- Sky and Void eggs sparkle and announce themselves to the server.
+- Leaving the game with an egg in hand saves it for your next free nest
+  (you paid for it). Fast travel is off while carrying.
+- HUD **Eggs** button fast-travels to the arch.
+
+### How the egg loop works
+
+1. **Buy** off the egg belt and carry it home (above).
 2. **Heat** builds while it sits (0→100% over 10 min; faster with the
    Incubation Speed upgrade or a Nest Warmer). Everyone can see an egg's heat
    on its label — a hot egg advertises itself to thieves.
@@ -281,7 +305,8 @@ when someone rebirths.
 
 ## 7. Shops
 
-- **Egg Shop** — a hub building. Browse eggs, see odds, buy.
+- **Egg belt** — round the hub campfire (see Eggs). Replaced the Egg Shop
+  building in Step 6.6.
 - **Upgrade Shop** — the Upgrades cabin in the hub: nest slots, incubation
   speed, vault size, lock duration, walk speed. Level tables in
   `Config.Upgrades`. Bought at the counter; effects apply instantly.
@@ -377,9 +402,9 @@ fills the kit's screens; the kit's own shop scripts are not used.
 - **HUD:** cash and rebirth bonus (bottom left, "+" opens the Store); side
   buttons Store, Index (Codex, Step 7), Rebirth (red "!" when ready),
   Invite, Settings; top buttons **Base** and **Eggs** fast-travel you home or
-  to the Egg Shop (8s cooldown, not while carrying or stunned); right-side
+  to the egg belt (8s cooldown, not while carrying or stunned); right-side
   quick-buys for the Luck Potion and 3-Egg Bundle; buff timers above the cash
-- **Screens:** Store, Rebirth (+ confirm), Egg Shop, Upgrades, Settings
+- **Screens:** Store, Rebirth (+ confirm), Upgrades, Settings
   (sounds on/off). One open at a time; shop screens close when you walk away
 - **Plot panel:** one row, top left — protection timer, nests used, Lock
   button. Our own UI scales with screen height so it fits phones

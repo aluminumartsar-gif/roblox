@@ -20,6 +20,13 @@
 	  return  — UnclaimedReturnTime after the steal, if not claimed, the item
 	            goes home.
 
+	Eggs bought off the egg belt (EggBeltService) use the same carry, with
+	Source = "Belt": held in the left hand, no return timer while held, no
+	previous owner. A bat hit knocks one loose for anyone to grab (gone after
+	Config.Belt.DroppedEggLifetime); reaching your pad places it in a nest
+	(or PendingEggs if they filled up); leaving mid-carry saves it to
+	PendingEggs, since it was paid for.
+
 	Where the item lives while it's out (this is what keeps it dupe-safe):
 	the OWNER's profile keeps the slot, marked Away. Nothing is added to the
 	thief until the claim, and the claim removes it from the owner in the
@@ -58,6 +65,7 @@ type PlotRecord = PlotService.PlotRecord
 
 export type Carry = {
 	Id: number,
+	Source: string,          -- "Steal" (from a nest) or "Belt" (bought off the egg belt)
 	Owner: Player?,          -- nil once the owner has left (forfeited)
 	OwnerUserId: number,
 	OwnerName: string,
@@ -117,6 +125,9 @@ end
 local function itemLabel(slot: any): string
 	if slot.Kind == "Egg" then
 		local egg = Config.Eggs[slot.EggId]
+		if slot.Heat == nil then
+			return egg and egg.Name or "Egg" -- fresh off the belt
+		end
 		return string.format("%s (%d%% heat)", egg and egg.Name or "Egg", math.floor(slot.Heat or 0))
 	end
 	local def = Config.CreaturesById[slot.CreatureId]
@@ -174,6 +185,7 @@ local function buildItemModel(carry: Carry): Model
 		model:ScaleTo(Config.Steal.MaxCarrySize / largest)
 	end
 
+	model:SetAttribute("Source", carry.Source)
 	model:SetAttribute("Kind", slot.Kind)
 	if slot.Kind == "Egg" then
 		model:SetAttribute("EggId", slot.EggId)
@@ -185,7 +197,9 @@ local function buildItemModel(carry: Carry): Model
 	model:SetAttribute("ItemLabel", itemLabel(slot))
 	model:SetAttribute("OwnerUserId", carry.OwnerUserId)
 	model:SetAttribute("OwnerName", carry.OwnerName)
-	model:SetAttribute("ReturnAt", carry.ReturnAtServer)
+	if carry.ReturnAtServer < math.huge then
+		model:SetAttribute("ReturnAt", carry.ReturnAtServer)
+	end
 	model:SetAttribute("CarryId", carry.Id)
 	CollectionService:AddTag(model, Config.Tags.CarriedItem)
 	return model
@@ -219,8 +233,21 @@ local function attachToCarrier(carry: Carry, player: Player): boolean
 		return false
 	end
 
+	-- Stolen items ride overhead; a bought egg is held in the left hand
+	-- (the bat goes in the right).
+	local anchor: BasePart = root
+	if carry.Source == "Belt" then
+		local hand = character:FindFirstChild("LeftHand") or character:FindFirstChild("Left Arm")
+		if hand and hand:IsA("BasePart") then
+			anchor = hand
+		end
+	end
+
 	local model = buildItemModel(carry)
 	model:SetAttribute("CarrierUserId", player.UserId)
+	if carry.Source == "Belt" then
+		model:ScaleTo(Config.Belt.CarryScale)
+	end
 	local primary = model.PrimaryPart :: BasePart
 	for _, part in ipairs(model:GetDescendants()) do
 		if part:IsA("BasePart") then
@@ -237,9 +264,15 @@ local function attachToCarrier(carry: Carry, player: Player): boolean
 			end
 		end
 	end
-	model:PivotTo(root.CFrame * CFrame.new(Config.Steal.CarryOffset))
+	if anchor == root then
+		model:PivotTo(root.CFrame * CFrame.new(Config.Steal.CarryOffset))
+	else
+		-- Egg centred just below and in front of the palm.
+		local height = model:GetExtentsSize().Y
+		model:PivotTo(anchor.CFrame * CFrame.new(0, -0.45 - height / 2, -0.35))
+	end
 	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = root
+	weld.Part0 = anchor
 	weld.Part1 = primary
 	weld.Parent = primary
 	model.Name = "CarriedItem"
@@ -248,7 +281,8 @@ local function attachToCarrier(carry: Carry, player: Player): boolean
 	carry.Model = model
 	carry.Carrier = player
 	carryByCarrier[player] = carry
-	MovementService.SetModifier(player, "Carrying", Config.Steal.CarrySpeedMultiplier)
+	MovementService.SetModifier(player, "Carrying",
+		if carry.Source == "Belt" then Config.Belt.CarrySpeedMultiplier else Config.Steal.CarrySpeedMultiplier)
 	player:SetAttribute("Carrying", true)
 	return true
 end
@@ -266,6 +300,13 @@ local function returnHome(carry: Carry, reason: string)
 	local carrier = carry.Carrier
 	releaseCarrier(carry)
 	forget(carry)
+
+	if carry.Source == "Belt" then
+		-- A bought egg has no home but its buyer's camp: once it's been
+		-- lying loose too long, it's gone.
+		log("belt egg carry %d vanished (%s)", carry.Id, reason)
+		return
+	end
 
 	local owner = carry.Owner
 	if owner and owner.Parent == Players then
@@ -357,6 +398,16 @@ function StealService.Drop(player: Player, reason: string)
 	model.Parent = runtimeFolder
 	carry.Model = model
 
+	if carry.Source == "Belt" then
+		-- Loose eggs are anyone's, for a little while.
+		carry.ReturnAt = os.clock() + Config.Belt.DroppedEggLifetime
+		carry.ReturnAtServer = serverNow() + Config.Belt.DroppedEggLifetime
+		model:SetAttribute("ReturnAt", carry.ReturnAtServer)
+		Notifier.Send(player, string.format("You dropped the %s! Grab it before someone else does.", itemLabel(carry.Slot)), "Warning")
+		log("belt egg carry %d dropped by %s (%s)", carry.Id, player.Name, reason)
+		return
+	end
+
 	Notifier.Send(player, string.format("You dropped the %s!", itemLabel(carry.Slot)), "Warning")
 	if carry.Owner then
 		Notifier.Send(carry.Owner, string.format("Your %s was knocked loose — grab it back!", itemLabel(carry.Slot)), "Warning")
@@ -365,7 +416,32 @@ function StealService.Drop(player: Player, reason: string)
 	log("carry %d dropped by %s (%s)", carry.Id, player.Name, reason)
 end
 
+--- A bought (or picked-up) belt egg reaches its carrier's pad.
+local function claimBeltEgg(player: Player, carry: Carry)
+	local eggId = carry.Slot.EggId
+	releaseCarrier(carry)
+	forget(carry)
+	local nestIndex = NestService.PlaceEgg(player, eggId, 0)
+	if nestIndex then
+		Notifier.Send(player, string.format("%s is in nest %d. Let it heat up!", itemLabel(carry.Slot), nestIndex), "Success")
+	else
+		-- Nests filled up while it was being carried: it waits for the next
+		-- free nest (MonetizationService places pending eggs).
+		DataService.Mutate(player, function(d)
+			table.insert(d.PendingEggs, eggId)
+		end)
+		Notifier.Send(player, string.format("Your nests are full — the %s goes in the next free one.", itemLabel(carry.Slot)), "Info")
+	end
+	log("%s brought belt egg carry %d (%s) home", player.Name, carry.Id, eggId)
+	task.spawn(DataService.SaveNow, player)
+	StealService.Claimed:Fire(player, carry, nestIndex or 0)
+end
+
 local function claim(player: Player, carry: Carry)
+	if carry.Source == "Belt" then
+		claimBeltEgg(player, carry)
+		return
+	end
 	local nestIndex = NestService.FindEmptyNest(player)
 	if not nestIndex then
 		throttledNotice(player, "No empty nest! Hatch something or make room, quick.")
@@ -487,6 +563,7 @@ local function performSteal(thief: Player, plot: PlotRecord, nestIndex: number, 
 	nextCarryId += 1
 	local carry: Carry = {
 		Id = nextCarryId,
+		Source = "Steal",
 		Owner = owner,
 		OwnerUserId = owner.UserId,
 		OwnerName = owner.DisplayName,
@@ -615,6 +692,27 @@ function StealService.TryPickup(player: Player, carry: Carry, began: number?)
 		return
 	end
 
+	if carry.Source == "Belt" then
+		if carryByCarrier[player] then
+			throttledNotice(player, "You're already carrying something.")
+			return
+		end
+		if not PlotService.GetPlot(player) or not NestService.FindEmptyNest(player) then
+			throttledNotice(player, "You have no empty nest to bring it home to.")
+			return
+		end
+		destroyModel(carry)
+		if not attachToCarrier(carry, player) then
+			return
+		end
+		carry.ReturnAt = math.huge -- in someone's hand again: no timer
+		carry.ReturnAtServer = math.huge
+		Notifier.Send(player, string.format("You grabbed a %s! Take it to your camp's pad.", itemLabel(carry.Slot)), "Success")
+		log("%s picked up belt egg carry %d", player.Name, carry.Id)
+		StealService.ItemTaken:Fire(player, carry)
+		return
+	end
+
 	-- The owner grabbing it back sends it straight home.
 	if carry.Owner == player then
 		returnHome(carry, "rescued by owner")
@@ -639,6 +737,40 @@ function StealService.TryPickup(player: Player, carry: Carry, began: number?)
 	alarm(carry.Owner, "Stolen", carry)
 	log("%s picked up carry %d", player.Name, carry.Id)
 	StealService.ItemTaken:Fire(player, carry)
+end
+
+--------------------------------------------------------------------------
+-- Eggs bought off the belt
+--------------------------------------------------------------------------
+
+--- Puts a freshly bought belt egg in `player`'s hand. It becomes theirs
+--- when they reach their pad (claimBeltEgg); a bat hit or death drops it
+--- for anyone to grab. Returns false (nothing changed) if the player has
+--- no living character — the caller refunds.
+function StealService.CarryBought(player: Player, eggId: string): boolean
+	if carryByCarrier[player] or not Config.Eggs[eggId] then
+		return false
+	end
+	nextCarryId += 1
+	local carry: Carry = {
+		Id = nextCarryId,
+		Source = "Belt",
+		Owner = nil,
+		OwnerUserId = 0,
+		OwnerName = "",
+		NestIndex = 0,
+		Slot = { Kind = "Egg", EggId = eggId },
+		ReturnAt = math.huge,
+		ReturnAtServer = math.huge,
+		Carrier = nil,
+		Model = nil,
+	}
+	if not attachToCarrier(carry, player) then
+		return false
+	end
+	carries[carry.Id] = carry
+	log("%s bought a %s off the belt (carry %d)", player.Name, eggId, carry.Id)
+	return true
 end
 
 --------------------------------------------------------------------------
@@ -691,9 +823,11 @@ function StealService.Start()
 		end
 	end
 
-	-- You can't lock your own camp while carrying stolen goods.
+	-- You can't lock your own camp while carrying stolen goods. (A bought
+	-- egg is fine.)
 	PlotService.AddLockCheck(function(player: Player)
-		if carryByCarrier[player] then
+		local carry = carryByCarrier[player]
+		if carry and carry.Source == "Steal" then
 			return false, "You can't lock your camp while carrying a stolen item."
 		end
 		return true, nil
@@ -719,6 +853,16 @@ function StealService.Start()
 	-- Owner leaving while their item is out: forfeit (or return), decided
 	-- here because this hook can still write to the owner's profile.
 	DataService.OnBeforeRelease(function(owner: Player, data: any)
+		-- Leaving with an egg in hand: you paid for it, so it's saved for
+		-- your next free nest.
+		local held = carryByCarrier[owner]
+		if held and held.Source == "Belt" then
+			table.insert(data.PendingEggs, held.Slot.EggId)
+			releaseCarrier(held)
+			forget(held)
+			log("%s left holding belt egg carry %d; saved as pending", owner.Name, held.Id)
+		end
+
 		for _, carry in pairs(carries) do
 			if carry.Owner == owner then
 				if Config.Steal.OwnerLeavingForfeits then
@@ -744,7 +888,16 @@ function StealService.Start()
 	-- Thief leaving: the item goes home.
 	Players.PlayerRemoving:Connect(function(player)
 		local carry = carryByCarrier[player]
-		if carry then
+		if carry and carry.Source == "Belt" then
+			-- Normally OnBeforeRelease above already saved it; this covers
+			-- the case where this handler runs first.
+			local eggId = carry.Slot.EggId
+			DataService.Mutate(player, function(d)
+				table.insert(d.PendingEggs, eggId)
+			end)
+			releaseCarrier(carry)
+			forget(carry)
+		elseif carry then
 			returnHome(carry, "carrier left")
 		end
 		holdStarts[player] = nil
@@ -775,7 +928,7 @@ function StealService.DebugState(): string
 	local lines = {}
 	for id, carry in pairs(carries) do
 		table.insert(lines, string.format("carry %d: %s from %s nest %d, %s, returns in %.0fs",
-			id, itemLabel(carry.Slot), carry.OwnerName, carry.NestIndex,
+			id, itemLabel(carry.Slot), if carry.Source == "Belt" then "the belt" else carry.OwnerName, carry.NestIndex,
 			if carry.Carrier then ("carried by " .. carry.Carrier.Name) else "dropped",
 			carry.ReturnAt - os.clock()))
 	end

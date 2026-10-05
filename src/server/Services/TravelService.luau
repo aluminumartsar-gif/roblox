@@ -5,7 +5,7 @@
 
 	Fast travel for the HUD's Base and Shop buttons. Travel(destination):
 	  "Home"         -> your plot's spawn point
-	  "EggShop"      -> in front of the Egg Shop counter
+	  "EggBelt"      -> outside the egg belt's arch, facing the fire
 	  "UpgradeShop"  -> in front of the Upgrades counter
 
 	Refused while carrying a stolen item (thieves walk), while stunned, on
@@ -17,6 +17,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local BeltPath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BeltPath"))
 
 local Server = ServerScriptService:WaitForChild("Server")
 local Modules = Server:WaitForChild("Modules")
@@ -28,7 +29,14 @@ local BatService = require(Services:WaitForChild("BatService"))
 
 local TravelService = {}
 
-local SHOP_IDS: { [string]: string } = { EggShop = "Eggs", UpgradeShop = "Upgrades" }
+local SHOP_IDS: { [string]: string } = { UpgradeShop = "Upgrades" }
+
+local function beltCFrame(): CFrame
+	local angle = math.rad(Config.Belt.GapCenterDegrees)
+	local outward = Vector3.new(math.cos(angle), 0, math.sin(angle))
+	local spot = BeltPath.Center + outward * (Config.Belt.Radius + 10) + Vector3.new(0, 3, 0)
+	return CFrame.lookAt(spot, Vector3.new(BeltPath.Center.X, spot.Y, BeltPath.Center.Z))
+end
 
 local function counterCFrame(shopId: string): CFrame?
 	for _, counter in ipairs(CollectionService:GetTagged(Config.Tags.ShopBooth)) do
@@ -45,7 +53,7 @@ function TravelService.Travel(player: Player, destination: any): RemoteGuard.Res
 	if not Config.Travel.Enabled then
 		return { Ok = false, Message = "Fast travel is off." }
 	end
-	if destination ~= "Home" and not SHOP_IDS[destination] then
+	if destination ~= "Home" and destination ~= "EggBelt" and not SHOP_IDS[destination] then
 		return { Ok = false, Message = "Unknown destination." }
 	end
 	if StealService.IsCarrying(player) then
@@ -67,6 +75,8 @@ function TravelService.Travel(player: Player, destination: any): RemoteGuard.Res
 	if destination == "Home" then
 		local plot = PlotService.GetPlot(player)
 		target = plot and plot.SpawnCFrame * CFrame.new(0, 3, 0)
+	elseif destination == "EggBelt" then
+		target = beltCFrame()
 	else
 		target = counterCFrame(SHOP_IDS[destination])
 	end

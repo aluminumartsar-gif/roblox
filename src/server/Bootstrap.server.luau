@@ -37,9 +37,9 @@ local SERVICE_ORDER: { string } = {
 	"PlotService",
 	"NestService",
 	"IncomeService",
-	"EggShopService",
 	"StealService",
 	"BatService",
+	"EggBeltService",   -- needs Steal (carrying) and Bat (stuns)
 	"UpgradeService",
 	"RebirthService",
 	"MonetizationService",
@@ -101,6 +101,24 @@ local function validateConfig(): (boolean, { string })
 				table.insert(problems, string.format("Egg '%s' has no positive weights", eggId))
 			end
 		end
+	end
+
+	-- Belt: every weight names a real egg, and something can spawn.
+	local beltTotal = 0
+	for eggId, weight in pairs(Config.Belt.EggWeights) do
+		if not Config.Eggs[eggId] then
+			table.insert(problems, string.format("Belt.EggWeights names unknown egg '%s'", eggId))
+		elseif typeof(weight) ~= "number" or weight < 0 then
+			table.insert(problems, string.format("Belt.EggWeights.%s must be a number >= 0", eggId))
+		else
+			beltTotal += weight
+		end
+	end
+	if beltTotal <= 0 then
+		table.insert(problems, "Belt.EggWeights has no positive weights")
+	end
+	if Config.Belt.ArcDegrees <= 0 or Config.Belt.ArcDegrees >= 360 then
+		table.insert(problems, "Belt.ArcDegrees must be between 0 and 360")
 	end
 
 	-- Heat multipliers must name real rarities and never shrink a weight.

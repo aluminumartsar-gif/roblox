@@ -281,6 +281,37 @@ our server-checked flow.
       (`Components/ScreenScale`, `Config.UI.ScreenScale`); plot panel is
       one row so it clears the side buttons; toasts bolder
 
+## Step 6.6 — Egg belt `[x]` (owner request, replaces the Egg Shop)
+
+Owner: "a circular conveyor belt where the eggs come out of the ground …
+first come first serve … 1 egg every 2 seconds … you hold the egg in your
+hand and have to return it to your base … people can knock it out of your
+hand."
+
+- [x] `Config.Belt` (spawn rate, egg chances, shape, timing, carry) and
+      `Shared/BeltPath` (shared path maths, so nothing moves over the network)
+- [x] Belt built round the campfire by MapBuilder: wooden bed, iron rails,
+      80 moving slats, two glowing burrows with mist and puffs, EGG BELT
+      arch, odds board. Egg Shop cabin removed; hub spawn moved out
+- [x] `EggBeltService`: random egg every 2s, belt pre-filled at boot, Buy
+      prompt with server checks (still for sale, riding, real hold, rebirth,
+      hands free, not stunned, free nest, reach to where the egg is now,
+      cash); Sky/Void sparkle + server announcement
+- [x] Bought eggs ride StealService's carry system (Source "Belt"): held
+      in the left hand, slower walk, claimed on your pad into a nest (or
+      PendingEggs), bat knocks it loose for anyone, loose eggs vanish after
+      30s, leaving mid-carry saves it to PendingEggs
+- [x] `EggBeltController`: smooth client-side motion, burrow puffs, prompts
+      only while riding/hands free/unlocked, "Rebirth N" on locked eggs
+- [x] HUD Eggs button fast-travels to the arch; EggShopService,
+      EggShopController and the BuyEgg remote removed
+- [x] Debug: `belt`, `beltspawn`, `beltroll` (odds check), `knock`
+- [x] Tested solo: buy → carry → knock loose → grab → claim at pad; locked
+      Sky egg; fast travel; odds 100k rolls match the board. Owner's save
+      snapshotted before and restored after
+- [ ] Two-player check: a real bat hit knocking an egg loose, the other
+      player grabbing it, two players racing for the same egg
+
 ## Step 7.5 — Retention features `[ ]` (owner request)
 
 Kit screens already exist for each; hidden until built.
@@ -333,6 +364,12 @@ Things only the owner can do. Ticked when done.
 
 ## Decisions log
 
+- **Egg belt replaces the Egg Shop** (owner request, after Step 6.5).
+  Claude's calls, all in Config: knocked-loose eggs are anyone's for 30s
+  then vanish; eggs above your rebirth still ride past (marked, unbuyable);
+  you need a free nest to buy or grab one; leaving with an egg in hand
+  saves it (you paid); belt chances Forest 50 / Swamp 26 / Mountain 14 /
+  Deep Sea 6.5 / Sky 2.8 / Void 0.7 percent.
 - **Heat bonus scales by rarity** (owner chose option b, after Step 1).
   Full-heat multipliers: Rare ×2, Epic ×3, Legendary ×4, Mythic ×5,
   Secret ×6, in `Config.Heat.MaxMultiplierByRarity`. Void egg Legendary+ odds

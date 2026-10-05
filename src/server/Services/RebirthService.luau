@@ -16,7 +16,7 @@
 	Effect: resets exactly Config.Rebirth.Resets (Cash / Nests / Upgrades),
 	adds one rebirth. Everything else is kept. The bonuses themselves
 	(+income, +luck, glow colour, Sky/Void unlocks) are read from the rebirth
-	count by BoostService, PlotService and EggShopService — nothing to grant
+	count by BoostService, PlotService and EggBeltService — nothing to grant
 	here beyond the count.
 ]]
 

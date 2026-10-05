@@ -9,8 +9,8 @@
 	  side buttons  Store, Rebirth (red "!" when you can rebirth), Invite
 	                (Roblox invite prompt), Settings, Index (the Codex —
 	                Step 7). Gift is hidden until Playtime Gifts (Step 7.5).
-	  top buttons   Base -> fast travel home; Eggs -> fast travel to the Egg
-	                Shop. Sell is hidden (no selling in this game).
+	  top buttons   Base -> fast travel home; Eggs -> fast travel to the egg
+	                belt. Sell is hidden (no selling in this game).
 	  right offers  quick-buy Luck Potion and the 3-Egg Bundle
 	  hidden        toolbar, inventory, Daily (Step 7.5), dev placeholders
 
@@ -174,7 +174,7 @@ function HudController.Start()
 	local eggsButton = top:FindFirstChild("ShopBtn")
 	Kit.SetText(eggsButton and eggsButton:FindFirstChildWhichIsA("TextLabel"), "Eggs")
 	onActivated(eggsButton, function()
-		travel("EggShop")
+		travel("EggBelt")
 	end)
 
 	-- Right-side offers: quick-buy Luck Potion and the egg bundle.

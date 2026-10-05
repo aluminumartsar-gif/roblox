@@ -208,7 +208,7 @@ local function updateCarried(model: Instance)
 	setOutline(model, mine)
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("ProximityPrompt") and d.Name == "PickupPrompt" then
-			d.ActionText = if mine then "Take back" else "Pick up"
+			d.ActionText = if mine then "Take back" elseif model:GetAttribute("Source") == "Belt" then "Grab egg" else "Pick up"
 			d.Enabled = mine or localPlayer:GetAttribute("Carrying") ~= true
 		end
 	end
@@ -230,8 +230,15 @@ local function renderCarrying()
 	end
 	local model = myCarriedModel()
 	local label = model and model:GetAttribute("ItemLabel") or "stolen item"
-	local remaining = model and ((model:GetAttribute("ReturnAt") or 0) - Workspace:GetServerTimeNow()) or 0
-	carryBanner.Text = string.format("Carrying %s — run to your camp's pad! (%s)", tostring(label), formatClock(remaining))
+	if model and model:GetAttribute("Source") == "Belt" then
+		-- A bought egg: no timer, but anyone can knock it loose.
+		carryBanner.Text = string.format("Carrying %s — take it to your camp's pad!", tostring(label))
+		carryBanner.BackgroundColor3 = Color3.fromRGB(40, 110, 70)
+	else
+		local remaining = (model and model:GetAttribute("ReturnAt") or 0) - Workspace:GetServerTimeNow()
+		carryBanner.Text = string.format("Carrying %s — run to your camp's pad! (%s)", tostring(label), formatClock(remaining))
+		carryBanner.BackgroundColor3 = Color3.fromRGB(150, 90, 20)
+	end
 	carryBanner.Visible = true
 end
 

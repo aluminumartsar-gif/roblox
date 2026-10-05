@@ -26,6 +26,10 @@
 	  dbg:Invoke("setslot", "PlayerName", nestIndex, "egg"|"creature"|"empty", id, heat)
 	  dbg:Invoke("nests", "PlayerName")
 	  dbg:Invoke("carries")              -- everything currently stolen/in transit
+	  dbg:Invoke("belt")                 -- eggs on the belt right now
+	  dbg:Invoke("beltspawn", "void")    -- put a chosen egg on the belt
+	  dbg:Invoke("beltroll", 100000)     -- roll the belt picker: checks the odds board
+	  dbg:Invoke("knock", "PlayerName")  -- drop what they carry, like a bat hit
 	  dbg:Invoke("unprotect", "PlayerName")
 	  dbg:Invoke("clearcooldown", "PlayerName")
 	  dbg:Invoke("snapshot", "PlayerName") / dbg:Invoke("restore", "PlayerName")
@@ -279,6 +283,35 @@ function DebugCommands.Start()
 
 	function commands.carries()
 		return StealService.DebugState()
+	end
+
+	local EggBeltService = require(Services:WaitForChild("EggBeltService"))
+
+	function commands.belt()
+		return EggBeltService.DebugState()
+	end
+
+	-- Rolls the belt picker many times: checks the odds board is honest.
+	function commands.beltroll(count)
+		return EggBeltService.DebugRoll(tonumber(count) or 100000)
+	end
+
+	-- Puts a specific egg on the belt now (e.g. to test a Void Egg).
+	function commands.beltspawn(eggId)
+		return EggBeltService.DebugSpawn(tostring(eggId))
+	end
+
+	-- Knocks whatever a player is carrying out of their hands, as a bat hit would.
+	function commands.knock(name)
+		local player = findPlayer(name)
+		if not player then
+			return "no such player"
+		end
+		if not StealService.IsCarrying(player) then
+			return player.Name .. " isn't carrying anything"
+		end
+		StealService.Drop(player, "debug knock")
+		return "knocked loose"
 	end
 
 	-- Ends spawn protection right away (tests can't wait 5 minutes).

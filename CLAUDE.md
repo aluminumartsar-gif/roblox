@@ -137,7 +137,7 @@ LocalScript, plain `.luau` = ModuleScript.
   Commands are listed at the top of `Modules/DebugCommands` (status, give,
   dump, save, wipe, plots, resetlock, simulate, giveegg, setheat, hatch,
   setslot, nests, carries, unprotect, clearcooldown, snapshot, restore,
-  receipt, pass).
+  receipt, pass, belt, beltspawn, beltroll, knock).
   Must be used via a BindableFunction because MCP/command-bar code runs in a
   separate Luau VM and gets its own copies of modules.
 
@@ -180,6 +180,19 @@ LocalScript, plain `.luau` = ModuleScript.
 - Rolls happen in `Modules/EggRoller` on the server. Never roll on a client.
 - Placeholder art is built in `Modules/ItemVisuals`; the art pass replaces
   those builders without touching game logic.
+
+### Egg belt
+- Eggs are only sold on the belt (`EggBeltService`). Which egg spawns is
+  `Config.Belt.EggWeights`; the odds board is generated from the same table,
+  and `SAC_Debug beltroll` proves the picker matches it.
+- **Belt motion is client-side.** The server places each belt egg once and
+  never moves it; it only stores `SpawnTime`. `Shared/BeltPath` turns age
+  into a position, used by `EggBeltController` (drawing, every frame) and by
+  the server (reach checks). Change the path in BeltPath only, so both sides
+  stay in step. The same trick moves the slats.
+- A bought egg is a StealService carry with `Source = "Belt"` (no owner, no
+  timer while held, left hand). Anything that treats carries as "stolen"
+  must check `carry.Source` — e.g. locking is only refused for stolen items.
 
 ### Shops, upgrades, rebirth
 - Screens are built on the STUD UI kit — see "UI kit" below.
@@ -265,6 +278,15 @@ testing), and bump `Config.Data.StoreScope` before launch to start clean.
 - **Stealing is dupe-safe only because** the owner's slot stays (marked
   Away) until the claim, and the claim removes it from the owner and adds it
   to the thief in one synchronous step, then saves the owner first.
+
+- **Edit-mode tool code caches modules.** Code run in the Edit datamodel
+  (MCP or command bar) keeps every module it has required, so after Config
+  changes it sees the old Config. Require clones, or swap in a fresh copy of
+  `Shared` as `tools/place-settings.luau` does. Play tests are unaffected.
+- **Prompts on moving belt eggs:** drive them in tests with
+  `prompt:InputHoldBegin()` / `InputHoldEnd()` from the Client datamodel
+  while standing at the belt edge; simulated E key presses didn't complete
+  the hold.
 
 ### Multi-client tests through the MCP
 - **Re-identify windows every session and assert in every client call**

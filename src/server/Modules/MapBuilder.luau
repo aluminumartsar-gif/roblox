@@ -3,8 +3,8 @@
 	MapBuilder
 	ServerScriptService/Server/Modules/MapBuilder
 
-	Builds the whole world from Config: ground, hub (campfire, shop cabins,
-	spawn), paths, the ring of plots, The Wilds, and the boundary.
+	Builds the whole world from Config: ground, hub (campfire, egg belt,
+	Upgrades cabin, spawn), paths, the ring of plots, The Wilds, and the boundary.
 
 	The map is GENERATED. WorldService rebuilds it on every server boot, so
 	the world always matches the code and Config. Editing parts by hand in
@@ -36,6 +36,7 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local BeltPath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("BeltPath"))
 
 local MapBuilder = {}
 
@@ -256,7 +257,7 @@ local function buildCabin(name: string, cf: CFrame, signText: string, shopId: st
 	counter:SetAttribute("ShopId", shopId)
 	CollectionService:AddTag(counter, Config.Tags.ShopBooth)
 
-	-- Opens the shop panel on the client (EggShopController). Buying itself
+	-- Opens the shop panel on the client (UpgradeShopController). Buying itself
 	-- goes through a remote that re-checks you're at this counter.
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "ShopPrompt"
@@ -298,6 +299,226 @@ local function plotAngle(index: number): number
 	return (index - 1) / Config.Plot.Count * TAU
 end
 
+--------------------------------------------------------------------------
+-- Egg belt (circles the campfire; see Shared/BeltPath for the motion)
+--------------------------------------------------------------------------
+
+local function signLabel(part: BasePart, face: Enum.NormalId, text: string, font: Enum.Font?)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.Parent = part
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = font or Enum.Font.Fantasy
+	label.TextScaled = true
+	label.TextColor3 = COLORS.SignText
+	label.Text = text
+	label.Parent = gui
+end
+
+--- One burrow: a mossy stone mound, flush with the belt, with a glowing
+--- hole the eggs climb out of (start) or sink into (end).
+local function burrow(which: string, angle: number, glow: Color3, parent: Instance)
+	local b = Config.Belt
+	local center = BeltPath.PointAt(angle, 0)
+	local burrowModel = model("Burrow_" .. which, parent)
+	local diameter = b.Width + 3
+	post(CFrame.new(center), b.Height, diameter, {
+		Name = "Mound", Material = Enum.Material.Slate, Color = COLORS.Rock, Parent = burrowModel,
+	})
+	post(CFrame.new(center), b.Height - 0.3, diameter + 0.8, {
+		Name = "Moss", Material = Enum.Material.Grass, Color = Color3.fromRGB(52, 84, 50), Parent = burrowModel,
+	})
+	local rim = disc(CFrame.new(center + Vector3.new(0, b.Height + 0.03, 0)), 4.2, 0.06, {
+		Name = "Rim", Material = Enum.Material.Neon, Color = glow,
+		CanCollide = false, CanQuery = false, CanTouch = false, Parent = burrowModel,
+	})
+	local hole = disc(CFrame.new(center + Vector3.new(0, b.Height + 0.05, 0)), 3.5, 0.06, {
+		Name = "Hole", Material = Enum.Material.SmoothPlastic, Color = Color3.fromRGB(8, 6, 12),
+		CanCollide = false, CanQuery = false, CanTouch = false, Parent = burrowModel,
+	})
+	hole:SetAttribute("Which", which)
+	CollectionService:AddTag(hole, Config.Tags.Burrow)
+
+	local light = Instance.new("PointLight")
+	light.Color = glow
+	light.Range = 12
+	light.Brightness = 1.6
+	light.Shadows = false
+	light.Parent = rim
+
+	-- A slow wisp of mist, always on.
+	local mist = Instance.new("ParticleEmitter")
+	mist.Name = "Mist"
+	mist.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	mist.Color = ColorSequence.new(glow)
+	mist.LightEmission = 0.6
+	mist.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 1) })
+	mist.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 3) })
+	mist.Lifetime = NumberRange.new(1.5, 2.5)
+	mist.Rate = 3
+	mist.Speed = NumberRange.new(1, 2)
+	mist.SpreadAngle = Vector2.new(15, 15)
+	mist.Parent = hole
+
+	-- Burst the client fires as an egg comes out / goes in.
+	local puff = Instance.new("ParticleEmitter")
+	puff.Name = "Puff"
+	puff.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	puff.Color = ColorSequence.new(glow)
+	puff.LightEmission = 1
+	puff.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 0) })
+	puff.Lifetime = NumberRange.new(0.5, 0.9)
+	puff.Rate = 0
+	puff.Speed = NumberRange.new(4, 8)
+	puff.SpreadAngle = Vector2.new(60, 60)
+	puff.Parent = hole
+end
+
+local function buildOddsBoard(cf: CFrame, parent: Instance)
+	-- `cf` is ground level, facing the reader.
+	local board = model("OddsBoard", parent)
+	for _, side in ipairs({ -1, 1 }) do
+		post(cf * CFrame.new(side * 3.6, 0, 0), 8.5, 0.7, { Name = "Leg", Material = Enum.Material.Wood, Color = COLORS.Trim, Parent = board })
+	end
+	local panel = block({
+		Name = "Panel", Size = Vector3.new(8, 6.5, 0.4), CFrame = cf * CFrame.new(0, 5.2, 0),
+		Material = Enum.Material.WoodPlanks, Color = COLORS.Wall, Parent = board,
+	})
+
+	local total = 0
+	for _, eggId in ipairs(Config.EggOrder) do
+		total += Config.Belt.EggWeights[eggId] or 0
+	end
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.Parent = panel
+	local list = Instance.new("Frame")
+	list.Size = UDim2.fromScale(1, 1)
+	list.BackgroundTransparency = 1
+	list.Parent = gui
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Parent = list
+	local rows = #Config.EggOrder + 1
+	local function row(order: number, text: string, color: Color3, font: Enum.Font)
+		local label = Instance.new("TextLabel")
+		label.LayoutOrder = order
+		label.Size = UDim2.fromScale(0.9, 1 / rows)
+		label.BackgroundTransparency = 1
+		label.Font = font
+		label.TextScaled = true
+		label.TextColor3 = color
+		label.Text = text
+		label.Parent = list
+	end
+	row(0, "EGG BELT ODDS", COLORS.SignText, Enum.Font.Fantasy)
+	for i, eggId in ipairs(Config.EggOrder) do
+		local weight = Config.Belt.EggWeights[eggId] or 0
+		local pct = if total > 0 then weight / total * 100 else 0
+		local pctText = if pct >= 1 then string.format("%.0f%%", pct) else string.format("%.1f%%", pct)
+		row(i, string.format("%s  %s", Config.Eggs[eggId].Name, pctText),
+			Config.Belt.LabelColors[eggId] or COLORS.SignText, Enum.Font.GothamBold)
+	end
+end
+
+local function buildBelt(parent: Instance)
+	local b = Config.Belt
+	local belt = model("EggBelt", parent)
+	local segments = 64
+	local start, arc = BeltPath.StartAngle, BeltPath.Arc
+	local segmentAngle = arc / segments
+	local bedHeight = b.Height - 0.2
+
+	for i = 1, segments do
+		local angle = start + (i - 0.5) * segmentAngle
+		local base = BeltPath.FrameAt(angle, 0)
+		local chord = 2 * b.Radius * math.sin(segmentAngle / 2)
+		-- The bed: a solid wooden base you can stand on, the slats glide over it.
+		block({
+			Name = "Bed", Size = Vector3.new(b.Width, bedHeight, chord * 1.06),
+			CFrame = base * CFrame.new(0, bedHeight / 2, 0),
+			Material = Enum.Material.WoodPlanks, Color = COLORS.Log, Parent = belt,
+		})
+		block({
+			Name = "Track", Size = Vector3.new(b.Width - 0.6, 0.05, chord * 1.06),
+			CFrame = base * CFrame.new(0, bedHeight + 0.025, 0),
+			Material = Enum.Material.SmoothPlastic, Color = Color3.fromRGB(70, 66, 62),
+			CanCollide = false, CanQuery = false, CanTouch = false, Parent = belt,
+		})
+		-- Iron rails along both edges.
+		for _, side in ipairs({ -1, 1 }) do
+			local railRadius = b.Radius + side * (b.Width / 2 + 0.15)
+			local railChord = 2 * railRadius * math.sin(segmentAngle / 2)
+			local railPoint = BeltPath.Center + Vector3.new(math.cos(angle) * railRadius, 0, math.sin(angle) * railRadius)
+			block({
+				Name = "Rail", Size = Vector3.new(0.35, 0.6, railChord * 1.08),
+				CFrame = CFrame.lookAt(railPoint, railPoint + Vector3.new(-math.sin(angle), 0, math.cos(angle)))
+					* CFrame.new(0, b.Height + 0.15, 0),
+				Material = Enum.Material.Metal, Color = Color3.fromRGB(64, 66, 72), Parent = belt,
+			})
+		end
+	end
+
+	-- Slats. Built here once; each client slides them round the belt.
+	local slats = folder("Slats", belt)
+	local slatLength = BeltPath.SlatLength()
+	for i = 1, b.SlatCount do
+		local slat = block({
+			Name = "Slat", Size = Vector3.new(b.Width - 0.8, 0.12, slatLength),
+			CFrame = BeltPath.SlatCFrame(i, 0),
+			Material = Enum.Material.SmoothPlastic, Color = Color3.fromRGB(30, 30, 34),
+			CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false, Parent = slats,
+		})
+		slat:SetAttribute("Index", i)
+		CollectionService:AddTag(slat, Config.Tags.BeltSlat)
+	end
+
+	burrow("Start", BeltPath.StartAngle, Color3.fromRGB(120, 255, 170), belt)
+	burrow("End", BeltPath.EndAngle, Color3.fromRGB(200, 130, 255), belt)
+
+	-- An arch over the gap between the burrows: the way in to the campfire.
+	local gapCenter = math.rad(b.GapCenterDegrees)
+	local gapHalf = math.rad(360 - b.ArcDegrees) / 2
+	local postAngle = gapHalf - 0.07
+	local archHeight = 12
+	local postPoints = {}
+	for _, side in ipairs({ -1, 1 }) do
+		local a = gapCenter + side * postAngle
+		local p = BeltPath.PointAt(a, 0)
+		table.insert(postPoints, p)
+		post(CFrame.new(p), archHeight, 1.6, { Name = "ArchPost", Material = Enum.Material.Wood, Color = COLORS.Log, Parent = belt })
+		lantern(CFrame.new(p + (p - BeltPath.Center).Unit * 1.6), 6, belt)
+	end
+	local mid = (postPoints[1] + postPoints[2]) / 2
+	local outward = (mid - BeltPath.Center) * Vector3.new(1, 0, 1)
+	outward = outward.Unit
+	local span = (postPoints[1] - postPoints[2]).Magnitude
+	local beamCf = CFrame.lookAt(mid + Vector3.new(0, archHeight, 0), mid + Vector3.new(0, archHeight, 0) + outward)
+	block({
+		Name = "ArchBeam", Size = Vector3.new(span + 3, 1.4, 1.4), CFrame = beamCf,
+		Material = Enum.Material.Wood, Color = COLORS.Log, Parent = belt,
+	})
+	local sign = block({
+		Name = "ArchSign", Size = Vector3.new(11, 2.6, 0.4), CFrame = beamCf * CFrame.new(0, -2.2, 0),
+		Material = Enum.Material.Wood, Color = COLORS.Trim, Parent = belt,
+	})
+	-- Readable from both sides of the arch.
+	signLabel(sign, Enum.NormalId.Back, "EGG BELT")
+	signLabel(sign, Enum.NormalId.Front, "EGG BELT")
+
+	-- Odds board outside the ring, just beside the arch, facing out.
+	local boardAngle = gapCenter + gapHalf + math.rad(14)
+	local boardPos = BeltPath.PointAt(boardAngle, 0) + Vector3.new(math.cos(boardAngle), 0, math.sin(boardAngle)) * 9
+	buildOddsBoard(CFrame.lookAt(boardPos, boardPos + (boardPos - BeltPath.Center) * Vector3.new(1, 0, 1)), belt)
+end
+
 local function buildHub(map: Folder)
 	local hub = model("Hub", map, true)
 	local r = Config.Map.HubRadius
@@ -323,13 +544,14 @@ local function buildHub(map: Folder)
 		})
 	end
 
-	-- Shop cabins sit between plot paths, facing the fire.
+	-- The Upgrades cabin sits between two plot paths, facing the fire. (Eggs
+	-- come from the belt round the fire, not a shop.)
 	local half = 0.5 / Config.Plot.Count * TAU
 	local function cabinCf(angle: number): CFrame
 		local pos = Vector3.new(math.cos(angle), 0, math.sin(angle)) * (r - 22)
 		return CFrame.lookAt(pos, Vector3.new(0, 0, 0))
 	end
-	buildCabin("EggShop", cabinCf(plotAngle(1) + half), "EGG SHOP", "Eggs", hub)
+	buildBelt(hub)
 	buildCabin("UpgradeShop", cabinCf(plotAngle(1 + Config.Plot.Count / 2) + half), "UPGRADES", "Upgrades", hub)
 
 	-- One lantern beside each path mouth.
@@ -345,7 +567,7 @@ local function buildHub(map: Folder)
 	spawn.Neutral = true
 	spawn.Duration = 0
 	spawn.Size = Vector3.new(8, 1, 8)
-	spawn.CFrame = CFrame.new(0, 0.5, 26)
+	spawn.CFrame = CFrame.new(0, 0.5, Config.Belt.Radius + 16)
 	spawn.Material = Enum.Material.Slate
 	spawn.Color = COLORS.Rock
 	spawn.TopSurface = Enum.SurfaceType.Smooth
