@@ -107,7 +107,7 @@ end
 -- Plot panel
 --------------------------------------------------------------------------
 
-local function buildPanel(): (TextButton, TextLabel)
+local function buildPanel(): (TextButton, TextLabel, TextLabel)
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "PlotPanel"
 	gui.ResetOnSpawn = false
@@ -161,8 +161,28 @@ local function buildPanel(): (TextButton, TextLabel)
 	buttonCorner.CornerRadius = UDim.new(0, 8)
 	buttonCorner.Parent = button
 
+	local protection = Instance.new("TextLabel")
+	protection.Name = "Protection"
+	protection.LayoutOrder = 0
+	protection.Size = UDim2.new(1, 0, 0, 20)
+	protection.BackgroundTransparency = 1
+	protection.Font = Enum.Font.GothamBold
+	protection.TextSize = 14
+	protection.TextColor3 = Color3.fromRGB(140, 210, 255)
+	protection.TextXAlignment = Enum.TextXAlignment.Left
+	protection.Visible = false
+	protection.Parent = frame
+
 	gui.Parent = localPlayer:WaitForChild("PlayerGui")
-	return button, nests
+	return button, nests, protection
+end
+
+local function renderProtection(label: TextLabel)
+	local remaining = (localPlayer:GetAttribute("ProtectedUntil") or 0) - now()
+	label.Visible = remaining > 0
+	if remaining > 0 then
+		label.Text = "Protected " .. formatClock(remaining)
+	end
 end
 
 local LOCK_READY = Color3.fromRGB(46, 140, 80)
@@ -221,7 +241,7 @@ function PlotController.Start()
 		doorStates[door :: BasePart] = nil
 	end)
 
-	local lockButton, nestsLabel = buildPanel()
+	local lockButton, nestsLabel, protectionLabel = buildPanel()
 	local lockRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("LockPlot") :: RemoteFunction
 	local busy = false
 	lockButton.Activated:Connect(function()
@@ -254,6 +274,7 @@ function PlotController.Start()
 				end
 			end
 			renderLockButton(lockButton)
+			renderProtection(protectionLabel)
 			task.wait(0.2)
 		end
 	end)

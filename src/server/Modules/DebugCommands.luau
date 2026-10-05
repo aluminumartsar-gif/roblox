@@ -25,6 +25,9 @@
 	  dbg:Invoke("hatch", "PlayerName", nestIndex)
 	  dbg:Invoke("setslot", "PlayerName", nestIndex, "egg"|"creature"|"empty", id, heat)
 	  dbg:Invoke("nests", "PlayerName")
+	  dbg:Invoke("carries")              -- everything currently stolen/in transit
+	  dbg:Invoke("unprotect", "PlayerName")
+	  dbg:Invoke("clearcooldown", "PlayerName")
 ]]
 
 local Players = game:GetService("Players")
@@ -229,6 +232,32 @@ function DebugCommands.Start()
 			return "bad kind or id"
 		end
 		return "nest " .. index .. " set"
+	end
+
+	local StealService = require(Services:WaitForChild("StealService"))
+	local RemoteGuard = require(Modules:WaitForChild("RemoteGuard"))
+
+	function commands.carries()
+		return StealService.DebugState()
+	end
+
+	-- Ends spawn protection right away (tests can't wait 5 minutes).
+	function commands.unprotect(name)
+		local player = findPlayer(name)
+		if not player then
+			return "no such player"
+		end
+		PlotService.EndProtection(player)
+		return "protection ended for " .. player.Name
+	end
+
+	function commands.clearcooldown(name)
+		local player = findPlayer(name)
+		if not player then
+			return "no such player"
+		end
+		RemoteGuard.Cooldowns.Start(player, "Steal", 0)
+		return "steal cooldown cleared for " .. player.Name
 	end
 
 	function commands.nests(name)

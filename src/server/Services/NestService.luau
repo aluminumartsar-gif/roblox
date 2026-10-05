@@ -177,7 +177,8 @@ function NestService.RenderNest(plot: PlotRecord, nestIndex: number)
 		return
 	end
 	local slot = NestService.GetSlot(owner, nestIndex)
-	if not slot then
+	if not slot or slot.Away then
+		-- Away = being carried by a thief; StealService draws it overhead.
 		return
 	end
 
@@ -246,6 +247,26 @@ function NestService.SetSlot(player: Player, nestIndex: number, slot: any)
 	end
 end
 
+--- Marks a nest's item as away (being carried by a thief) or home again.
+--- An away item keeps its nest reserved, isn't drawn, and doesn't tick.
+function NestService.SetAway(player: Player, nestIndex: number, away: boolean, thiefUserId: number?, immuneUntil: number?)
+	DataService.Mutate(player, function(data)
+		local slot = data.Nests[nestIndex]
+		if slot == false then
+			return
+		end
+		slot.Away = if away then true else nil
+		slot.AwayThief = if away then thiefUserId else nil
+		if immuneUntil then
+			slot.ImmuneUntil = immuneUntil
+		end
+	end)
+	local plot = PlotService.GetPlot(player)
+	if plot then
+		NestService.RenderNest(plot, nestIndex)
+	end
+end
+
 --- Removes and returns a nest's slot (Step 4: stealing). nil if empty.
 function NestService.TakeSlot(player: Player, nestIndex: number): any
 	local slot = NestService.GetSlot(player, nestIndex)
@@ -279,7 +300,7 @@ end
 --- no egg there. All checks (ownership, distance) are the caller's job.
 function NestService.Hatch(player: Player, nestIndex: number): EggRoller.HatchResult?
 	local slot = NestService.GetSlot(player, nestIndex)
-	if not slot or slot.Kind ~= "Egg" then
+	if not slot or slot.Kind ~= "Egg" or slot.Away then
 		return nil
 	end
 
@@ -347,7 +368,7 @@ local function tickHeat(dt: number)
 		if owner and data then
 			local rate = baseRate * BoostService.GetHeatRateMultiplier(owner)
 			for nestIndex, slot in ipairs(data.Nests) do
-				if slot ~= false and slot.Kind == "Egg" and slot.Heat < h.Max then
+				if slot ~= false and slot.Kind == "Egg" and not slot.Away and slot.Heat < h.Max then
 					slot.Heat = math.min(h.Max, slot.Heat + rate * dt)
 					local model = NestService.GetVisual(plot.Index, nestIndex)
 					if model then

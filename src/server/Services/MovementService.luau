@@ -12,11 +12,14 @@
 	  MovementService.SetModifier(player, "OwnPlot", nil)    -- remove
 
 	Final speed = WalkSpeed upgrade value * product of all modifiers.
+
+	Jumping works the same way: SetJumpBlocked(player, "Stunned", true).
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
+local StarterPlayer = game:GetService("StarterPlayer")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local DataService = require(ServerScriptService:WaitForChild("Server"):WaitForChild("Services"):WaitForChild("DataService"))
@@ -24,6 +27,8 @@ local DataService = require(ServerScriptService:WaitForChild("Server"):WaitForCh
 local MovementService = {}
 
 local modifiers: { [Player]: { [string]: number } } = {}
+-- player -> set of reasons jumping is currently blocked (e.g. "Stunned")
+local jumpBlocks: { [Player]: { [string]: boolean } } = {}
 
 local function baseSpeed(player: Player): number
 	local data = DataService.Get(player)
@@ -46,6 +51,30 @@ function MovementService.Refresh(player: Player)
 	if math.abs(humanoid.WalkSpeed - speed) > 0.01 then
 		humanoid.WalkSpeed = speed
 	end
+
+	local blocked = next(jumpBlocks[player] or {}) ~= nil
+	local jumpHeight = if blocked then 0 else StarterPlayer.CharacterJumpHeight
+	if humanoid.UseJumpPower then
+		humanoid.UseJumpPower = false
+	end
+	if humanoid.JumpHeight ~= jumpHeight then
+		humanoid.JumpHeight = jumpHeight
+	end
+end
+
+--- Blocks (or unblocks) jumping for a named reason. Jumping works again
+--- once no reason is left.
+function MovementService.SetJumpBlocked(player: Player, key: string, blocked: boolean)
+	local map = jumpBlocks[player]
+	if not map then
+		map = {}
+		jumpBlocks[player] = map
+	end
+	if (map[key] == true) == blocked then
+		return
+	end
+	map[key] = if blocked then true else nil
+	MovementService.Refresh(player)
 end
 
 --- Sets (or with nil, clears) a named speed multiplier.
@@ -80,6 +109,7 @@ function MovementService.Start()
 	end
 	Players.PlayerRemoving:Connect(function(player)
 		modifiers[player] = nil
+		jumpBlocks[player] = nil
 	end)
 end
 

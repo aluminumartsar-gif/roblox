@@ -44,6 +44,9 @@ export type NestSlot = {
 	AcquiredAt: number,      -- os.time() when it entered this nest
 	LastIncomeAt: number,    -- os.time() of the last income tick
 	StolenFrom: number?,     -- userId, if this was taken from someone
+	Away: boolean?,          -- being carried by a thief right now (Step 4)
+	AwayThief: number?,      -- userId of the thief while Away
+	ImmuneUntil: number?,    -- os.time(); can't be stolen again before this
 }
 
 export type ProfileData = {
@@ -190,6 +193,15 @@ local function repair(data: ProfileData, context: string): { string }
 			else
 				slot.Heat = math.clamp(tonumber(slot.Heat) or 0, 0, Config.Heat.Max)
 				slot.Vault = math.max(0, math.floor(tonumber(slot.Vault) or 0))
+				-- A slot still marked Away means the last session ended while a
+				-- thief was carrying it and before they claimed it (claiming
+				-- clears the slot; an owner leaving forfeits it). The steal never
+				-- completed, so the item is home.
+				if slot.Away then
+					fix(string.format("Nest %d was mid-steal when the last session ended; returned home", i))
+					slot.Away = nil
+					slot.AwayThief = nil
+				end
 			end
 		end
 	end

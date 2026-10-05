@@ -25,7 +25,7 @@ local Config = {}
 -- VERSION / DEBUG
 -- =========================================================================
 
-Config.Version = "0.4.0-step3"
+Config.Version = "0.5.0-step4"
 
 Config.Debug = {
 	-- Master switch for verbose server logging.
@@ -380,24 +380,49 @@ Config.Income = {
 -- STEALING (Hook: the whole point)
 -- =========================================================================
 
+-- Hold time to steal is Config.Prompts.StealHold; reach is the prompt
+-- distance (Config.Prompts), re-checked on the server.
 Config.Steal = {
-	PromptHoldDuration = 3,
 	CarrySpeedMultiplier = 0.75,      -- -25% walk speed while carrying
-	StealCooldown = 30,               -- per thief, after a successful steal
-	SameItemImmunity = 120,           -- an item can't be stolen twice within 2 min
-	UnclaimedReturnTime = 60,         -- dropped/unclaimed items fly home
-	NewPlayerSpawnLock = 300,         -- 5 minutes of protection for new joiners
+	StealCooldown = 30,               -- per thief, after a successful (claimed) steal
+	SameItemImmunity = 120,           -- an item can't be stolen again within 2 min
+	UnclaimedReturnTime = 60,         -- from the moment of the steal; carried or dropped
+	-- Spawn protection: your camp can't be stolen from right after you join.
+	-- Starting a steal yourself ends it early.
+	NewPlayerSpawnLock = 300,         -- first ever join: 5 minutes
+	ReturningPlayerSpawnLock = 120,   -- every later join: 2 minutes
+	-- Hold time to pick up a dropped item (anyone, including the owner).
+	PickupHold = 1,
+	-- The server rejects a steal/pickup whose hold was shorter than the
+	-- prompt's HoldDuration minus this (stops instant-steal exploits).
+	HoldTolerance = 0.35,
+	-- Carried item sits this far above the thief's HumanoidRootPart, and is
+	-- shrunk to fit within MaxCarrySize studs so huge cryptids stay sane.
 	CarryOffset = Vector3.new(0, 3.5, 0),
-	-- Interaction distance enforced server-side on every steal remote.
-	MaxInteractDistance = 12,
+	MaxCarrySize = 6,
+	-- Owner's uncollected vault cash is paid to the OWNER at the moment of the
+	-- steal (thieves take the cryptid, not the wallet).
+	PayOwnerVaultOnSteal = true,
+	-- If the owner leaves while their item is being carried, it's forfeited
+	-- (the thief can still claim it). Stops rage-quitting to save an item.
+	OwnerLeavingForfeits = true,
 }
 
 Config.Bat = {
 	Name = "Bat",
 	Cooldown = 0.5,
 	StunDuration = 1.0,
+	-- After being stunned, a player can't be stunned again for this long
+	-- (stops two players stun-locking someone).
+	StunImmunity = 1.5,
 	KnockbackVelocity = 60,
+	KnockbackUp = 22,
 	Range = 8,
+	-- Targets must be roughly in front of the swing (dot product of the
+	-- facing direction and the direction to the target).
+	FrontDot = 0.2,
+	-- true: anyone's Bat knocks a stolen item loose. false: only the item's owner.
+	AnyoneCanDisarm = true,
 	-- The Bat only disarms thieves; it does no damage.
 	Damage = 0,
 }
@@ -411,7 +436,7 @@ Config.Sightings = {
 	MinInterval = 360,  -- 6 minutes
 	MaxInterval = 600,  -- 10 minutes
 	Duration = 90,
-	CaptureHoldDuration = 5,
+	-- Capture hold time: Config.Prompts.CaptureHold.
 	-- Base spawn odds; shifted rarer as the server fills up.
 	BaseWeights = { Rare = 60, Epic = 30, Legendary = 9, Mythic = 1 },
 	-- Per player online, shift this fraction of Rare weight into Epic+.
@@ -609,8 +634,8 @@ Config.Remotes = {
 	BuyUpgrade        = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 	DoRebirth         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 6 },
 	LockPlot          = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 20 },
-	BeginSteal        = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 40 },
-	ClaimCarried      = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 40 },
+	-- (Stealing, picking up and the Bat are prompts / a tool / a pad touch,
+	-- all handled server-side, so they need no remotes.)
 	BeginCapture      = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 	TakePhoto         = { Kind = "Function", Direction = "ClientToServer", MaxPerMinute = 30 },
 	PromptPurchase    = { Kind = "Event",    Direction = "ClientToServer", MaxPerMinute = 30 },

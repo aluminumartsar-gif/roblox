@@ -55,6 +55,7 @@ export type PlotRecord = {
 	Owner: Player?,
 	LockedUntil: number,
 	LockCooldownUntil: number,
+	ProtectedUntil: number,   -- spawn protection: no stealing from this plot
 	SpawnCFrame: CFrame,
 	EjectCFrame: CFrame,
 	Nests: { Model },
@@ -110,6 +111,24 @@ function PlotService.IsLocked(plot: PlotRecord): boolean
 	return plot.LockedUntil > now()
 end
 
+--- True while the owner's spawn protection is running.
+function PlotService.IsProtected(plot: PlotRecord): boolean
+	return plot.ProtectedUntil > now()
+end
+
+function PlotService.ProtectionRemaining(plot: PlotRecord): number
+	return math.max(0, plot.ProtectedUntil - now())
+end
+
+--- Ends a player's spawn protection early (they started stealing).
+function PlotService.EndProtection(player: Player)
+	local plot = plotByPlayer[player]
+	if plot and plot.ProtectedUntil > now() then
+		plot.ProtectedUntil = 0
+		publish(plot)
+	end
+end
+
 --- True if `position` is inside the plot's walls.
 function PlotService.IsInside(plot: PlotRecord, position: Vector3): boolean
 	local p = Config.Plot
@@ -146,10 +165,12 @@ local function publish(plot: PlotRecord)
 	m:SetAttribute("OwnerName", if owner then owner.DisplayName else "")
 	m:SetAttribute("LockedUntil", plot.LockedUntil)
 	m:SetAttribute("LockCooldownUntil", plot.LockCooldownUntil)
+	m:SetAttribute("ProtectedUntil", plot.ProtectedUntil)
 	if owner then
 		owner:SetAttribute("PlotIndex", plot.Index)
 		owner:SetAttribute("PlotLockedUntil", plot.LockedUntil)
 		owner:SetAttribute("PlotLockCooldownUntil", plot.LockCooldownUntil)
+		owner:SetAttribute("ProtectedUntil", plot.ProtectedUntil)
 	end
 end
 
@@ -250,6 +271,12 @@ local function claim(player: Player)
 	plot.Owner = player
 	plot.LockedUntil = 0
 	plot.LockCooldownUntil = 0
+	-- Spawn protection: longer on a player's very first join.
+	local data = DataService.Get(player)
+	local firstJoin = data ~= nil and (data.Stats.JoinCount or 0) <= 1
+	plot.ProtectedUntil = now() + (if firstJoin
+		then Config.Steal.NewPlayerSpawnLock
+		else Config.Steal.ReturningPlayerSpawnLock)
 	plotByPlayer[player] = plot
 
 	MapBuilder.SetPlotSign(plot.Model, player.DisplayName)
@@ -277,6 +304,7 @@ local function release(player: Player)
 	plot.Owner = nil
 	plot.LockedUntil = 0
 	plot.LockCooldownUntil = 0
+	plot.ProtectedUntil = 0
 
 	MapBuilder.SetPlotSign(plot.Model, nil)
 	resetNests(plot)
@@ -398,6 +426,7 @@ function PlotService.Start()
 			Owner = nil,
 			LockedUntil = 0,
 			LockCooldownUntil = 0,
+			ProtectedUntil = 0,
 			SpawnCFrame = spawnPart.CFrame,
 			-- Outside the door, facing the hub.
 			EjectCFrame = cf * CFrame.new(0, 3, -p.Size.Z / 2 - 8),

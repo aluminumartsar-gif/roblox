@@ -74,7 +74,7 @@ end
 --- Pays out one creature's vault to its owner. Returns the amount paid.
 function IncomeService.Collect(player: Player, nestIndex: number): number
 	local slot = NestService.GetSlot(player, nestIndex)
-	if not slot or slot.Kind ~= "Creature" then
+	if not slot or slot.Kind ~= "Creature" or slot.Away then
 		return 0
 	end
 	local amount = math.floor(slot.Vault)
@@ -133,7 +133,7 @@ local function tickIncome(dt: number)
 		if owner and data then
 			local cap = BoostService.GetVaultCap(owner)
 			for nestIndex, slot in ipairs(data.Nests) do
-				if slot ~= false and slot.Kind == "Creature" then
+				if slot ~= false and slot.Kind == "Creature" and not slot.Away then
 					local income = BoostService.GetCreatureIncome(owner, slot)
 					slot.Vault = math.min(cap, slot.Vault + income * dt)
 					local model = NestService.GetVisual(plot.Index, nestIndex)

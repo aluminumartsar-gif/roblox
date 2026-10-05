@@ -19,6 +19,7 @@
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
@@ -127,16 +128,45 @@ local function setupEgg(model: Instance)
 	end
 	render()
 	model:GetAttributeChangedSignal("Heat"):Connect(render)
+end
 
-	local function updatePrompt(prompt: Instance)
-		if prompt:IsA("ProximityPrompt") and prompt.Name == "HatchPrompt" then
-			prompt.Enabled = isMine(model)
+--------------------------------------------------------------------------
+-- Prompts on nest items
+-- Owner sees Hatch (eggs). Everyone else sees Steal — unless the camp is
+-- locked or spawn-protected, or they're already carrying something. This
+-- is only about what's shown; the server re-checks every rule.
+--------------------------------------------------------------------------
+
+local function plotModel(index: any): Instance?
+	local map = Workspace:FindFirstChild("Map")
+	local plots = map and map:FindFirstChild("Plots")
+	return plots and plots:FindFirstChild("Plot_" .. tostring(index))
+end
+
+local function updateItemPrompts(model: Instance)
+	local mine = isMine(model)
+	local plot = plotModel(model:GetAttribute("PlotIndex"))
+	local now = Workspace:GetServerTimeNow()
+	local locked = plot ~= nil and (plot:GetAttribute("LockedUntil") or 0) > now
+	local protected = plot ~= nil and (plot:GetAttribute("ProtectedUntil") or 0) > now
+	local carrying = localPlayer:GetAttribute("Carrying") == true
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("ProximityPrompt") then
+			if d.Name == "HatchPrompt" then
+				d.Enabled = mine
+			elseif d.Name == "StealPrompt" then
+				d.Enabled = not mine and not locked and not protected and not carrying
+			end
 		end
 	end
-	for _, d in ipairs(model:GetDescendants()) do
-		updatePrompt(d)
+end
+
+local function updateAllItemPrompts()
+	for _, tag in ipairs({ Config.Tags.Egg, Config.Tags.Creature }) do
+		for _, model in ipairs(CollectionService:GetTagged(tag)) do
+			updateItemPrompts(model)
+		end
 	end
-	model.DescendantAdded:Connect(updatePrompt)
 end
 
 --------------------------------------------------------------------------
@@ -256,6 +286,17 @@ function NestVisualsController.Start()
 			if next(secrets) then
 				flickerSecrets()
 			end
+		end
+	end)
+
+	-- Prompt visibility depends on locks, protection and carrying, which all
+	-- change over time, so re-evaluate a few times a second.
+	CollectionService:GetInstanceAddedSignal(Config.Tags.Egg):Connect(updateItemPrompts)
+	CollectionService:GetInstanceAddedSignal(Config.Tags.Creature):Connect(updateItemPrompts)
+	task.spawn(function()
+		while true do
+			updateAllItemPrompts()
+			task.wait(0.3)
 		end
 	end)
 end
