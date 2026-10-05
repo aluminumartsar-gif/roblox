@@ -174,10 +174,22 @@ around the hub.
   Auto Collect pass collects for you. Vault cap is upgradeable — an
   uncollected full vault is wasted income, which keeps players moving around
   and therefore stealable.
-- The base has **walls and a door that opens only for the owner**.
-- **Lock button:** 60-second lock, 5-minute cooldown. Extended Lock pass makes
-  it 3 minutes.
+- The base has **walls (too high to jump) and one doorway** facing the hub.
+- **The doorway is open by default** — that's how thieves get in.
+- **Lock** (button on a stump inside the door, or the Lock button on the HUD
+  panel): for 60 seconds the doorway becomes a barrier that **only the owner
+  can pass**, and anyone already inside is put outside the door. 5-minute
+  cooldown, counted from when you lock. Extended Lock pass makes it 3
+  minutes. The LockDuration upgrade lengthens it.
+- The server enforces the lock by position, not by the door part, so a
+  hacked client that removes the barrier still gets ejected.
+- You spawn and respawn **inside your own camp**.
 - The owner gets **+15% walk speed on their own plot** — defender's advantage.
+
+Layout (each plot is 80×80 studs, door facing the hub): claim pad and lock
+button just inside the door, spawn point behind them, 12 nests in a 3×4
+grid (only as many glow as you have nest slots), a tent and a small fire in
+the back corners. A floating sign shows "<Name>'s Camp".
 
 ---
 

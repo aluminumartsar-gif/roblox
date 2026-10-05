@@ -136,6 +136,40 @@ LocalScript, plain `.luau` = ModuleScript.
   Must be used via a BindableFunction because MCP/command-bar code runs in a
   separate Luau VM and gets its own copies of modules.
 
+### Remotes in practice
+- Bind every client→server remote with `RemoteGuard.BindFunction` /
+  `BindEvent`. That gives the rate limit and pcall for free; handlers still
+  do ownership, distance (`RemoteGuard.IsWithinReach`), cooldowns
+  (`RemoteGuard.Cooldowns`) and state themselves.
+- RemoteFunctions return `{ Ok = bool, Message = string?, ... }`.
+- ProximityPrompt `Triggered` is client-fireable from anywhere by exploit
+  tools: re-check owner and distance in the handler, same as a remote.
+- Server → player messages go through `Modules/Notifier`.
+
+### World and movement
+- **The map is generated** by `Modules/MapBuilder` from `Config.Map` and
+  `Config.Plot`, rebuilt on every server boot by `WorldService`. Never
+  hand-edit map parts in Studio; change Config or MapBuilder. After changing
+  MapBuilder, re-run `tools/place-settings.luau` in Edit to refresh the
+  saved preview.
+- Runtime objects (eggs, creatures, carried items) go in `Workspace.Runtime`,
+  never inside `Workspace.Map`.
+- **Only `MovementService` sets `Humanoid.WalkSpeed`.** Other systems call
+  `MovementService.SetModifier(player, key, multiplier)`.
+- `Players.CharacterAutoLoads` is off; `PlotService` loads and respawns
+  characters at the owner's plot.
+- Find world objects by CollectionService tag (`Config.Tags`), and expect
+  them to stream in and out on the client (StreamingEnabled).
+- Edit-only place settings live in `tools/place-settings.luau`.
+
+### Multi-client tests through the MCP
+After the owner starts Test → Clients and Servers, `list_roblox_studios`
+shows one extra Studio per window (names are null). Call `get_studio_state`
+on each: the one whose focused datamodel is `Server` is the server; for the
+others, run `game.Players.LocalPlayer.Name` in the Client datamodel to see
+which player it is. Moving characters server-side (`PivotTo`) and walking
+them client-side (`Humanoid:MoveTo`) both work.
+
 ### Verifying a push
 After pushing scripts to Studio, run `tools/checksum.sh` locally and the body
 of `tools/checksum.luau` in the Edit datamodel. The outputs must be identical
