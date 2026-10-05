@@ -4,7 +4,7 @@
 	ServerScriptService/Server/Services/BoostService
 
 	The one place that answers "how much does this player get?":
-	luck, income multiplier, heat speed, nest capacity, vault cap.
+	luck, income multiplier, hatch speed, nest capacity, vault cap.
 	Every system that needs one of these asks here, so a new source of a
 	bonus (a pass, a potion, a rebirth, a codex page) is added in one place.
 
@@ -101,15 +101,16 @@ function BoostService.GetCreatureIncome(player: Player, slot: any): number
 	return income * BoostService.GetIncomeMultiplier(player)
 end
 
---- How fast this player's eggs heat up, as a multiplier on the base rate.
-function BoostService.GetHeatRateMultiplier(player: Player): number
+--- How fast this player's eggs incubate, as a multiplier on real time
+--- (Hatch Speed upgrade x Hatch Boost buff).
+function BoostService.GetHatchSpeedMultiplier(player: Player): number
 	local data = DataService.Get(player)
 	if not data then
 		return 1
 	end
 	local multiplier = Config.GetUpgradeValue("IncubationSpeed", data.Upgrades.IncubationSpeed)
-	if buffActive(data, "HeatRate") then
-		multiplier *= Config.DevProducts.NestWarmer.Multiplier
+	if buffActive(data, "HatchSpeed") then
+		multiplier *= Config.DevProducts.HatchBoost.Multiplier
 	end
 	return multiplier
 end

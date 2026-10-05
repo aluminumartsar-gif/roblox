@@ -19,11 +19,13 @@
 	  dbg:Invoke("wipe", "PlayerName")   -- resets to a fresh profile
 	  dbg:Invoke("plots")                -- who owns what, lock state
 	  dbg:Invoke("resetlock", "PlayerName")
-	  dbg:Invoke("simulate", 10000)      -- odds check, every egg, heat 0 & max
-	  dbg:Invoke("giveegg", "PlayerName", "forest", heat)
-	  dbg:Invoke("setheat", "PlayerName", 100)
+	  dbg:Invoke("simulate", 10000)      -- odds check, every egg, luck 0 & 50%
+	  dbg:Invoke("giveegg", "PlayerName", "forest", progressPercent)
+	  dbg:Invoke("setprogress", "PlayerName", 95)  -- every egg to 95% hatched
+	  dbg:Invoke("sell", "PlayerName", nestIndex)
+	  dbg:Invoke("hunt") / dbg:Invoke("huntend") / dbg:Invoke("huntstate")  -- the Brood Mother
 	  dbg:Invoke("hatch", "PlayerName", nestIndex)
-	  dbg:Invoke("setslot", "PlayerName", nestIndex, "egg"|"creature"|"empty", id, heat)
+	  dbg:Invoke("setslot", "PlayerName", nestIndex, "egg"|"creature"|"empty", id, progressPercent)
 	  dbg:Invoke("nests", "PlayerName")
 	  dbg:Invoke("carries")              -- everything currently stolen/in transit
 	  dbg:Invoke("belt")                 -- eggs on the belt right now
@@ -219,14 +221,14 @@ function DebugCommands.Start()
 	local NestService = require(Services:WaitForChild("NestService"))
 	local EggRoller = require(Modules:WaitForChild("EggRoller"))
 
-	-- 10k-roll check of every egg at heat 0 and max heat (Step 3 deliverable).
+	-- 10k-roll check of every egg at luck 0 and +50% (Step 3 deliverable).
 	function commands.simulate(rolls)
 		local n = tonumber(rolls) or 10000
 		local out = {}
 		local worst = 0
 		for _, eggId in ipairs(Config.EggOrder) do
-			for _, heat in ipairs({ 0, Config.Heat.Max }) do
-				local report, worstZ = EggRoller.SimulationReport(eggId, heat, 0, n)
+			for _, luck in ipairs({ 0, 50 }) do
+				local report, worstZ = EggRoller.SimulationReport(eggId, luck, n)
 				worst = math.max(worst, worstZ)
 				table.insert(out, report)
 			end
@@ -235,18 +237,21 @@ function DebugCommands.Start()
 		return table.concat(out, "\n")
 	end
 
-	-- Places an egg without charging (test only).
-	function commands.giveegg(name, eggId, heat)
+	-- Places an egg without charging (test only), optionally part-hatched.
+	function commands.giveegg(name, eggId, progressPercent)
 		local player = findPlayer(name)
 		if not player then
 			return "no such player"
 		end
-		local nestIndex = NestService.PlaceEgg(player, eggId or "forest", tonumber(heat) or 0)
+		local id = if Config.Eggs[eggId or ""] then eggId else "forest"
+		local incubated = NestService.GetHatchTime(id) * math.clamp(tonumber(progressPercent) or 0, 0, 99) / 100
+		local nestIndex = NestService.PlaceEgg(player, id, incubated)
 		return if nestIndex then ("egg in nest " .. nestIndex) else "no empty nest"
 	end
 
-	-- Sets the heat of every egg the player owns.
-	function commands.setheat(name, heat)
+	-- Sets how far along every egg the player owns is (percent; 100 hatches
+	-- them on the next tick).
+	function commands.setprogress(name, percent)
 		local player = findPlayer(name)
 		local data = player and DataService.Get(player)
 		local plot = player and PlotService.GetPlot(player)
@@ -256,18 +261,35 @@ function DebugCommands.Start()
 		local count = 0
 		for i, slot in ipairs(data.Nests) do
 			if slot ~= false and slot.Kind == "Egg" then
-				slot.Heat = math.clamp(tonumber(heat) or 0, 0, Config.Heat.Max)
-				local model = NestService.GetVisual(plot.Index, i)
-				if model then
-					model:SetAttribute("Heat", slot.Heat)
-				end
+				slot.Incubated = NestService.GetHatchTime(slot.EggId) * math.clamp(tonumber(percent) or 0, 0, 100) / 100
 				count += 1
 			end
 		end
-		return "set heat on " .. count .. " egg(s)"
+		return "set progress on " .. count .. " egg(s) (labels update on the next tick)"
 	end
 
-	-- Hatches a nest directly (skips the prompt's distance check).
+	-- Sells the creature in a nest (skips the prompt's distance check).
+	function commands.sell(name, nestIndex)
+		local player = findPlayer(name)
+		if not player then
+			return "no such player"
+		end
+		local amount = NestService.Sell(player, tonumber(nestIndex) or 1)
+		return if amount > 0 then ("sold for $" .. amount) else "no creature there"
+	end
+
+	-- The Brood Mother (HuntService).
+	function commands.hunt()
+		return require(Services:WaitForChild("HuntService")).DebugStart()
+	end
+	function commands.huntend()
+		return require(Services:WaitForChild("HuntService")).DebugEnd()
+	end
+	function commands.huntstate()
+		return require(Services:WaitForChild("HuntService")).DebugState()
+	end
+
+	-- Hatches a nest right now.
 	function commands.hatch(name, nestIndex)
 		local player = findPlayer(name)
 		if not player then
@@ -277,18 +299,18 @@ function DebugCommands.Start()
 		return if result then string.format("%s (%s)", result.CreatureId, result.Rarity) else "no egg there"
 	end
 
-	-- Puts anything in a nest: ("egg", eggId, heat) / ("creature", creatureId) / ("empty").
-	function commands.setslot(name, nestIndex, kind, id, heat)
+	-- Puts anything in a nest: ("egg", eggId, progressPercent) / ("creature", creatureId) / ("empty").
+	function commands.setslot(name, nestIndex, kind, id, progressPercent)
 		local player = findPlayer(name)
 		local index = tonumber(nestIndex)
 		if not player or not index then
-			return "usage: setslot(player, nestIndex, egg|creature|empty, id, heat?)"
+			return "usage: setslot(player, nestIndex, egg|creature|empty, id, progressPercent?)"
 		end
 		local now = os.time()
 		if kind == "egg" and Config.Eggs[id] then
-			NestService.SetSlot(player, index, { Kind = "Egg", EggId = id, Heat = tonumber(heat) or 0, Vault = 0, AcquiredAt = now, LastIncomeAt = now })
+			NestService.SetSlot(player, index, { Kind = "Egg", EggId = id, Incubated = NestService.GetHatchTime(id) * math.clamp(tonumber(progressPercent) or 0, 0, 99) / 100, Vault = 0, AcquiredAt = now, LastIncomeAt = now })
 		elseif kind == "creature" and Config.CreaturesById[id] then
-			NestService.SetSlot(player, index, { Kind = "Creature", CreatureId = id, Rarity = Config.CreaturesById[id].Rarity, Heat = 0, Vault = 0, AcquiredAt = now, LastIncomeAt = now })
+			NestService.SetSlot(player, index, { Kind = "Creature", CreatureId = id, Rarity = Config.CreaturesById[id].Rarity, Vault = 0, AcquiredAt = now, LastIncomeAt = now })
 		elseif kind == "empty" then
 			NestService.SetSlot(player, index, false)
 		else
@@ -392,7 +414,7 @@ function DebugCommands.Start()
 		for i, slot in ipairs(data.Nests) do
 			if slot ~= false then
 				if slot.Kind == "Egg" then
-					table.insert(lines, string.format("%d: Egg %s heat=%.1f", i, slot.EggId, slot.Heat))
+					table.insert(lines, string.format("%d: Egg %s %d%% hatched", i, slot.EggId, math.floor(NestService.GetProgress(slot) * 100)))
 				else
 					table.insert(lines, string.format("%d: %s (%s) vault=%.1f", i, slot.CreatureId, slot.Rarity, slot.Vault))
 				end

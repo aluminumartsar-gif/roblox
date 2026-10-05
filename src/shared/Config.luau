@@ -25,7 +25,7 @@ local Config = {}
 -- VERSION / DEBUG
 -- =========================================================================
 
-Config.Version = "0.7.6-belt"
+Config.Version = "0.9.0-broodmother"
 
 Config.Debug = {
 	-- Master switch for verbose server logging.
@@ -58,8 +58,7 @@ Config.Economy = {
 
 -- =========================================================================
 -- RARITY
--- Order matters: index 1 is the most common. "Rare and above" for the heat
--- bonus means every rarity at HeatBonusMinIndex or higher.
+-- Order matters: index 1 is the most common.
 -- =========================================================================
 
 Config.RarityOrder = {
@@ -72,8 +71,9 @@ Config.RarityOrder = {
 	"Secret",
 }
 
--- Which rarities heat and luck boost, and by how much, is set per rarity
--- in Config.Heat.MaxMultiplierByRarity (Rare and above).
+-- Which rarities luck boosts: Config.Luck.BoostedRarities (Rare and up).
+-- Selling a cryptid pays its vault plus Config.Sell.RefundSeconds of its
+-- income (see Config.Sell).
 
 Config.Rarities = {
 	Common = {
@@ -205,9 +205,13 @@ Config.Mutations = {
 
 -- =========================================================================
 -- EGGS
--- Weights are percentages. They do not need to sum to 100 (the roller
--- normalizes) but they are written to for readability.
--- RequiredRebirths gates the higher tiers.
+-- Weights are percentages (each egg's add up to 100; the roller normalizes
+-- anyway). Luck pushes the Rare-and-up weights higher (Config.Luck).
+-- HatchTime: seconds an egg sits in your nest before it hatches by itself.
+-- The longer it takes, the longer it's out there to be stolen — so the
+-- best eggs are the biggest targets.
+-- RequiredRebirths gates the higher tiers. AnnounceInNest tells the whole
+-- server when someone has one cooking ("go and get it").
 -- =========================================================================
 
 Config.EggOrder = { "forest", "swamp", "mountain", "deepsea", "sky", "void" }
@@ -217,50 +221,57 @@ Config.Eggs = {
 		Id = "forest",
 		Name = "Forest Egg",
 		Price = 100,
+		HatchTime = 40,
 		RequiredRebirths = 0,
 		Color = Color3.fromRGB(104, 138,  92),
-		HatchTimeHint = "Any time",
-		Weights = { Common = 55.00, Uncommon = 27.00, Rare = 12.00, Epic =  4.50, Legendary =  1.20, Mythic = 0.25, Secret = 0.05 },
+		Weights = { Common = 50.00, Uncommon = 24.50, Rare = 15.20, Epic =  7.30, Legendary =  2.40, Mythic = 0.50, Secret = 0.10 },
 	},
 	swamp = {
 		Id = "swamp",
 		Name = "Swamp Egg",
-		Price = 1000,
+		Price = 600,
+		HatchTime = 60,
 		RequiredRebirths = 0,
 		Color = Color3.fromRGB( 86, 104,  70),
-		Weights = { Common = 40.00, Uncommon = 33.00, Rare = 18.00, Epic =  7.00, Legendary =  1.60, Mythic = 0.35, Secret = 0.05 },
+		Weights = { Common = 34.60, Uncommon = 28.60, Rare = 21.80, Epic = 10.90, Legendary =  3.10, Mythic = 0.85, Secret = 0.15 },
 	},
 	mountain = {
 		Id = "mountain",
 		Name = "Mountain Egg",
-		Price = 10000,
+		Price = 4000,
+		HatchTime = 90,
 		RequiredRebirths = 0,
 		Color = Color3.fromRGB(128, 134, 146),
-		Weights = { Common = 25.00, Uncommon = 32.00, Rare = 26.00, Epic = 13.00, Legendary =  3.20, Mythic = 0.72, Secret = 0.08 },
+		Weights = { Common = 19.80, Uncommon = 25.40, Rare = 28.90, Epic = 18.60, Legendary =  5.60, Mythic = 1.50, Secret = 0.20 },
 	},
 	deepsea = {
 		Id = "deepsea",
 		Name = "Deep Sea Egg",
-		Price = 100000,
+		Price = 30000,
+		HatchTime = 150,
 		RequiredRebirths = 0,
 		Color = Color3.fromRGB( 48,  86, 112),
-		Weights = { Common = 12.00, Uncommon = 25.00, Rare = 32.00, Epic = 22.00, Legendary =  7.50, Mythic = 1.35, Secret = 0.15 },
+		Weights = { Common =  8.50, Uncommon = 17.60, Rare = 31.60, Epic = 27.90, Legendary = 11.60, Mythic = 2.50, Secret = 0.30 },
 	},
 	sky = {
 		Id = "sky",
 		Name = "Sky Egg",
-		Price = 1000000,
+		Price = 250000,
+		HatchTime = 240,
 		RequiredRebirths = 1,
+		AnnounceInNest = true,
 		Color = Color3.fromRGB(158, 186, 216),
-		Weights = { Common =  4.00, Uncommon = 14.00, Rare = 30.00, Epic = 33.00, Legendary = 15.00, Mythic = 3.70, Secret = 0.30 },
+		Weights = { Common =  2.50, Uncommon =  8.60, Rare = 25.80, Epic = 36.40, Legendary = 20.20, Mythic = 5.90, Secret = 0.60 },
 	},
 	void = {
 		Id = "void",
 		Name = "Void Egg",
-		Price = 25000000,
+		Price = 2500000,
+		HatchTime = 360,
 		RequiredRebirths = 3,
+		AnnounceInNest = true,
 		Color = Color3.fromRGB( 42,  32,  56),
-		Weights = { Common =  0.00, Uncommon =  4.00, Rare = 16.00, Epic = 34.00, Legendary = 32.00, Mythic = 12.50, Secret = 1.50 },
+		Weights = { Common =  0.00, Uncommon =  2.00, Rare = 11.50, Epic = 31.40, Legendary = 36.10, Mythic = 16.70, Secret = 2.30 },
 	},
 }
 
@@ -313,36 +324,25 @@ Config.Belt = {
 }
 
 -- =========================================================================
--- HEAT (Hook 1 — patience odds)
+-- INCUBATION
+-- An egg in your nest counts up to its HatchTime (Config.Eggs) and hatches
+-- by itself. Hatch Speed (upgrade) and Hatch Boost (product) make it count
+-- faster. A stolen egg keeps the progress it had (it doesn't count while
+-- it's being carried), so an egg that's nearly done is the juiciest thing
+-- on the map — and it says so: in its last stretch it glows and throws a
+-- light pillar into the sky that everyone can see.
 -- =========================================================================
 
-Config.Heat = {
-	Max = 100,
-	-- Seconds for a nest to go 0 -> Max with no modifiers.
-	SecondsToMax = 600, -- 10 minutes
-	-- Server tick rate for heat accrual.
-	TickInterval = 1,
-	-- Weight multiplier each rarity reaches at full heat. Heat scales it
-	-- linearly from x1 at heat 0, then all weights are renormalized:
-	--   multiplier = 1 + (MaxMultiplier - 1) * (heat / Max)
-	-- Rarer outcomes climb faster, so heat keeps pushing odds toward the top
-	-- even on high-tier eggs that are already mostly Rare+.
-	-- Rarities not listed here get no heat (or luck) boost.
-	MaxMultiplierByRarity = {
-		Rare = 2,
-		Epic = 3,
-		Legendary = 4,
-		Mythic = 5,
-		Secret = 6,
-	},
-	-- A stolen egg keeps its heat.
-	ThiefKeepsHeat = true,
+Config.Incubation = {
+	TickInterval = 1,           -- server tick, seconds
+	AlmostReadyFraction = 0.8,  -- progress at which the egg starts to glow + pillar
 }
 
 -- =========================================================================
 -- LUCK
--- Luck is a percentage bonus applied on top of the heat multiplier to
--- Rare+ weights. Sources stack additively.
+-- Luck is a percentage bonus on the weights of the rarities listed in
+-- BoostedRarities (Rare and up): weight x (1 + luck / 100). Sources stack
+-- additively.
 -- =========================================================================
 
 -- This is the only place luck amounts are defined; BoostService adds them up.
@@ -352,6 +352,7 @@ Config.Luck = {
 	PotionPercent = 50,       -- Luck Potion dev product (duration: DevProducts.LuckPotion)
 	CodexPageCompletePercent = 5, -- per completed rarity page (Step 7)
 	MaxPercent = 500,         -- hard cap so nothing runs away
+	BoostedRarities = { Rare = true, Epic = true, Legendary = true, Mythic = true, Secret = true },
 }
 
 -- =========================================================================
@@ -543,7 +544,11 @@ Config.Income = {
 -- distance (Config.Prompts), re-checked on the server.
 Config.Steal = {
 	CarrySpeedMultiplier = 0.75,      -- -25% walk speed while carrying
-	StealCooldown = 30,               -- per thief, after a successful (claimed) steal
+	-- What can be stolen out of a nest. The game is about stealing EGGS:
+	-- cryptids you've hatched are yours to keep. (Add Creature = true to
+	-- make hatched cryptids stealable too; every rule below still applies.)
+	StealableKinds = { Egg = true },
+	StealCooldown = 20,               -- per thief, after a successful (claimed) steal
 	SameItemImmunity = 120,           -- an item can't be stolen again within 2 min
 	UnclaimedReturnTime = 60,         -- from the moment of the steal; carried or dropped
 	-- Spawn protection: your camp can't be stolen from right after you join.
@@ -565,6 +570,16 @@ Config.Steal = {
 	-- If the owner leaves while their item is being carried, it's forfeited
 	-- (the thief can still claim it). Stops rage-quitting to save an item.
 	OwnerLeavingForfeits = true,
+}
+
+-- Selling a cryptid (owner only, ProximityPrompt on the cryptid): pays its
+-- uncollected vault plus RefundSeconds of its income, and frees the nest
+-- for a better egg.
+Config.Sell = {
+	Enabled = true,
+	RefundSeconds = 60,
+	-- Rarities that use the longer Config.Prompts.SellHoldRare hold.
+	RareHoldFromIndex = 5, -- Legendary and up
 }
 
 Config.Bat = {
@@ -778,10 +793,11 @@ Config.Codex = {
 --   { Kind = "Egg", EggId = "swamp", Count = 1 }
 --       goes in a free nest, else is saved for the next free nest. An egg the
 --       player hasn't unlocked yet becomes the best egg they have unlocked.
---   { Kind = "Buff", Buff = "Luck" | "HeatRate", Duration = 600 }
---       same as the Luck Potion / Nest Warmer; adds time to a running one.
---   { Kind = "MaxHeat", Count = 1 }
---       same as the Max Heat product (best egg, else saved for the next egg).
+--   { Kind = "Buff", Buff = "Luck" | "HatchSpeed", Duration = 600 }
+--       same as the Luck Potion / Hatch Boost; adds time to a running one.
+--   { Kind = "InstantHatch", Count = 1 }
+--       same as the Instant Hatch product (hatches your best egg now, else
+--       saved for the next egg).
 -- =========================================================================
 
 export type RetentionItem = {
@@ -807,7 +823,7 @@ local dailyRewards: { RetentionReward } = {
 	{ Items = { { Kind = "Cash", Base = 2000, Minutes = 8 } } },
 	{ Items = { { Kind = "Buff", Buff = "Luck", Duration = 900 } } },
 	{ Items = { { Kind = "Cash", Base = 5000, Minutes = 15 } } },
-	{ Items = { { Kind = "Egg", EggId = "mountain", Count = 1 }, { Kind = "Buff", Buff = "HeatRate", Duration = 900 } } },
+	{ Items = { { Kind = "Egg", EggId = "mountain", Count = 1 }, { Kind = "Buff", Buff = "HatchSpeed", Duration = 900 } } },
 	-- Day 7: the big one.
 	{ Items = {
 		{ Kind = "Cash", Base = 25000, Minutes = 45 },
@@ -823,9 +839,9 @@ local spinPrizes: { RetentionReward } = {
 	{ Weight = 24, Items = { { Kind = "Cash", Base = 1500, Minutes = 8 } } },
 	{ Weight = 16, Label = "Boost Pack", Items = {
 		{ Kind = "Buff", Buff = "Luck", Duration = 600 },
-		{ Kind = "Buff", Buff = "HeatRate", Duration = 600 },
+		{ Kind = "Buff", Buff = "HatchSpeed", Duration = 600 },
 	} },
-	{ Weight = 8, Items = { { Kind = "MaxHeat", Count = 1 } } },
+	{ Weight = 8, Items = { { Kind = "InstantHatch", Count = 1 } } },
 	{ Weight = 6, Announce = true, Items = { { Kind = "Cash", Base = 10000, Minutes = 30 } } },
 }
 
@@ -836,7 +852,7 @@ local playtimeGifts: { RetentionReward } = {
 	{ Minutes = 5,  Items = { { Kind = "Cash", Base = 500, Minutes = 2 } } },
 	{ Minutes = 10, Items = { { Kind = "Egg", EggId = "swamp", Count = 1 } } },
 	{ Minutes = 15, Items = { { Kind = "Cash", Base = 1500, Minutes = 5 } } },
-	{ Minutes = 25, Items = { { Kind = "Buff", Buff = "HeatRate", Duration = 600 } } },
+	{ Minutes = 25, Items = { { Kind = "Buff", Buff = "HatchSpeed", Duration = 600 } } },
 	{ Minutes = 40, Items = { { Kind = "Cash", Base = 5000, Minutes = 10 } } },
 	{ Minutes = 60, Items = { { Kind = "Egg", EggId = "mountain", Count = 1 }, { Kind = "Buff", Buff = "Luck", Duration = 900 } } },
 }
@@ -851,9 +867,9 @@ Config.Retention = {
 	-- income-scaled cash amounts on the screens current).
 	StatePushInterval = 60,
 	-- Icon (Config.Icons name) shown for each reward kind / buff.
-	Icons = { Cash = "Cash", Egg = "Egg", Luck = "Potion", HeatRate = "Bonfire", MaxHeat = "Fire" },
+	Icons = { Cash = "Cash", Egg = "Egg", Luck = "Potion", HatchSpeed = "Bonfire", InstantHatch = "Fire" },
 	-- Short names for buffs in reward text.
-	BuffNames = { Luck = "Luck Potion", HeatRate = "Nest Warmer" },
+	BuffNames = { Luck = "Luck Potion", HatchSpeed = "Hatch Boost" },
 
 	Daily = {
 		Enabled = true,
@@ -1036,10 +1052,16 @@ Config.Sounds = {
 	GiftClaim        = { Id = "rbxassetid://17208204604",  Volume = 0.6 },                        -- Roblox GUI Bubble
 	-- Music and ambience (loops). Music obeys the Music setting; everything
 	-- else obeys the Sounds setting.
-	MusicMain        = { Id = "rbxassetid://15675069601",  Volume = 0.18, Looped = true, Group = "Music" }, -- Roblox UI Loop Calm Music
+	MusicMain        = { Id = "rbxassetid://1837630034",   Volume = 0.14, Looped = true, Group = "Music" }, -- APM "The Horrors" (low, under everything)
 	AmbientNight     = { Id = "rbxassetid://9112835631",   Volume = 0.22, Looped = true },        -- PSE night: cricket + owls
+	AmbientDread     = { Id = "rbxassetid://9125351530",   Volume = 0.12, Looped = true },        -- PSE "Afterworld Ambience": breathing, creaks (the woods are watching)
 	Campfire         = { Id = "rbxassetid://9112780462",   Volume = 0.55, Looped = true, RollOff = 45 }, -- PSE fireplace crackle
 	Owl              = { Id = "rbxassetid://9117181540",   Volume = 0.3, RollOff = 200 },         -- PSE owl hooting (random, far off)
+	-- The Hunt (the Brood Mother)
+	HuntWarning      = { Id = "rbxassetid://1843779857",   Volume = 0.6 },                        -- APM "Low Drone 15"
+	HuntWail         = { Id = "rbxassetid://9120574965",   Volume = 0.8, PlaybackSpeed = 0.8 },   -- PSE waterphone burst, slowed: her wail
+	Heartbeat        = { Id = "rbxassetid://9043365842",   Volume = 0, Looped = true },           -- APM "Heartbeat 02 96BPM" (volume driven by distance)
+	Jumpscare        = { Id = "rbxassetid://9043346594",   Volume = 1, RollOff = 140 },           -- APM "Horror Scream 16"
 }
 
 -- =========================================================================
@@ -1098,7 +1120,7 @@ Config.Feedback = {
 	NestLabelGap = 0.8,              -- studs between the top of the model and the label
 	CreatureLabelSize = Vector2.new(6.5, 2.0),     -- width, height (studs): name + income
 	CreatureLabelOwnSize = Vector2.new(6.5, 3.0),  -- your own creature: + vault bar
-	EggLabelSize = Vector2.new(5.5, 2.0),          -- name + heat bar
+	EggLabelSize = Vector2.new(5.5, 2.0),          -- name + hatch countdown bar
 	NestLabelMaxTextSize = 30,       -- px cap so labels aren't enormous when you stand right next to them
 
 	-- Life: idle motion for creatures and eggs in nests (client only)
@@ -1107,8 +1129,8 @@ Config.Feedback = {
 	IdleBobSpeed = 1.6,              -- radians per second
 	IdleYawDegrees = 9,              -- slow look-around, each side
 	IdleYawSpeed = 0.35,
-	EggWobbleHeat = 80,              -- eggs at or above this heat wobble
-	EggWobbleDegrees = 6,            -- at max heat
+	EggWobbleProgress = 0.8,         -- eggs this close to hatching (0..1) wobble
+	EggWobbleDegrees = 6,            -- just before hatching
 	EggWobbleSpeed = 14,
 	AuraRate = 5,                    -- Legendary+ aura particles per second
 
@@ -1169,6 +1191,13 @@ Config.Art = {
 		dover_demon = { Mesh = "rbxassetid://127820108357810", Texture = "rbxassetid://128404826249463", Height = 4.4, Yaw = 0 },
 		flatwoods = { Mesh = "rbxassetid://95978287199268", Texture = "rbxassetid://114948872465345", Height = 4.4, Yaw = 0 },
 		jersey_devil = { Mesh = "rbxassetid://133077204186004", Texture = "rbxassetid://112001839476144", Height = 4.4, Yaw = 0 },
+		mothman = { Mesh = "rbxassetid://107438722643971", Texture = "rbxassetid://135727397672515", Height = 5.2, Yaw = 0 },
+		bigfoot = { Mesh = "rbxassetid://124745552711970", Texture = "rbxassetid://89032616199124", Height = 5.2, Yaw = 0 },
+		thunderbird = { Mesh = "rbxassetid://118963594307595", Texture = "rbxassetid://82598969794423", Height = 5.2, Yaw = 0 },
+		bunyip = { Mesh = "rbxassetid://113317298872835", Texture = "rbxassetid://123505522201560", Height = 5.2, Yaw = 0 },
+		death_worm = { Mesh = "rbxassetid://72402313990350", Texture = "rbxassetid://88869529137142", Height = 5.2, Yaw = 0 },
+		kraken = { Mesh = "rbxassetid://72768183058923", Texture = "rbxassetid://137691239141461", Height = 6.2, Yaw = 0 },
+		ningen = { Mesh = "rbxassetid://117659548202346", Texture = "rbxassetid://83752095862825", Height = 6.2, Yaw = 0 },
 	},
 	Eggs = {},
 	Props = {
@@ -1242,8 +1271,11 @@ Config.Hunt = {
 -- =========================================================================
 
 Config.Rebirth = {
-	BaseCost = 50000,
+	BaseCost = 75000,
 	CostGrowth = 2.2,           -- cost = BaseCost * Growth ^ rebirths
+	-- Cash you start with after a rebirth (instead of $0), so the climb back
+	-- starts at once. Set directly, not counted as earned.
+	StartingCash = 1500,
 	IncomeBonusPerRebirth = 0.25, -- +25% income
 	-- Luck per rebirth: Config.Luck.PerRebirthPercent.
 	-- What a rebirth wipes. RebirthService does exactly this list; anything
@@ -1276,28 +1308,28 @@ Config.Upgrades = {
 	NestSlots = {
 		DisplayName = "Nest Slots",
 		Icon = "Egg",
-		Description = "More nests means more eggs cooking at once.",
+		Description = "More nests means more eggs hatching at once.",
 		Levels = {
 			{ Cost = 0,        Value = 6 },
-			{ Cost = 5000,     Value = 7 },
-			{ Cost = 25000,    Value = 8 },
-			{ Cost = 120000,   Value = 9 },
-			{ Cost = 600000,   Value = 10 },
-			{ Cost = 3000000,  Value = 11 },
-			{ Cost = 15000000, Value = 12 },
+			{ Cost = 1000,     Value = 7 },
+			{ Cost = 6000,     Value = 8 },
+			{ Cost = 30000,    Value = 9 },
+			{ Cost = 150000,   Value = 10 },
+			{ Cost = 750000,   Value = 11 },
+			{ Cost = 4000000,  Value = 12 },
 		},
 	},
 	IncubationSpeed = {
-		DisplayName = "Incubation Speed",
+		DisplayName = "Hatch Speed",
 		Icon = "Fire",
-		Description = "Heat builds faster. Value is a multiplier on heat gain.",
+		Description = "Eggs hatch faster. Value is a speed multiplier on incubation.",
 		Levels = {
 			{ Cost = 0,        Value = 1.00 },
-			{ Cost = 7500,     Value = 1.15 },
-			{ Cost = 40000,    Value = 1.30 },
-			{ Cost = 200000,   Value = 1.50 },
-			{ Cost = 1000000,  Value = 1.75 },
-			{ Cost = 6000000,  Value = 2.00 },
+			{ Cost = 200,      Value = 1.20 },
+			{ Cost = 3000,     Value = 1.40 },
+			{ Cost = 20000,    Value = 1.60 },
+			{ Cost = 120000,   Value = 1.80 },
+			{ Cost = 750000,   Value = 2.00 },
 		},
 	},
 	VaultSize = {
@@ -1306,11 +1338,11 @@ Config.Upgrades = {
 		Description = "How much uncollected cash a creature can hold.",
 		Levels = {
 			{ Cost = 0,        Value = 25000 },
-			{ Cost = 10000,    Value = 75000 },
-			{ Cost = 60000,    Value = 250000 },
-			{ Cost = 350000,   Value = 1000000 },
-			{ Cost = 2000000,  Value = 5000000 },
-			{ Cost = 12000000, Value = 25000000 },
+			{ Cost = 2500,     Value = 75000 },
+			{ Cost = 15000,    Value = 250000 },
+			{ Cost = 100000,   Value = 1000000 },
+			{ Cost = 600000,   Value = 5000000 },
+			{ Cost = 4000000,  Value = 25000000 },
 		},
 	},
 	LockDuration = {
@@ -1319,10 +1351,10 @@ Config.Upgrades = {
 		Description = "How long your door stays locked, in seconds.",
 		Levels = {
 			{ Cost = 0,        Value = 60 },
-			{ Cost = 15000,    Value = 75 },
-			{ Cost = 80000,    Value = 90 },
-			{ Cost = 450000,   Value = 110 },
-			{ Cost = 2500000,  Value = 135 },
+			{ Cost = 1500,     Value = 75 },
+			{ Cost = 10000,    Value = 90 },
+			{ Cost = 60000,    Value = 110 },
+			{ Cost = 400000,   Value = 135 },
 		},
 	},
 	WalkSpeed = {
@@ -1331,10 +1363,10 @@ Config.Upgrades = {
 		Description = "Move faster everywhere. Value is studs/second.",
 		Levels = {
 			{ Cost = 0,        Value = 16 },
-			{ Cost = 12000,    Value = 18 },
-			{ Cost = 65000,    Value = 20 },
-			{ Cost = 380000,   Value = 22 },
-			{ Cost = 2200000,  Value = 24 },
+			{ Cost = 500,      Value = 18 },
+			{ Cost = 5000,     Value = 20 },
+			{ Cost = 40000,    Value = 22 },
+			{ Cost = 300000,   Value = 24 },
 		},
 	},
 }
@@ -1364,7 +1396,7 @@ Config.DoubleCashMultiplier = 2
 
 Config.DevProductOrder = {
 	"CashSmall", "CashMedium", "CashLarge",
-	"LuckPotion", "NestWarmer", "MaxHeat", "EmergencyLock", "EggBundle",
+	"LuckPotion", "HatchBoost", "InstantHatch", "EmergencyLock", "EggBundle",
 	-- Step 7.5: sold only from their own screens (Spin Wheel, Offline popup).
 	"ExtraSpins", "OfflineDouble",
 }
@@ -1380,12 +1412,12 @@ Config.DevProducts = {
 		Description = "$5M cash." },
 	LuckPotion    = { Id = 0, DisplayName = "Luck Potion",   RobuxHint =  49, Icon = "Potion",    Kind = "Buff", Buff = "Luck", Duration = 900,
 		Description = "+50% luck for 15 minutes." },
-	NestWarmer    = { Id = 0, DisplayName = "Nest Warmer",   RobuxHint =  29, Icon = "Bonfire",   Kind = "Buff", Buff = "HeatRate", Duration = 600, Multiplier = 2,
-		Description = "Eggs heat up 2x faster for 10 minutes." },
-	-- Goes to your most valuable egg that isn't already at max heat. With no
-	-- such egg, it's saved and applied to your next egg automatically.
-	MaxHeat       = { Id = 0, DisplayName = "Max Heat",      RobuxHint =  99, Icon = "Fire",      Kind = "Instant", Effect = "MaxHeatOneEgg",
-		Description = "Instantly max the heat of your best egg." },
+	HatchBoost    = { Id = 0, DisplayName = "Hatch Boost",   RobuxHint =  29, Icon = "Bonfire",   Kind = "Buff", Buff = "HatchSpeed", Duration = 600, Multiplier = 2,
+		Description = "Your eggs hatch 2x faster for 10 minutes." },
+	-- Hatches your most valuable egg right now (ties: the one with the most
+	-- time left). With no egg in a nest, it's saved and used on your next one.
+	InstantHatch  = { Id = 0, DisplayName = "Instant Hatch", RobuxHint =  99, Icon = "Fire",      Kind = "Instant", Effect = "InstantHatch",
+		Description = "Hatch your best egg right now — no waiting, no thieves." },
 	-- Locks your camp right now for EmergencyLockBonus seconds (ignores the
 	-- cooldown), or adds that much to a lock that's already running.
 	EmergencyLock = { Id = 0, DisplayName = "Emergency Lock",RobuxHint =  49, Icon = "Lock",      Kind = "Instant", Effect = "ExtendLock",
@@ -1473,7 +1505,7 @@ Config.Remotes = {
 	RetentionState    = { Kind = "Event",    Direction = "ServerToClient" },
 
 	-- ---- Feedback / juice (Step 8) ----
-	-- HatchResult: (creatureId, rarity, mutation, heat, nestPosition) to the hatcher.
+	-- HatchResult: (creatureId, rarity, mutation, eggId, nestPosition) to the hatcher.
 	-- CashCollected: (amount, position) to the collector.
 	-- FeedbackCue: (cue, info) — small presentation-only events:
 	--   "BatHit" {Position} to everyone; "HatchBurst" {Position, Rarity, UserId}
@@ -1504,8 +1536,9 @@ Config.Prompts = {
 	ShopOpenHold = 0,             -- opening a shop panel is a tap
 	BeltBuyHold = 0,              -- buying off the belt is a tap: a hold gets cut off when a
 	                              -- different moving egg becomes the nearest
-	HatchHold = 0.5,
 	StealHold = 3,
+	SellHold = 1,                 -- selling one of your cryptids
+	SellHoldRare = 2.5,           -- ...a Legendary or better (harder to do by accident)
 	CaptureHold = 5,
 	RequiresLineOfSight = false,
 }
@@ -1682,28 +1715,25 @@ function Config.GetRarityIndex(rarity: string): number
 	return entry and entry.Index or 0
 end
 
---- True if this rarity gets the Heat / Luck weight bonus.
+--- True if luck boosts this rarity (Config.Luck.BoostedRarities).
 function Config.IsBoostedRarity(rarity: string): boolean
-	return Config.Heat.MaxMultiplierByRarity[rarity] ~= nil
+	return Config.Luck.BoostedRarities[rarity] == true
 end
 
---- The multiplier applied to one rarity's weight at a given heat and luck.
+--- The multiplier luck applies to one rarity's weight.
 --- Unboosted rarities (Common, Uncommon) always return 1.
---- heat: 0..Config.Heat.Max      luckPercent: additive percent, e.g. 25
-function Config.GetBoostMultiplier(rarity: string, heat: number, luckPercent: number?): number
-	local maxMultiplier = Config.Heat.MaxMultiplierByRarity[rarity]
-	if not maxMultiplier then
+--- luckPercent: additive percent, e.g. 25
+function Config.GetBoostMultiplier(rarity: string, luckPercent: number?): number
+	if not Config.IsBoostedRarity(rarity) then
 		return 1
 	end
-	local h = math.clamp(heat or 0, 0, Config.Heat.Max)
-	local heatPart = 1 + (maxMultiplier - 1) * (h / Config.Heat.Max)
 	local luck = math.clamp(luckPercent or 0, 0, Config.Luck.MaxPercent)
-	return heatPart * (1 + luck / 100)
+	return 1 + luck / 100
 end
 
---- Builds the normalized rarity chance table for an egg at a given heat/luck.
+--- Builds the normalized rarity chance table for an egg at a given luck.
 --- Returns { [rarity] = probability } summing to 1.
-function Config.GetRarityChances(eggId: string, heat: number, luckPercent: number?): { [string]: number }
+function Config.GetRarityChances(eggId: string, luckPercent: number?): { [string]: number }
 	local egg = Config.Eggs[eggId]
 	assert(egg, "Unknown egg id: " .. tostring(eggId))
 
@@ -1711,7 +1741,7 @@ function Config.GetRarityChances(eggId: string, heat: number, luckPercent: numbe
 	local total = 0
 
 	for _, rarity in ipairs(Config.RarityOrder) do
-		local w = (egg.Weights[rarity] or 0) * Config.GetBoostMultiplier(rarity, heat, luckPercent)
+		local w = (egg.Weights[rarity] or 0) * Config.GetBoostMultiplier(rarity, luckPercent)
 		weighted[rarity] = w
 		total += w
 	end

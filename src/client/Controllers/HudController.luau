@@ -44,7 +44,7 @@ local alertTemplate: GuiObject? = nil
 
 local BUFFS: { { key: string, icon: string } } = {
 	{ key = "Luck", icon = "Potion" },
-	{ key = "HeatRate", icon = "Bonfire" },
+	{ key = "HatchSpeed", icon = "Bonfire" },
 }
 
 local function formatClock(seconds: number): string

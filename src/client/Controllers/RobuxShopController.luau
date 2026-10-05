@@ -7,7 +7,7 @@
 	are found by what they contain (not their order), then filled from
 	Config:
 
-	  Featured (3 coloured cards)  -> Luck Potion, Nest Warmer, Max Heat
+	  Featured (3 coloured cards)  -> Luck Potion, Hatch Boost, Instant Hatch
 	  Gamepasses                   -> the 5 game passes
 	  Currency                     -> the 3 cash packs
 	  Starter Pack banner          -> 3-Egg Bundle
@@ -35,7 +35,7 @@ local RobuxShopController = {}
 
 local localPlayer = Players.LocalPlayer
 
-local FEATURED = { "LuckPotion", "NestWarmer", "MaxHeat" }
+local FEATURED = { "LuckPotion", "HatchBoost", "InstantHatch" }
 local CURRENCY = { "CashSmall", "CashMedium", "CashLarge" }
 -- Which kit pass card each pass uses (the 5th is a copy of the Green card).
 local PASS_CARDS = {

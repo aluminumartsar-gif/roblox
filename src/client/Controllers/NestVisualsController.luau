@@ -10,17 +10,19 @@
 	    shrink with distance instead of crowding a phone screen, sit just
 	    above the model's real height (generated meshes vary in size), and
 	    hide beyond Config.Feedback.NestLabelMaxDistance.
-	      Eggs:      name + heat bar ("MAX" when full). Everyone sees it —
-	                 a hot egg is a target, which is the point.
+	      Eggs:      name + a countdown bar to hatching. Everyone sees it —
+	                 an egg that's nearly done is a target, which is the point.
 	      Creatures: name in its rarity colour + "$X/s". On YOUR creatures
 	                 only, a vault bar with "$X" ("FULL" pulses).
-	    Eggs glow brighter as they heat up.
-	  * Prompts: owner sees Hatch; others see Steal unless the camp is
-	    locked/protected or they're carrying (display only; the server
-	    re-checks everything).
+	    Eggs glow brighter as they get closer to hatching, and in the last
+	    stretch (Config.Incubation.AlmostReadyFraction) they throw a light
+	    pillar into the sky that the whole map can see.
+	  * Prompts: owners see Sell on their cryptids (with the price); others
+	    see Steal on eggs unless the camp is locked/protected or they're
+	    carrying (display only; the server re-checks everything).
 	  * Secret creatures flicker and never show a clear name or body.
 	  * Life: creatures near the camera breathe and slowly look around
-	    (each on its own rhythm); eggs at high heat wobble; Legendary+ get a
+	    (each on its own rhythm); eggs about to hatch wobble; Legendary+ get a
 	    faint aura of sparks in their rarity colour. Motion is client-only:
 	    the server never moves nest models after placing them, and the
 	    exact base pivot is restored when a model goes out of range.
@@ -45,7 +47,8 @@ local localPlayer = Players.LocalPlayer
 
 local WHITE = Color3.new(1, 1, 1)
 local BAR_BACK = Color3.fromRGB(20, 20, 26)
-local HEAT_COLOR = Color3.fromRGB(255, 140, 60)
+local HATCH_COLOR = Color3.fromRGB(255, 190, 80)
+local ALMOST_COLOR = Color3.fromRGB(255, 80, 60)
 local VAULT_COLOR = Color3.fromRGB(110, 220, 120)
 local VAULT_FULL_COLOR = Color3.fromRGB(255, 170, 60)
 local INCOME_COLOR = Color3.fromRGB(150, 255, 160)
@@ -214,10 +217,10 @@ local function stepLife()
 		local offset: CFrame? = nil
 		if (life.base.Position - cameraPos).Magnitude <= FX.IdleMaxDistance then
 			if life.isEgg then
-				local heat = tonumber(model:GetAttribute("Heat")) or 0
-				if heat >= FX.EggWobbleHeat then
-					-- Wobbles in little fits, harder the hotter it is.
-					local k = math.clamp((heat - FX.EggWobbleHeat) / math.max(1, Config.Heat.Max - FX.EggWobbleHeat), 0, 1)
+				local progress = tonumber(model:GetAttribute("Progress")) or 0
+				if progress >= FX.EggWobbleProgress then
+					-- Wobbles in little fits, harder the closer it is to hatching.
+					local k = math.clamp((progress - FX.EggWobbleProgress) / math.max(0.01, 1 - FX.EggWobbleProgress), 0, 1)
 					local amplitude = math.rad(FX.EggWobbleDegrees) * (0.4 + 0.6 * k)
 					local fit = math.max(0, math.sin(t * 1.7 + life.phase)) ^ 4
 					local angle = amplitude * fit * math.sin(t * FX.EggWobbleSpeed)
@@ -296,22 +299,62 @@ local function setupEgg(instance: Instance)
 	local name = textLine(frame, 1, 0.5)
 	name.Text = egg.Name
 	name.TextColor3 = egg.Color:Lerp(WHITE, 0.5)
-	local heatFill, heatText = bar(frame, 2, 0.42, HEAT_COLOR)
-	local glow = shell:FindFirstChild("HeatGlow") :: PointLight?
+	local hatchFill, hatchText = bar(frame, 2, 0.42, HATCH_COLOR)
+	local glow = shell:FindFirstChild("HatchGlow") :: PointLight?
+	local pillar: BasePart? = nil
 
-	local function render()
-		local heat = tonumber(model:GetAttribute("Heat")) or 0
-		local fraction = math.clamp(heat / Config.Heat.Max, 0, 1)
-		heatText.Text = if fraction >= 1 then "MAX" else string.format("%d%%", math.floor(heat))
-		heatFill.Size = UDim2.fromScale(fraction, 1)
-		heatFill.BackgroundColor3 = Color3.fromRGB(255, 200, 90):Lerp(Color3.fromRGB(255, 70, 30), fraction)
-		if glow then
-			glow.Brightness = fraction * 2.5
-			glow.Range = 6 + fraction * 8
+	-- The last stretch: a light pillar into the night sky over the egg, so
+	-- everyone on the map knows something good is about to hatch here.
+	local function setPillar(on: boolean)
+		if on and not pillar then
+			local p = Instance.new("Part")
+			p.Name = "AlmostPillar"
+			p.Shape = Enum.PartType.Cylinder
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanQuery = false
+			p.CanTouch = false
+			p.CastShadow = false
+			p.Material = Enum.Material.Neon
+			p.Color = egg.Color:Lerp(ALMOST_COLOR, 0.5)
+			p.Transparency = 0.7
+			local height = 70
+			p.Size = Vector3.new(height, 1.6, 1.6)
+			p.CFrame = CFrame.new(shell.Position + Vector3.new(0, height / 2, 0)) * CFrame.Angles(0, 0, math.pi / 2)
+			-- Outside the model so the egg's wobble doesn't swing it; it goes
+			-- when the egg does (hatched, stolen, streamed out).
+			p.Parent = Workspace
+			pillar = p
+			model.AncestryChanged:Connect(function()
+				if not model:IsDescendantOf(game) and pillar then
+					pillar:Destroy()
+					pillar = nil
+				end
+			end)
+		elseif not on and pillar then
+			pillar:Destroy()
+			pillar = nil
 		end
 	end
+
+	local function render()
+		local progress = math.clamp(tonumber(model:GetAttribute("Progress")) or 0, 0, 1)
+		local remaining = math.max(0, tonumber(model:GetAttribute("Remaining")) or 0)
+		local almost = progress >= Config.Incubation.AlmostReadyFraction
+		local clock = string.format("%d:%02d", remaining // 60, remaining % 60)
+		hatchText.Text = if almost then "HATCHING " .. clock else clock
+		hatchFill.Size = UDim2.fromScale(progress, 1)
+		hatchFill.BackgroundColor3 = if almost then ALMOST_COLOR else HATCH_COLOR
+		if glow then
+			glow.Brightness = progress * 2.5
+			glow.Range = 6 + progress * 8
+			glow.Color = if almost then ALMOST_COLOR else HATCH_COLOR
+		end
+		setPillar(almost)
+	end
 	render()
-	model:GetAttributeChangedSignal("Heat"):Connect(render)
+	model:GetAttributeChangedSignal("Progress"):Connect(render)
+	model:GetAttributeChangedSignal("Remaining"):Connect(render)
 
 	addLife(model, true)
 end
@@ -338,8 +381,14 @@ local function updateItemPrompts(model: Instance)
 	local carrying = localPlayer:GetAttribute("Carrying") == true
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("ProximityPrompt") then
-			if d.Name == "HatchPrompt" then
+			if d.Name == "SellPrompt" then
 				d.Enabled = mine
+				if mine then
+					-- Vault plus RefundSeconds of income, as NestService pays it.
+					local vault = tonumber(model:GetAttribute("Vault")) or 0
+					local income = tonumber(model:GetAttribute("IncomePerSecond")) or 0
+					d.ActionText = "Sell $" .. Config.FormatNumber(math.floor(vault + income * Config.Sell.RefundSeconds))
+				end
 			elseif d.Name == "StealPrompt" then
 				d.Enabled = not mine and not locked and not protected and not carrying
 			end

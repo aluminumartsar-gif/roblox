@@ -9,7 +9,7 @@
 	  * Hatch reveal (HatchResult remote, only on the hatcher's screen): the
 	    screen dims, light rays in the rarity colour turn behind the new
 	    cryptid spinning in a ViewportFrame, a RARITY stamp punches in, then
-	    the name, its income and the heat it hatched at. The shell crack is
+	    the name, its income and the egg it came from. The shell crack is
 	    followed by a sting that gets bigger with rarity. Legendary and up
 	    add a camera shake and confetti; Secret gets TV static and a name
 	    that won't hold still. Closes itself after a few seconds; a tap
@@ -63,7 +63,7 @@ type Reveal = {
 	CreatureId: string,
 	Rarity: string,
 	Mutation: string?,
-	Heat: number,
+	EggId: string?,
 	Position: Vector3?,
 }
 
@@ -458,12 +458,13 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 		TextColor3 = FX.CashColor,
 		TextTransparency = 1,
 	})
-	local heatLabel = label(pop, {
-		Name = "Heat",
+	local eggDef = Config.Eggs[data.EggId or ""]
+	local eggLabel = label(pop, {
+		Name = "FromEgg",
 		Position = UDim2.fromScale(0.5, 0.975),
 		Size = UDim2.fromOffset(320, 24),
 		Font = Enum.Font.GothamBold,
-		Text = string.format("hatched at %d%% heat", math.floor(data.Heat + 0.5)),
+		Text = if eggDef then ("from a " .. eggDef.Name) else "",
 		TextColor3 = Color3.fromRGB(255, 190, 120),
 		TextTransparency = 1,
 	})
@@ -514,7 +515,7 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 		tween(stamp, 0.2, { TextTransparency = 0 })
 		tween(stampStroke, 0.2, { Transparency = 0.1 })
 	end)
-	for i, l in ipairs({ nameLabel, incomeLabel, heatLabel }) do
+	for i, l in ipairs({ nameLabel, incomeLabel, eggLabel }) do
 		task.delay(0.35 + i * 0.12, function()
 			tween(l, 0.25, { TextTransparency = 0 })
 		end)
@@ -624,7 +625,7 @@ local function pump()
 	end)
 end
 
-local function onHatchResult(creatureId: any, rarityName: any, mutation: any, heat: any, position: any)
+local function onHatchResult(creatureId: any, rarityName: any, mutation: any, eggId: any, position: any)
 	if typeof(creatureId) ~= "string" or typeof(rarityName) ~= "string" then
 		return
 	end
@@ -637,7 +638,7 @@ local function onHatchResult(creatureId: any, rarityName: any, mutation: any, he
 		CreatureId = creatureId,
 		Rarity = rarityName,
 		Mutation = if typeof(mutation) == "string" then mutation else nil,
-		Heat = if typeof(heat) == "number" then heat else 0,
+		EggId = if typeof(eggId) == "string" then eggId else nil,
 		Position = if typeof(position) == "Vector3" then position else nil,
 	}
 	-- The burst at the nest happens right away; the reveal may queue.

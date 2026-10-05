@@ -11,7 +11,7 @@
 	  NestSlots        -> more nests light up (PlotService.RefreshNests)
 	  WalkSpeed        -> MovementService.Refresh
 	  IncubationSpeed, VaultSize, LockDuration
-	                   -> read live by the heat tick, income tick and lock,
+	                   -> read live by the incubation tick, income tick and lock,
 	                      so there's nothing to push
 ]]
 

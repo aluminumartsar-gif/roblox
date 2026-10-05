@@ -34,7 +34,7 @@
 	Retention (Step 7.5): the Extra Spins and Double Offline Cash products
 	write straight into data.Retention (RetentionService starts later, so it
 	can't be required here); ProductGranted tells RetentionService to refresh
-	the player's screens. RetentionService reuses GrantMaxHeat / ExtendBuff /
+	the player's screens. RetentionService reuses GrantInstantHatch / ExtendBuff /
 	GrantEggs / GetTotalCreatureIncome so prizes behave exactly like the
 	products.
 ]]
@@ -136,42 +136,31 @@ function MonetizationService.GetTotalCreatureIncome(player: Player): number
 	return total
 end
 
---- Puts the player's best not-yet-maxed egg at max heat. "Best" = most
---- expensive egg type; ties go to the coolest egg. Returns true if applied.
-local function applyMaxHeat(player: Player): boolean
-	local data = DataService.Get(player)
-	if not data then
+--- Hatches the player's best egg right now (NestService.FindBestEgg: most
+--- expensive egg type; ties go to the one with the most time left).
+--- Returns true if an egg hatched. Never yields.
+local function applyInstantHatch(player: Player): boolean
+	local nestIndex = NestService.FindBestEgg(player)
+	if not nestIndex then
 		return false
 	end
-	local bestIndex, bestPrice, bestHeat = nil, -1, math.huge
-	for i, slot in ipairs(data.Nests) do
-		if slot ~= false and slot.Kind == "Egg" and not slot.Away and slot.Heat < Config.Heat.Max then
-			local price = Config.Eggs[slot.EggId].Price
-			if price > bestPrice or (price == bestPrice and slot.Heat < bestHeat) then
-				bestIndex, bestPrice, bestHeat = i, price, slot.Heat
-			end
-		end
-	end
-	if not bestIndex then
-		return false
-	end
-	return NestService.SetEggHeat(player, bestIndex, Config.Heat.Max)
+	return NestService.Hatch(player, nestIndex) ~= nil
 end
 
---- Max Heat, as the product does it: the best egg now, or saved for the
---- next egg. Never yields. Returns true if an egg was heated right away.
---- (Also used by RetentionService for spin-wheel prizes.)
-function MonetizationService.GrantMaxHeat(player: Player): boolean
-	if applyMaxHeat(player) then
+--- Instant Hatch, as the product does it: the best egg hatches now, or the
+--- hatch is saved for the next egg. Never yields. Returns true if an egg
+--- hatched right away. (Also used by RetentionService for wheel prizes.)
+function MonetizationService.GrantInstantHatch(player: Player): boolean
+	if applyInstantHatch(player) then
 		return true
 	end
 	DataService.Mutate(player, function(d)
-		d.PendingMaxHeat += 1
+		d.PendingInstantHatch += 1
 	end)
 	return false
 end
 
---- Adds time to a buff ("Luck" / "HeatRate"), as the potions do: a running
+--- Adds time to a buff ("Luck" / "HatchSpeed"), as the potions do: a running
 --- buff is extended. Never yields. (Also used by RetentionService.)
 function MonetizationService.ExtendBuff(player: Player, buffName: string, duration: number)
 	DataService.Mutate(player, function(d)
@@ -227,11 +216,11 @@ local function grantProduct(player: Player, key: string): string
 		MonetizationService.ExtendBuff(player, product.Buff, product.Duration)
 		return string.format("%s active!", product.DisplayName)
 
-	elseif product.Effect == "MaxHeatOneEgg" then
-		if MonetizationService.GrantMaxHeat(player) then
-			return "Your best egg is at max heat!"
+	elseif product.Effect == "InstantHatch" then
+		if MonetizationService.GrantInstantHatch(player) then
+			return "Your best egg hatched!"
 		end
-		return "Max Heat saved — it'll hit your next egg."
+		return "Instant Hatch saved: it'll hatch your next egg the moment it lands."
 
 	elseif product.Effect == "ExtendLock" then
 		PlotService.EmergencyLock(player, Config.Plot.EmergencyLockBonus)
@@ -331,7 +320,7 @@ local function processReceipt(receipt: any): Enum.ProductPurchaseDecision
 end
 
 --------------------------------------------------------------------------
--- Pending rewards (eggs that didn't fit, Max Heat with no egg)
+-- Pending rewards (eggs that didn't fit, Instant Hatch with no egg)
 --------------------------------------------------------------------------
 
 local function applyPending()
@@ -347,11 +336,11 @@ local function applyPending()
 					Notifier.Send(player, "A saved " .. Config.Eggs[eggId].Name .. " was placed in your nest.", "Success")
 				end
 			end
-			if data.PendingMaxHeat > 0 and applyMaxHeat(player) then
+			if data.PendingInstantHatch > 0 and applyInstantHatch(player) then
 				DataService.Mutate(player, function(d)
-					d.PendingMaxHeat -= 1
+					d.PendingInstantHatch -= 1
 				end)
-				Notifier.Send(player, "Your saved Max Heat warmed your best egg!", "Success")
+				Notifier.Send(player, "Your saved Instant Hatch hatched your best egg!", "Success")
 			end
 		end
 	end

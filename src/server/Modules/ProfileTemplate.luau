@@ -27,7 +27,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 local ProfileTemplate = {}
 
 -- Bump this ONLY when you add a migration below.
-ProfileTemplate.SchemaVersion = 1
+ProfileTemplate.SchemaVersion = 2
 
 -- How many purchase receipts to remember for idempotency. Roblox retries a
 -- failed receipt for a limited window, so this only has to outlive that.
@@ -39,7 +39,7 @@ export type NestSlot = {
 	CreatureId: string?,     -- set when Kind == "Creature"
 	Rarity: string?,         -- set when Kind == "Creature"
 	Mutation: string?,       -- reserved for the mutation layer
-	Heat: number,            -- 0..Config.Heat.Max, meaningful for eggs
+	Incubated: number?,      -- eggs: seconds of incubation done (0..egg HatchTime)
 	Vault: number,           -- uncollected cash, meaningful for creatures
 	AcquiredAt: number,      -- os.time() when it entered this nest
 	LastIncomeAt: number,    -- os.time() of the last income tick
@@ -61,7 +61,7 @@ export type ProfileData = {
 	Stats: { [string]: any },
 	SpawnLockUntil: number,
 	PendingEggs: { string },              -- bought eggs waiting for a free nest
-	PendingMaxHeat: number,               -- Max Heat purchases waiting for an egg
+	PendingInstantHatch: number,          -- Instant Hatch purchases waiting for an egg
 	Retention: RetentionData,             -- Step 7.5 (RetentionService)
 }
 
@@ -118,6 +118,9 @@ function ProfileTemplate.new(): ProfileData
 			StealsCommitted = 0,
 			StealsSuffered = 0,
 			CapturesWon = 0,
+			PhotosTaken = 0,
+			CreaturesSold = 0,
+			CaughtByMother = 0,
 			Playtime = 0,
 			JoinCount = 0,
 			FirstJoinAt = 0,  -- filled on first load
@@ -125,7 +128,7 @@ function ProfileTemplate.new(): ProfileData
 		},
 		SpawnLockUntil = 0,
 		PendingEggs = {},
-		PendingMaxHeat = 0,
+		PendingInstantHatch = 0,
 		Retention = {
 			DailyLastDay = 0,
 			DailyStreak = 0,
@@ -146,7 +149,33 @@ end
 --------------------------------------------------------------------------
 
 local Migrations: { (ProfileData) -> () } = {
-	-- [1] = function(data) ... end,  -- v1 -> v2
+	-- v1 -> v2: heat is gone. Eggs now count up to their HatchTime and
+	-- hatch by themselves. An egg keeps the same share of progress it had
+	-- in heat; creatures just drop the field. The Nest Warmer buff is now
+	-- Hatch Boost ("HatchSpeed") and Max Heat purchases waiting for an egg
+	-- become Instant Hatch ones.
+	[1] = function(data: any)
+		if typeof(data.Nests) == "table" then
+			for _, slot in pairs(data.Nests) do
+				if typeof(slot) == "table" then
+					local egg = slot.Kind == "Egg" and Config.Eggs[slot.EggId or ""]
+					if egg then
+						local heat = math.clamp(tonumber(slot.Heat) or 0, 0, 100)
+						slot.Incubated = egg.HatchTime * heat / 100
+					end
+					slot.Heat = nil
+				end
+			end
+		end
+		if typeof(data.Buffs) == "table" and data.Buffs.HeatRate ~= nil then
+			data.Buffs.HatchSpeed = math.max(tonumber(data.Buffs.HatchSpeed) or 0, tonumber(data.Buffs.HeatRate) or 0)
+			data.Buffs.HeatRate = nil
+		end
+		if data.PendingMaxHeat ~= nil then
+			data.PendingInstantHatch = (tonumber(data.PendingInstantHatch) or 0) + (tonumber(data.PendingMaxHeat) or 0)
+			data.PendingMaxHeat = nil
+		end
+	end,
 }
 
 --------------------------------------------------------------------------
@@ -218,7 +247,11 @@ local function repair(data: ProfileData, context: string): { string }
 				fix(string.format("Nest %d held unknown creature '%s', cleared", i, tostring(slot.CreatureId)))
 				data.Nests[i] = false
 			else
-				slot.Heat = math.clamp(tonumber(slot.Heat) or 0, 0, Config.Heat.Max)
+				if slot.Kind == "Egg" then
+					slot.Incubated = math.clamp(tonumber(slot.Incubated) or 0, 0, Config.Eggs[slot.EggId].HatchTime)
+				else
+					slot.Incubated = nil
+				end
 				slot.Vault = math.max(0, math.floor(tonumber(slot.Vault) or 0))
 				-- A slot still marked Away means the last session ended while a
 				-- thief was carrying it and before they claimed it (claiming
@@ -318,10 +351,10 @@ local function repair(data: ProfileData, context: string): { string }
 			table.remove(data.PendingEggs, i)
 		end
 	end
-	if typeof(data.PendingMaxHeat) ~= "number" or data.PendingMaxHeat < 0 then
-		data.PendingMaxHeat = 0
+	if typeof(data.PendingInstantHatch) ~= "number" or data.PendingInstantHatch < 0 then
+		data.PendingInstantHatch = 0
 	end
-	data.PendingMaxHeat = math.floor(data.PendingMaxHeat)
+	data.PendingInstantHatch = math.floor(data.PendingInstantHatch)
 
 	-- Retention (Step 7.5): every field a whole, finite, non-negative number.
 	if typeof(data.Retention) ~= "table" then

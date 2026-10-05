@@ -12,7 +12,7 @@
 	  1. Welcome card                       -> "Let's go!"
 	  2. Grab an egg off the egg belt       done: carrying, or bought one
 	  3. Carry it to your camp's pad        done: an egg is in a nest
-	  4. Heat & hatch                       done: Stats.Hatches > 0
+	  4. Guard it until it hatches          done: Stats.Hatches > 0
 	  5. Collect from your cryptid          done: a CashCollected event arrived
 	  6. Tips card                          -> "Let's play!"
 
@@ -261,7 +261,7 @@ local function myPad(): BasePart?
 	return nil
 end
 
---- My nest item with the biggest value of `attribute` (Heat for eggs, Vault
+--- My nest item with the biggest value of `attribute` (Progress for eggs, Vault
 --- for cryptids), among models tagged `tag`.
 local function myBestItem(tag: string, attribute: string): (Model?, number)
 	local best: Model? = nil
@@ -349,11 +349,12 @@ local function hatchGuide(state: State): Guide
 		end
 		return beltGuide(state, "No egg in your nests right now.")
 	end
-	local egg, heat = myBestItem(Config.Tags.Egg, "Heat")
-	local heatText = if egg then string.format("at %s", bold(string.format("%d%% heat", math.floor(heat)))) else bold("warming up")
+	local egg = myBestItem(Config.Tags.Egg, "Progress")
+	local remaining = if egg then tonumber(egg:GetAttribute("Remaining")) or 0 else 0
+	local clock = string.format("%d:%02d", remaining // 60, remaining % 60)
 	return {
-		text = "Your egg is " .. heatText .. ". The hotter it gets, the better the odds of a rare cryptid — "
-			.. "but a hot egg tempts thieves! Hold " .. bold("Hatch") .. " on it whenever you're ready. Try it now!",
+		text = "Your egg hatches by itself in " .. bold(clock) .. ". Until then anyone can "
+			.. bold("steal") .. " it, so stay close and bat away thieves! Better eggs take longer, and everyone can see them.",
 		target = egg,
 		point = homePoint(),
 	}
@@ -403,7 +404,7 @@ local STEPS: { Step } = {
 		end,
 	},
 	{
-		Title = "Heat it up & hatch it",
+		Title = "Guard it until it hatches",
 		Card = false,
 		Done = function(state)
 			return state.hatches > 0
@@ -438,12 +439,14 @@ local STEPS: { Step } = {
 		Button = "Let's play!",
 		Guide = function(_state)
 			return {
-				text = "• The " .. bold("Upgrades") .. " cabin by the campfire sells more nests, faster heat and faster feet.\n"
+				text = "• The " .. bold("Upgrades") .. " cabin by the campfire sells more nests, faster hatching and faster feet.\n"
 					.. "• " .. bold("LOCK CAMP") .. " (top left) shuts your door to thieves for a while.\n"
-					.. "• Unlocked camps can be robbed: hold " .. bold("Steal") .. " on their eggs and cryptids. Bonk a thief with your "
+					.. "• Unlocked camps can be robbed: hold " .. bold("Steal") .. " on their eggs. Hatched cryptids are safe, and you can " .. bold("Sell") .. " the ones you don't want. Bonk a thief with your "
 					.. bold("Bat") .. " to make them drop it.\n"
 					.. "• Wild cryptids turn up in the woods. Catch them, and snap photos with your "
-					.. bold("Field Camera") .. " for your Codex.",
+					.. bold("Field Camera") .. " for your Codex.\n"
+					.. "• When the fire gutters, " .. bold(Config.Hunt.Name) .. " comes for anyone carrying an egg. "
+					.. "Your camp and the campfire's light are the only safe places.",
 				target = upgradesCounter(),
 			}
 		end,

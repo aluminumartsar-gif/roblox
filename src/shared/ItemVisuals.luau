@@ -18,7 +18,7 @@
 	anything.
 
 	Contract callers rely on:
-	  * egg:      PrimaryPart named "Shell", with a PointLight "HeatGlow"
+	  * egg:      PrimaryPart named "Shell", with a PointLight "HatchGlow"
 	  * creature: PrimaryPart named "Body"; parts named "Eye" are left alone
 	              by the Secret flicker
 ]]
@@ -81,9 +81,9 @@ end
 -- Eggs
 --------------------------------------------------------------------------
 
-local function addHeatGlow(shell: BasePart)
+local function addHatchGlow(shell: BasePart)
 	local glow = Instance.new("PointLight")
-	glow.Name = "HeatGlow"
+	glow.Name = "HatchGlow"
 	glow.Color = Color3.fromRGB(255, 140, 60)
 	glow.Range = 10
 	glow.Brightness = 0
@@ -125,14 +125,14 @@ local function buildPlaceholderEgg(eggId: string): Model
 		})
 	end
 
-	addHeatGlow(shell)
+	addHatchGlow(shell)
 	model.PrimaryPart = shell
 	shell.PivotOffset = CFrame.new(0, -size.Y / 2, 0)
 	return model
 end
 
 --- An egg standing on the origin. The shell carries a PointLight named
---- HeatGlow that clients brighten as heat rises.
+--- HatchGlow that clients brighten as it gets closer to hatching.
 function ItemVisuals.BuildEgg(eggId: string): Model
 	assert(Config.Eggs[eggId], "Unknown egg " .. tostring(eggId))
 	local template = ItemVisuals.GetTemplate("Eggs", eggId)
@@ -142,8 +142,8 @@ function ItemVisuals.BuildEgg(eggId: string): Model
 	local model = cloneTemplate(template, "Egg")
 	local shell = model.PrimaryPart :: BasePart
 	shell.Name = "Shell"
-	if not shell:FindFirstChild("HeatGlow") then
-		addHeatGlow(shell)
+	if not shell:FindFirstChild("HatchGlow") then
+		addHatchGlow(shell)
 	end
 	return model
 end

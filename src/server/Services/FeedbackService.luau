@@ -91,7 +91,7 @@ function FeedbackService.DebugHatch(player: Player, which: string?): string
 		def = list[math.random(1, #list)]
 	end
 	local position = nestPosition(player, 1) or rootPosition(player)
-	RemoteGuard.GetClientEvent("HatchResult"):FireClient(player, def.Id, def.Rarity, nil, math.random(0, Config.Heat.Max), position)
+	RemoteGuard.GetClientEvent("HatchResult"):FireClient(player, def.Id, def.Rarity, nil, Config.EggOrder[math.random(1, #Config.EggOrder)], position)
 	if position and Config.GetRarityIndex(def.Rarity) >= Config.Feedback.BigRarityIndex then
 		sendAll("HatchBurst", { Position = position, Rarity = def.Rarity, UserId = player.UserId })
 	end

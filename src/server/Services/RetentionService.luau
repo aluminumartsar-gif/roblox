@@ -29,7 +29,7 @@
 
 	Rewards (Config.Retention) are lists of items: income-scaled cash, eggs
 	(best unlocked egg if the named one is locked; saved for a free nest if
-	there's no room), potion-style buffs, and Max Heat — granted through
+	there's no room), potion-style buffs, and Instant Hatch — granted through
 	MonetizationService's helpers so they behave exactly like the products.
 
 	The client gets everything it shows through RetentionState: on join,
@@ -148,9 +148,9 @@ local function itemText(player: Player, item: Item): string
 	elseif item.Kind == "Buff" then
 		local name = R.BuffNames[item.Buff or ""] or tostring(item.Buff)
 		return string.format("%s %dm", name, (item.Duration or 0) // 60)
-	elseif item.Kind == "MaxHeat" then
+	elseif item.Kind == "InstantHatch" then
 		local count = item.Count or 1
-		return if count > 1 then string.format("%dx Max Heat", count) else "Max Heat"
+		return if count > 1 then string.format("%dx Instant Hatch", count) else "Instant Hatch"
 	end
 	return "?"
 end
@@ -206,14 +206,14 @@ local function grantItem(player: Player, item: Item, reason: string): string
 		end
 		return itemText(player, item)
 
-	elseif item.Kind == "MaxHeat" then
-		local heatedNow = false
+	elseif item.Kind == "InstantHatch" then
+		local hatchedNow = false
 		for _ = 1, item.Count or 1 do
-			if MonetizationService.GrantMaxHeat(player) then
-				heatedNow = true
+			if MonetizationService.GrantInstantHatch(player) then
+				hatchedNow = true
 			end
 		end
-		return itemText(player, item) .. (if heatedNow then "" else " (saved for your next egg)")
+		return itemText(player, item) .. (if hatchedNow then "" else " (saved for your next egg)")
 	end
 
 	warnf("Reward has an unknown kind '%s'", tostring(item.Kind))
@@ -627,7 +627,7 @@ local function validateConfig()
 				warnf("%s names unknown egg '%s'", at, tostring(item.EggId))
 			elseif item.Kind == "Buff" and not R.BuffNames[item.Buff or ""] then
 				warnf("%s names unknown buff '%s'", at, tostring(item.Buff))
-			elseif item.Kind ~= "Cash" and item.Kind ~= "Egg" and item.Kind ~= "Buff" and item.Kind ~= "MaxHeat" then
+			elseif item.Kind ~= "Cash" and item.Kind ~= "Egg" and item.Kind ~= "Buff" and item.Kind ~= "InstantHatch" then
 				warnf("%s has unknown Kind '%s'", at, tostring(item.Kind))
 			end
 		end

@@ -140,14 +140,15 @@ local function formatClock(seconds: number): string
 	return string.format("%d:%02d", seconds // 60, seconds % 60)
 end
 
---- "Rare Yeti", "Forest Egg (62% heat)", "???"
+--- "Rare Yeti", "Void Egg (62% hatched)", "???"
 local function itemLabel(slot: any): string
 	if slot.Kind == "Egg" then
 		local egg = Config.Eggs[slot.EggId]
-		if slot.Heat == nil then
+		local progress = NestService.GetProgress(slot)
+		if progress <= 0 then
 			return egg and egg.Name or "Egg" -- fresh off the belt
 		end
-		return string.format("%s (%d%% heat)", egg and egg.Name or "Egg", math.floor(slot.Heat or 0))
+		return string.format("%s (%d%% hatched)", egg and egg.Name or "Egg", math.floor(progress * 100))
 	end
 	local def = Config.CreaturesById[slot.CreatureId]
 	local rarity = def and Config.Rarities[def.Rarity]
@@ -208,7 +209,7 @@ local function buildItemModel(carry: Carry): Model
 	model:SetAttribute("Kind", slot.Kind)
 	if slot.Kind == "Egg" then
 		model:SetAttribute("EggId", slot.EggId)
-		model:SetAttribute("Heat", slot.Heat)
+		model:SetAttribute("Progress", NestService.GetProgress(slot))
 	else
 		model:SetAttribute("CreatureId", slot.CreatureId)
 		model:SetAttribute("Rarity", slot.Rarity)
@@ -473,6 +474,18 @@ function StealService.Drop(player: Player, reason: string)
 	log("carry %d dropped by %s (%s)", carry.Id, player.Name, reason)
 end
 
+--- The Brood Mother (HuntService) takes back whatever `player` is
+--- carrying: a stolen egg goes home to its owner, a belt egg or a captured
+--- cryptid is gone. Returns false if they weren't carrying anything.
+function StealService.Reclaim(player: Player, reason: string): boolean
+	local carry = carryByCarrier[player]
+	if not carry then
+		return false
+	end
+	returnHome(carry, reason)
+	return true
+end
+
 --- A bought (or picked-up) belt egg reaches its carrier's pad.
 local function claimBeltEgg(player: Player, carry: Carry)
 	local eggId = carry.Slot.EggId
@@ -480,7 +493,7 @@ local function claimBeltEgg(player: Player, carry: Carry)
 	forget(carry)
 	local nestIndex = NestService.PlaceEgg(player, eggId, 0)
 	if nestIndex then
-		Notifier.Send(player, string.format("%s is in nest %d. Let it heat up!", itemLabel(carry.Slot), nestIndex), "Success")
+		Notifier.Send(player, string.format("%s is in nest %d. Guard it until it hatches!", itemLabel(carry.Slot), nestIndex), "Success")
 	else
 		-- Nests filled up while it was being carried: it waits for the next
 		-- free nest (MonetizationService places pending eggs).
@@ -609,6 +622,9 @@ local function checkSteal(thief: Player, plot: PlotRecord, nestIndex: number): (
 	local slot = NestService.GetSlot(owner, nestIndex)
 	if not slot or slot.Away then
 		return false, "Nothing to steal there."
+	end
+	if not Config.Steal.StealableKinds[slot.Kind] then
+		return false, "Hatched cryptids can't be stolen. Go for the eggs!"
 	end
 	if PlotService.IsLocked(plot) then
 		return false, "This camp is locked."
@@ -895,7 +911,6 @@ function StealService.CarryCaptured(player: Player, creatureId: string, rarity: 
 			Kind = "Creature",
 			CreatureId = creatureId,
 			Rarity = rarity,
-			Heat = 0,
 			Vault = 0,
 			AcquiredAt = now,
 			LastIncomeAt = now,
@@ -930,9 +945,12 @@ function StealService.Start()
 	alarmRemote = RemoteGuard.GetClientEvent("StealAlarm")
 	runtimeFolder = Workspace:WaitForChild("Runtime") :: Folder
 
-	-- Every item drawn in a nest gets a Steal prompt.
+	-- Every stealable item drawn in a nest gets a Steal prompt (eggs only,
+	-- per Config.Steal.StealableKinds).
 	NestService.ItemRendered:Connect(function(_owner: Player, plot: PlotRecord, nestIndex: number, model: Model, slot: any)
-		wireStealPrompt(plot, nestIndex, model, slot)
+		if Config.Steal.StealableKinds[slot.Kind] then
+			wireStealPrompt(plot, nestIndex, model, slot)
+		end
 	end)
 	for _, plot in ipairs(PlotService.GetPlots()) do
 		if plot.Owner then

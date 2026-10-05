@@ -87,7 +87,7 @@ function RebirthService.Rebirth(player: Player): RemoteGuard.Result
 	DataService.Mutate(player, function(d)
 		for _, key in ipairs(Config.Rebirth.Resets) do
 			if key == "Cash" then
-				d.Cash = 0
+				d.Cash = Config.Rebirth.StartingCash -- a head start, not counted as earned
 			elseif key == "Nests" then
 				d.Nests = fresh.Nests
 			elseif key == "Upgrades" then

@@ -8,26 +8,32 @@
 	  * Source of truth is the owner's profile: data.Nests[i] is an egg slot,
 	    a creature slot, or false. This service turns that into models in
 	    Workspace.Runtime when a plot is claimed, and clears them on release.
-	  * Heat: every Config.Heat.TickInterval, each egg gains heat at
-	    (Max / SecondsToMax) * BoostService.GetHeatRateMultiplier(owner).
+	  * Incubation: every Config.Incubation.TickInterval, each egg's
+	    Incubated seconds grow by dt * BoostService.GetHatchSpeedMultiplier.
 	    Written straight into the profile without a client push (it changes
-	    every second); clients read it from the egg model's Heat attribute.
-	  * Hatch: the egg's prompt, owner only. Rolls on the server with the
-	    egg's current heat and the owner's luck, swaps the slot to a creature,
-	    and fires HatchResult to the hatcher for the reveal (Step 8).
+	    every second); clients read the egg model's Progress / Remaining
+	    attributes. When an egg reaches its HatchTime it hatches by itself.
+	    An egg that's away (being carried by a thief) doesn't incubate.
+	  * Hatch: rolls on the server with the owner's luck, swaps the slot to a
+	    creature, fires HatchResult to the owner for the reveal.
+	  * Sell: owner-only prompt on a creature. Pays its vault plus
+	    Config.Sell.RefundSeconds of its income and empties the nest.
+	  * Big eggs (Config.Eggs[id].AnnounceInNest) are announced to the whole
+	    server when they land in a nest — an open invitation to thieves.
 
 	Model attributes (read by the client's NestVisualsController):
 	  all:      Kind ("Egg"|"Creature"), OwnerUserId, PlotIndex, NestIndex
-	  egg:      EggId, Heat
+	  egg:      EggId, Progress (0..1), Remaining (seconds at the current speed)
 	  creature: CreatureId, Rarity, Mutation, Vault, VaultCap, IncomePerSecond
 	            (the income ones are kept up to date by IncomeService)
 
-	Step 4 (stealing) moves items with TakeSlot / PutSlot.
+	StealService moves eggs with SetAway / SetSlot.
 ]]
 
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
-local CollectionService = game:GetService("CollectionService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -54,6 +60,8 @@ local NestService = {}
 NestService.ItemRendered = Signal.new()
 --- Fired as (owner, nestIndex, result) after a successful hatch.
 NestService.Hatched = Signal.new()
+--- Fired as (owner, nestIndex, creatureId, amount) after a creature is sold.
+NestService.Sold = Signal.new()
 
 -- plotIndex -> nestIndex -> model
 local visuals: { [number]: { [number]: Model } } = {}
@@ -64,6 +72,11 @@ local function log(fmt: string, ...: any)
 	if Config.Debug.Verbose then
 		print(string.format("[SAC/Nest] " .. fmt, ...))
 	end
+end
+
+local function formatClock(seconds: number): string
+	seconds = math.max(0, math.ceil(seconds))
+	return string.format("%d:%02d", seconds // 60, seconds % 60)
 end
 
 --------------------------------------------------------------------------
@@ -111,9 +124,23 @@ function NestService.CountUsed(player: Player): number
 	return used
 end
 
-local function newEggSlot(eggId: string, heat: number): any
+--- Seconds of incubation an egg needs (its HatchTime).
+function NestService.GetHatchTime(eggId: string): number
+	local egg = Config.Eggs[eggId]
+	return if egg then egg.HatchTime else 60
+end
+
+--- 0..1 incubation progress of an egg slot.
+function NestService.GetProgress(slot: any): number
+	if not slot or slot.Kind ~= "Egg" then
+		return 0
+	end
+	return math.clamp((slot.Incubated or 0) / NestService.GetHatchTime(slot.EggId), 0, 1)
+end
+
+local function newEggSlot(eggId: string, incubated: number): any
 	local now = os.time()
-	return { Kind = "Egg", EggId = eggId, Heat = heat, Vault = 0, AcquiredAt = now, LastIncomeAt = now }
+	return { Kind = "Egg", EggId = eggId, Incubated = incubated, Vault = 0, AcquiredAt = now, LastIncomeAt = now }
 end
 
 local function newCreatureSlot(result: EggRoller.HatchResult): any
@@ -123,7 +150,6 @@ local function newCreatureSlot(result: EggRoller.HatchResult): any
 		CreatureId = result.CreatureId,
 		Rarity = result.Rarity,
 		Mutation = result.Mutation,
-		Heat = 0,
 		Vault = 0,
 		AcquiredAt = now,
 		LastIncomeAt = now,
@@ -156,19 +182,44 @@ local function clearVisual(plotIndex: number, nestIndex: number)
 	end
 end
 
-local function addHatchPrompt(model: Model, eggName: string)
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "HatchPrompt"
-	prompt.ActionText = "Hatch"
-	prompt.ObjectText = eggName
-	prompt.HoldDuration = Config.Prompts.HatchHold
-	prompt.MaxActivationDistance = Config.Prompts.MaxActivationDistance
-	prompt.RequiresLineOfSight = Config.Prompts.RequiresLineOfSight
-	prompt.Parent = model.PrimaryPart
-	return prompt
+--- Pushes an egg's progress onto its model for the label.
+local function updateEggAttributes(model: Model, slot: any, speed: number)
+	local hatchTime = NestService.GetHatchTime(slot.EggId)
+	local incubated = math.clamp(slot.Incubated or 0, 0, hatchTime)
+	local progress = math.floor(incubated / hatchTime * 1000) / 1000
+	local remaining = math.ceil((hatchTime - incubated) / math.max(speed, 0.01))
+	if model:GetAttribute("Progress") ~= progress then
+		model:SetAttribute("Progress", progress)
+	end
+	if model:GetAttribute("Remaining") ~= remaining then
+		model:SetAttribute("Remaining", remaining)
+	end
 end
 
-local hatchFromPrompt: (Player, PlotRecord, number) -> ()
+local sellFromPrompt: (Player, PlotRecord, number) -> ()
+
+local function addSellPrompt(model: Model, slot: any, plot: PlotRecord, nestIndex: number)
+	if not Config.Sell.Enabled then
+		return
+	end
+	local def = Config.CreaturesById[slot.CreatureId]
+	local rarityIndex = Config.GetRarityIndex(slot.Rarity or "")
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "SellPrompt"
+	prompt.ActionText = "Sell"
+	prompt.ObjectText = if def then def.Name else "Cryptid"
+	prompt.HoldDuration = if rarityIndex >= Config.Sell.RareHoldFromIndex
+		then Config.Prompts.SellHoldRare
+		else Config.Prompts.SellHold
+	prompt.MaxActivationDistance = Config.Prompts.MaxActivationDistance
+	prompt.RequiresLineOfSight = Config.Prompts.RequiresLineOfSight
+	-- Only the owner ever sees it (NestVisualsController); the server checks too.
+	prompt.Enabled = false
+	prompt.Parent = model.PrimaryPart
+	prompt.Triggered:Connect(function(player)
+		sellFromPrompt(player, plot, nestIndex)
+	end)
+end
 
 --- Rebuilds the model for one nest from the owner's profile.
 function NestService.RenderNest(plot: PlotRecord, nestIndex: number)
@@ -179,7 +230,7 @@ function NestService.RenderNest(plot: PlotRecord, nestIndex: number)
 	end
 	local slot = NestService.GetSlot(owner, nestIndex)
 	if not slot or slot.Away then
-		-- Away = being carried by a thief; StealService draws it overhead.
+		-- Away = being carried by a thief; StealService draws it.
 		return
 	end
 
@@ -187,12 +238,8 @@ function NestService.RenderNest(plot: PlotRecord, nestIndex: number)
 	if slot.Kind == "Egg" then
 		model = ItemVisuals.BuildEgg(slot.EggId)
 		model:SetAttribute("EggId", slot.EggId)
-		model:SetAttribute("Heat", math.floor(slot.Heat * 10) / 10)
+		updateEggAttributes(model, slot, BoostService.GetHatchSpeedMultiplier(owner))
 		CollectionService:AddTag(model, Config.Tags.Egg)
-		local prompt = addHatchPrompt(model, Config.Eggs[slot.EggId].Name)
-		prompt.Triggered:Connect(function(player)
-			hatchFromPrompt(player, plot, nestIndex)
-		end)
 	else
 		model = ItemVisuals.BuildCreature(slot.CreatureId, slot.Mutation)
 		model:SetAttribute("CreatureId", slot.CreatureId)
@@ -204,6 +251,7 @@ function NestService.RenderNest(plot: PlotRecord, nestIndex: number)
 		model:SetAttribute("VaultCap", BoostService.GetVaultCap(owner, slot))
 		model:SetAttribute("IncomePerSecond", BoostService.GetCreatureIncome(owner, slot))
 		CollectionService:AddTag(model, Config.Tags.Creature)
+		addSellPrompt(model, slot, plot, nestIndex)
 	end
 
 	model:SetAttribute("Kind", slot.Kind)
@@ -237,6 +285,21 @@ end
 -- Changing slots
 --------------------------------------------------------------------------
 
+local function announce(text: string, rarity: string)
+	RemoteGuard.GetClientEvent("GlobalAnnounce"):FireAllClients(text, rarity)
+end
+
+--- A big egg just landed in a nest: tell everyone where to find it.
+local function announceBigEgg(player: Player, slot: any)
+	local egg = Config.Eggs[slot.EggId]
+	if not egg or not egg.AnnounceInNest then
+		return
+	end
+	local remaining = (egg.HatchTime - (slot.Incubated or 0)) / math.max(BoostService.GetHatchSpeedMultiplier(player), 0.01)
+	announce(string.format("%s has a %s hatching at their camp in %s. Go get it!",
+		player.DisplayName, string.upper(egg.Name), formatClock(remaining)), "Legendary")
+end
+
 --- Puts a slot (or false) into a nest, saves, pushes, and redraws.
 function NestService.SetSlot(player: Player, nestIndex: number, slot: any)
 	DataService.Mutate(player, function(data)
@@ -245,6 +308,9 @@ function NestService.SetSlot(player: Player, nestIndex: number, slot: any)
 	local plot = PlotService.GetPlot(player)
 	if plot then
 		NestService.RenderNest(plot, nestIndex)
+	end
+	if slot and slot.Kind == "Egg" then
+		announceBigEgg(player, slot)
 	end
 end
 
@@ -268,23 +334,7 @@ function NestService.SetAway(player: Player, nestIndex: number, away: boolean, t
 	end
 end
 
---- Sets an egg's heat (Max Heat product) and its label in one go.
-function NestService.SetEggHeat(player: Player, nestIndex: number, heat: number): boolean
-	local slot = NestService.GetSlot(player, nestIndex)
-	if not slot or slot.Kind ~= "Egg" or slot.Away then
-		return false
-	end
-	slot.Heat = math.clamp(heat, 0, Config.Heat.Max)
-	DataService.MarkChanged(player)
-	local plot = PlotService.GetPlot(player)
-	local model = plot and NestService.GetVisual(plot.Index, nestIndex)
-	if model then
-		model:SetAttribute("Heat", slot.Heat)
-	end
-	return true
-end
-
---- Removes and returns a nest's slot (Step 4: stealing). nil if empty.
+--- Removes and returns a nest's slot. nil if empty.
 function NestService.TakeSlot(player: Player, nestIndex: number): any
 	local slot = NestService.GetSlot(player, nestIndex)
 	if slot then
@@ -295,35 +345,53 @@ end
 
 --- Places a new egg in the first free nest. Returns the nest index, or nil
 --- if there's no room. Does NOT charge — the caller handles payment.
-function NestService.PlaceEgg(player: Player, eggId: string, heat: number?): number?
+--- `incubated` is seconds of progress it already has (default 0).
+function NestService.PlaceEgg(player: Player, eggId: string, incubated: number?): number?
 	assert(Config.Eggs[eggId], "Unknown egg " .. tostring(eggId))
 	local nestIndex = NestService.FindEmptyNest(player)
 	if not nestIndex then
 		return nil
 	end
-	NestService.SetSlot(player, nestIndex, newEggSlot(eggId, heat or 0))
+	local hatchTime = NestService.GetHatchTime(eggId)
+	NestService.SetSlot(player, nestIndex, newEggSlot(eggId, math.clamp(incubated or 0, 0, hatchTime)))
 	return nestIndex
+end
+
+--- The player's most valuable egg in a nest (ties: the one with the most
+--- time left), or nil. Used by Instant Hatch.
+function NestService.FindBestEgg(player: Player): number?
+	local data = DataService.Get(player)
+	if not data then
+		return nil
+	end
+	local bestIndex, bestPrice, bestProgress = nil, -1, math.huge
+	for i, slot in ipairs(data.Nests) do
+		if slot ~= false and slot.Kind == "Egg" and not slot.Away then
+			local price = Config.Eggs[slot.EggId].Price
+			local progress = NestService.GetProgress(slot)
+			if price > bestPrice or (price == bestPrice and progress < bestProgress) then
+				bestIndex, bestPrice, bestProgress = i, price, progress
+			end
+		end
+	end
+	return bestIndex
 end
 
 --------------------------------------------------------------------------
 -- Hatching
 --------------------------------------------------------------------------
 
-local function announce(text: string, rarity: string)
-	RemoteGuard.GetClientEvent("GlobalAnnounce"):FireAllClients(text, rarity)
-end
-
---- Hatches the egg in `nestIndex`. Returns the result, or nil if there was
---- no egg there. All checks (ownership, distance) are the caller's job.
+--- Hatches the egg in `nestIndex` right now. Returns the result, or nil if
+--- there was no egg there. Never yields.
 function NestService.Hatch(player: Player, nestIndex: number): EggRoller.HatchResult?
 	local slot = NestService.GetSlot(player, nestIndex)
 	if not slot or slot.Kind ~= "Egg" or slot.Away then
 		return nil
 	end
 
-	local heat = slot.Heat
+	local eggId = slot.EggId
 	local luck = BoostService.GetLuckPercent(player)
-	local result = EggRoller.Hatch(slot.EggId, heat, luck)
+	local result = EggRoller.Hatch(eggId, luck)
 
 	-- The check above and this write happen with no yield between them, so
 	-- a double-trigger can't hatch the same egg twice.
@@ -346,16 +414,12 @@ function NestService.Hatch(player: Player, nestIndex: number): EggRoller.HatchRe
 		end)
 		local nestPosition = if okCf and itemCf then itemCf.Position else nil
 		RemoteGuard.GetClientEvent("HatchResult"):FireClient(player,
-			result.CreatureId, result.Rarity, result.Mutation, heat, nestPosition)
+			result.CreatureId, result.Rarity, result.Mutation, eggId, nestPosition)
 	end
 
 	local def = Config.CreaturesById[result.CreatureId]
 	local rarity = Config.Rarities[result.Rarity]
-	log("%s hatched %s (%s) from %s at heat %.0f, luck %d%%",
-		player.Name, def.Name, result.Rarity, slot.EggId, heat, luck)
-
-	Notifier.Send(player, string.format("You hatched %s %s! (heat %d%%)",
-		rarity.DisplayName, def.Name, math.floor(heat)), "Success")
+	log("%s hatched %s (%s) from %s, luck %d%%", player.Name, def.Name, result.Rarity, eggId, luck)
 
 	if rarity.AnnounceOnHatch then
 		if rarity.NeverRenderClearly then
@@ -369,9 +433,56 @@ function NestService.Hatch(player: Player, nestIndex: number): EggRoller.HatchRe
 	return result
 end
 
-hatchFromPrompt = function(player: Player, plot: PlotRecord, nestIndex: number)
-	if plot.Owner ~= player then
-		return -- Step 4 gives non-owners a steal prompt instead
+--------------------------------------------------------------------------
+-- Selling
+--------------------------------------------------------------------------
+
+--- What selling this creature slot pays right now.
+function NestService.GetSellValue(player: Player, slot: any): number
+	if not slot or slot.Kind ~= "Creature" then
+		return 0
+	end
+	local income = BoostService.GetCreatureIncome(player, slot)
+	return math.floor((slot.Vault or 0) + income * Config.Sell.RefundSeconds)
+end
+
+--- Sells the creature in `nestIndex`. Returns the cash paid (0 = nothing).
+--- All checks (ownership, distance) are the caller's job.
+function NestService.Sell(player: Player, nestIndex: number): number
+	local slot = NestService.GetSlot(player, nestIndex)
+	if not slot or slot.Kind ~= "Creature" or slot.Away then
+		return 0
+	end
+	local amount = NestService.GetSellValue(player, slot)
+	local plot = PlotService.GetPlot(player)
+	local model = plot and NestService.GetVisual(plot.Index, nestIndex)
+	local position = if model then model:GetPivot().Position else nil
+
+	-- Empty the nest first, then pay; nothing yields in between.
+	NestService.SetSlot(player, nestIndex, false)
+	DataService.Mutate(player, function(data)
+		data.Stats.CreaturesSold = (data.Stats.CreaturesSold or 0) + 1
+	end)
+	if amount > 0 then
+		DataService.AddCash(player, amount, "sell")
+		if position then
+			RemoteGuard.GetClientEvent("CashCollected"):FireClient(player, amount, position)
+		end
+	end
+
+	local def = Config.CreaturesById[slot.CreatureId]
+	local rarity = Config.Rarities[slot.Rarity or ""]
+	Notifier.Send(player, string.format("Sold your %s%s for $%s. Nest %d is free.",
+		if rarity and not rarity.NeverRenderClearly then rarity.DisplayName .. " " else "",
+		if def then def.Name else "cryptid", Config.FormatNumber(amount), nestIndex), "Success")
+	log("%s sold %s from nest %d for %d", player.Name, slot.CreatureId, nestIndex, amount)
+	NestService.Sold:Fire(player, nestIndex, slot.CreatureId, amount)
+	return amount
+end
+
+sellFromPrompt = function(player: Player, plot: PlotRecord, nestIndex: number)
+	if plot.Owner ~= player or not Config.Sell.Enabled then
+		return
 	end
 	local model = NestService.GetVisual(plot.Index, nestIndex)
 	if not model or not model.PrimaryPart then
@@ -381,30 +492,40 @@ hatchFromPrompt = function(player: Player, plot: PlotRecord, nestIndex: number)
 	if not RemoteGuard.IsWithinReach(player, model.PrimaryPart.Position) then
 		return
 	end
-	NestService.Hatch(player, nestIndex)
+	NestService.Sell(player, nestIndex)
 end
 
 --------------------------------------------------------------------------
--- Heat
+-- Incubation
 --------------------------------------------------------------------------
 
-local function tickHeat(dt: number)
-	local h = Config.Heat
-	local baseRate = h.Max / h.SecondsToMax
+local function tickIncubation(dt: number)
+	local due: { { owner: Player, nestIndex: number } } = {}
 	for _, plot in ipairs(PlotService.GetPlots()) do
 		local owner = plot.Owner
 		local data = owner and DataService.Get(owner)
 		if owner and data then
-			local rate = baseRate * BoostService.GetHeatRateMultiplier(owner)
+			local speed = BoostService.GetHatchSpeedMultiplier(owner)
 			for nestIndex, slot in ipairs(data.Nests) do
-				if slot ~= false and slot.Kind == "Egg" and not slot.Away and slot.Heat < h.Max then
-					slot.Heat = math.min(h.Max, slot.Heat + rate * dt)
+				if slot ~= false and slot.Kind == "Egg" and not slot.Away then
+					local hatchTime = NestService.GetHatchTime(slot.EggId)
+					slot.Incubated = math.min(hatchTime, (slot.Incubated or 0) + speed * dt)
 					local model = NestService.GetVisual(plot.Index, nestIndex)
 					if model then
-						model:SetAttribute("Heat", math.floor(slot.Heat * 10) / 10)
+						updateEggAttributes(model, slot, speed)
+					end
+					if slot.Incubated >= hatchTime then
+						table.insert(due, { owner = owner, nestIndex = nestIndex })
 					end
 				end
 			end
+		end
+	end
+	-- Hatch after the sweep so nothing changes under the loop.
+	for _, entry in ipairs(due) do
+		local ok, err = pcall(NestService.Hatch, entry.owner, entry.nestIndex)
+		if not ok then
+			warn(string.format("[SAC/Nest] hatching %s nest %d errored: %s", entry.owner.Name, entry.nestIndex, tostring(err)))
 		end
 	end
 end
@@ -472,12 +593,12 @@ function NestService.Start()
 	task.spawn(function()
 		local last = os.clock()
 		while true do
-			task.wait(Config.Heat.TickInterval)
+			task.wait(Config.Incubation.TickInterval)
 			local now = os.clock()
-			local ok, err = pcall(tickHeat, now - last)
+			local ok, err = pcall(tickIncubation, now - last)
 			last = now
 			if not ok then
-				warn("[SAC/Nest] heat tick errored: " .. tostring(err))
+				warn("[SAC/Nest] incubation tick errored: " .. tostring(err))
 			end
 		end
 	end)
@@ -493,7 +614,7 @@ function NestService.Start()
 				end
 			end
 		end)
-		game:GetService("Players").PlayerRemoving:Connect(function(player)
+		Players.PlayerRemoving:Connect(function(player)
 			lastRescue[player] = nil
 		end)
 	end
@@ -502,10 +623,8 @@ function NestService.Start()
 	if Config.Debug.RunOddsSimulationOnStart then
 		task.spawn(function()
 			for _, eggId in ipairs(Config.EggOrder) do
-				for _, heat in ipairs({ 0, Config.Heat.Max }) do
-					local report = EggRoller.SimulationReport(eggId, heat, 0, Config.Debug.SimulationRolls)
-					print(report)
-				end
+				local report = EggRoller.SimulationReport(eggId, 0, Config.Debug.SimulationRolls)
+				print(report)
 			end
 		end)
 	end

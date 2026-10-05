@@ -127,12 +127,16 @@ local function validateConfig(): (boolean, { string })
 		table.insert(problems, "Belt.ArcDegrees must be between 0 and 360")
 	end
 
-	-- Heat multipliers must name real rarities and never shrink a weight.
-	for rarity, multiplier in pairs(Config.Heat.MaxMultiplierByRarity) do
+	-- Luck can only boost real rarities.
+	for rarity in pairs(Config.Luck.BoostedRarities) do
 		if not Config.Rarities[rarity] then
-			table.insert(problems, string.format("Heat.MaxMultiplierByRarity names unknown rarity '%s'", rarity))
-		elseif typeof(multiplier) ~= "number" or multiplier < 1 then
-			table.insert(problems, string.format("Heat.MaxMultiplierByRarity.%s must be a number >= 1", rarity))
+			table.insert(problems, string.format("Luck.BoostedRarities names unknown rarity '%s'", tostring(rarity)))
+		end
+	end
+	-- Every egg needs a positive hatch time.
+	for eggId, egg in pairs(Config.Eggs) do
+		if typeof(egg.HatchTime) ~= "number" or egg.HatchTime <= 0 then
+			table.insert(problems, string.format("Eggs.%s.HatchTime must be a number > 0", eggId))
 		end
 	end
 

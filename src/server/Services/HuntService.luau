@@ -326,12 +326,7 @@ local function reclaim(player: Player): string?
 		local def = Config.CreaturesById[slot.CreatureId]
 		label = if def then def.Name else "cryptid"
 	end
-	local reclaimFn = (StealService :: any).Reclaim
-	if typeof(reclaimFn) == "function" then
-		reclaimFn(player, "brood mother")
-	else
-		StealService.Drop(player, "brood mother")
-	end
+	StealService.Reclaim(player, "brood mother")
 	return label
 end
 
