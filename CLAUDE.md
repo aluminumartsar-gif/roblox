@@ -307,6 +307,14 @@ debug-spawned items in it (snapshot before, restore after).
   until that owner save succeeds (or its retries run out). A leaving
   owner's forfeit only becomes claimable once their final save succeeds
   (`DataService.OnAfterRelease`); a shutdown never forfeits.
+- **Terrain heights are not what the numbers say.** Voxels are centred on
+  multiples of 4: a FillBlock topped at y = 0 renders its surface at y = 2,
+  FillCylinder paint lifts the ground it paints by ~2 studs, and an air cut
+  starting at y = -2 drops it to -2. MapBuilder fills 2 studs low
+  (`VOXEL_OFFSET`), paints discs as FillBlock strips, and cuts air from y = 0
+  up. Always measure with a raycast **after a frame's wait** (collision
+  updates a beat later) — this once buried every home pad and nobody could
+  claim an egg.
 - **The client owns its character's position.** Every reach check reads
   a position the client can teleport; claims also check travel time from
   where the carry started (`Config.Steal.CarryTravelSlack`).
