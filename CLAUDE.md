@@ -135,7 +135,8 @@ LocalScript, plain `.luau` = ModuleScript.
 - Studio-only test hook: `ServerStorage.SAC_Debug:Invoke(command, playerName, ...)`.
   Commands are listed at the top of `Modules/DebugCommands` (status, give,
   dump, save, wipe, plots, resetlock, simulate, giveegg, setheat, hatch,
-  setslot, nests, carries, unprotect, clearcooldown, snapshot, restore).
+  setslot, nests, carries, unprotect, clearcooldown, snapshot, restore,
+  receipt, pass).
   Must be used via a BindableFunction because MCP/command-bar code runs in a
   separate Luau VM and gets its own copies of modules.
 
@@ -187,6 +188,28 @@ LocalScript, plain `.luau` = ModuleScript.
   `UpgradeService.ApplyEffects(player)` so nests and walk speed update.
 - Rebirth resets exactly `Config.Rebirth.Resets`; add a new resettable key
   in RebirthService *and* the Bootstrap whitelist together.
+
+### Robux
+- All Robux logic is in `MonetizationService`. Passes reach the rest of the
+  game only through `BoostService.HasPass` (and `Pass_<Key>` player
+  attributes for the client).
+- The client sends only `("Pass" | "Product", key)`; the server looks up the
+  id, refuses `Id = 0`, checks the item makes sense, and prompts itself.
+- `ProcessReceiptForKey` is the idempotent core; never grant a product any
+  other way. A grant function must not yield.
+- Test without real ids via `SAC_Debug` `receipt` (fake purchase through the
+  real code) and `pass` (fake ownership, this session only).
+
+### Icons
+- The owner's RhosGFX vector icon pack (`../vector-icon-pack.zip`). Its
+  license allows use in this game but **forbids redistributing the files and
+  using them as input to AI systems**. So: pick icons by file name, never
+  open the PNGs, keep extracted files in the scratchpad (never in the repo),
+  and verify uploads by load status. The owner OK'd screenshots of the
+  finished UI.
+- Upload flow: `tools/serve-icons.ps1` + the MCP `upload_image` tool; ids go
+  in `Config.Icons`. Use them via `Components/Icon` (`Icon.new`,
+  `Icon.addLeft`). Bootstrap rejects icon names missing from `Config.Icons`.
 
 ### Test data
 Studio play tests read and write the **same DataStore as the live game**.

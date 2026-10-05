@@ -210,18 +210,35 @@ of your items is out being stolen.
 
 ---
 
-## Step 6 — Robux `[ ]`
+## Step 6 — Robux `[x]` (real purchase prompts pending owner's IDs)
 
-- [ ] Game pass ownership checks and effects (2× Cash, +4 Nests, Auto Collect,
-      VIP, Extended Lock)
-- [ ] Dev products and their effects
-- [ ] **Idempotent `ProcessReceipt`** — record the PurchaseId before granting
-- [ ] Robux Shop UI
-- [ ] Graceful handling of unconfigured (`Id = 0`) products
+- [x] Game pass ownership (checked on join + on purchase) and effects:
+      2× Cash, +4 Nests, Auto Collect, VIP (+10% luck, gold nests, chat tag),
+      Extended Lock (180s)
+- [x] Dev products: 3 cash packs, Luck Potion & Nest Warmer (stacking),
+      Max Heat (best egg, else saved), Emergency Lock (now, ignores
+      cooldown; stacks), 3-Egg Bundle (extras saved until a nest frees)
+- [x] **Idempotent `ProcessReceipt`**: PurchaseId recorded with the grant in
+      one synchronous step, saved before PurchaseGranted; retries re-save
+      only
+- [x] Robux Shop UI (ROBUX button, icons, Roblox prices, OWNED / SOON)
+- [x] Unconfigured (`Id = 0`) items show SOON and are refused server-side
+- [x] HUD buff chips with countdowns
+- [x] **Icon pack:** 28 icons uploaded from the owner's RhosGFX pack + 9
+      reused; `Config.Icons`; icons on HUD, plot panel, shops, banners, Bat
 
-**Test:** Studio test purchases; double-grant attempt must be rejected.
-**Owner action needed:** create the passes and products in the Creator
-Dashboard and paste the IDs into `Config`.
+**Tested on the Player1 test account (all pass):** placeholder items refused
+("coming soon"), junk requests refused; same PurchaseId twice → paid once,
+new id paid again, both ids + cash on disk; potions stack (1800s), Nest
+Warmer doubles heat rate, luck 60% → 70% with VIP in hatch logs; Max Heat
+picks the more valuable egg, saves itself with no egg and applies to the
+next; Emergency Lock 120s → stacks to 239s; bundle with 1 free nest → 1
+placed, 2 saved, placed when nests freed; passes: gold glow, capacity 6 →
+10, Yeti income $18.75 → $37.50, Auto Collect paid a full vault untouched,
+lock 180s; shop shows OWNED/SOON; VIP chat prefix delivered as "[VIP]".
+
+**Still to test once real IDs exist:** the actual Roblox purchase prompts
+and `PromptGamePassPurchaseFinished` (Studio test purchases need real ids).
 
 ---
 
@@ -273,7 +290,9 @@ Things only the owner can do. Ticked when done.
       players). An 11th player has no plot and is turned away with a message.
 - [ ] **Save the place** (File → Save to Roblox) so the place settings and
       map preview are kept
-- [ ] **Create game passes and dev products**, paste IDs into `Config` — Step 6
+- [ ] **Create game passes and dev products**, paste IDs into `Config` — Step 6.
+      5 passes (`Config.GamePasses`) and 8 products (`Config.DevProducts`);
+      prices in the brief. Then a Studio test purchase of each.
 
 ---
 
@@ -311,6 +330,15 @@ Things only the owner can do. Ticked when done.
   steal would make the item vanish for both players.
 - **Rebirth keeps active potions** (they're paid for with Robux).
 - **Upgrades are bought at the Upgrades cabin**, like eggs at the Egg Shop.
+- **Product rules Claude chose** (Step 6): Max Heat goes to your most
+  valuable not-yet-maxed egg; Emergency Lock locks immediately ignoring the
+  cooldown (and stacks); paid items that can't apply yet (Max Heat with no
+  egg, bundle eggs with no nest) are saved and applied automatically later;
+  Emergency Lock works even while carrying (it's paid for). Buffs stack by
+  extending their time.
+- **Icons:** owner's RhosGFX pack. Chosen by file name and verified by load
+  status; the owner OK'd screenshots of the finished UI. Raw PNGs never go
+  in the repo (license forbids redistribution).
 
 ---
 

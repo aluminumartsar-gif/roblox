@@ -326,6 +326,22 @@ code must treat `0` as "not configured" and skip it gracefully.**
 player's profile *before* granting the reward, and return
 `NotProcessedYet` on any failure so Roblox retries.
 
+### As built (Step 6)
+
+- **Robux Shop:** gold ROBUX button on the right edge. Passes first, then
+  items, each with an icon and description. Prices come from Roblox once the
+  real IDs are set; until then items show SOON and can't be bought.
+- **Max Heat** goes to your most valuable egg that isn't already maxed.
+  With no such egg, it's saved and hits your next egg automatically.
+- **Emergency Lock** locks your camp immediately — even during the normal
+  cooldown — for 2 minutes, or adds 2 minutes to a running lock.
+- **3-Egg Bundle** fills free nests; any eggs that don't fit are saved and
+  placed the moment a nest frees up. (The shop asks for at least one free
+  nest before opening the purchase.)
+- **Potions** stack: buying another while one is running adds its time.
+  Active potions show on the HUD with a countdown.
+- **VIP:** gold [VIP] chat tag, +10% luck, gold nest glow.
+
 ---
 
 ## 9. Data
