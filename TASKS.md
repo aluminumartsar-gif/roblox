@@ -102,7 +102,7 @@ and released the save lock.
 
 ---
 
-## Step 3 — Eggs, heat, hatching, income `[x]`
+## Step 3 — Eggs, heat, hatching, income `[x]` (heat later removed — Step 9)
 
 - [x] Egg Shop: counter prompt opens a panel (price, rebirth lock, Legendary+
       odds at heat 0 vs max). `BuyEgg` checks egg id, rebirths, standing at
@@ -242,18 +242,28 @@ and `PromptGamePassPurchaseFinished` (Studio test purchases need real ids).
 
 ---
 
-## Step 7 — Sightings and Codex `[ ]`
+## Step 7 — Sightings and Codex `[x]` (2-player checks pending)
 
-- [ ] Sighting scheduler (6–10 min), spawn in The Wilds, 90s lifetime
-- [ ] Server-wide banner + countdown
-- [ ] Player-count-weighted rarity
-- [ ] VHS filter near the sighting (tint, grain, FOV wobble)
-- [ ] 5-second contested capture hold; damage or a rival hold interrupts
-- [ ] Winner carries it home like a stolen item
-- [ ] Camera tool → Codex entries as grainy ViewportFrames
-- [ ] Rarity-page completion → permanent luck; survives rebirth
+- [x] Sighting scheduler (first 2 min after the first player, then 6–10 min
+      after the last one ended), spawn spot found by raycasts in The Wilds,
+      90s lifetime, never during a Hunt
+- [x] Server-wide banner + countdown + direction hint, world marker
+- [x] Player-count-weighted rarity
+- [x] VHS filter near the sighting (tint, scanlines, grain, REC timecode,
+      FOV wobble)
+- [x] 5-second contested capture hold; a rival hold, a Bat bonk or damage
+      interrupts
+- [x] Winner carries it home (StealService Source "Sighting"), visible from
+      across the map; dropped → anyone can grab it for 30s, then it escapes
+- [x] Field Camera tool → Codex entries; auto-log on hatch and claim
+- [x] Codex screen on the kit Index screen (evidence photos, silhouettes,
+      filters, search, field notes)
+- [x] Rarity-page completion → permanent luck; survives rebirth
 
-**Test:** force a sighting, contest it with 2 clients, carry it home.
+**Tested solo:** forced sighting (Epic Death Worm) found a spot first try,
+banner + VHS + REC showed; hatch auto-logged a Codex entry with the polaroid.
+**Needs a 2-player session:** contested holds, bonk interrupt, knocking a
+capture loose.
 
 ---
 
@@ -318,33 +328,62 @@ hand."
 - [ ] Re-test after the fix: buying anywhere round the belt, two players
       racing for one egg, grabbing a dropped egg with the bat in hand
 
-## Step 7.5 — Retention features `[ ]` (owner request)
+## Step 7.5 — Retention features `[x]` (owner request)
 
-Kit screens already exist for each; hidden until built.
+- [x] Daily Rewards (7-day streak, UTC days, scaled cash, eggs, buffs)
+- [x] Spin Wheel (free spin every 4h; 3 Extra Spins product, Id 0)
+- [x] Playtime Gifts (2, 5, 10, 15, 25, 40, 60 minutes into a visit)
+- [x] Offline Earnings (25% of income while away, up to 8h; Double
+      Offline Cash product, Id 0)
 
-- [ ] Daily Rewards (escalating daily login rewards)
-- [ ] Spin Wheel (free spin on a timer; extra spins as a Robux product)
-- [ ] Playtime Gifts (gifts unlock the longer a session lasts)
-- [ ] Offline Earnings (share of income while away; Robux "double" option)
+**Tested solo:** state computed on join (daily already claimed today, free
+spin ready, gift timers running, offline away 191s → nothing pending).
 
-## Step 8 — Polish and launch `[ ]`
+## Step 8 — Polish and launch `[~]`
 
-- [ ] Nest billboards (name/rarity/income) are fixed pixel size and crowd
-      a phone screen — make them smaller or stud-sized
-- [ ] UI pass: HUD, bottom bar, plot panel, notification feed, banner
-- [ ] Free Roblox sounds and particles; unique Secret hatch sound
-- [ ] Global leaderboard
-- [ ] First-join tutorial
-- [ ] Mobile check on a phone-sized viewport
-- [ ] Anti-exploit audit — every remote re-checked against the rules in
-      CLAUDE.md §2
-- [ ] Performance check — part counts, StreamingEnabled, memory over time
-- [ ] Art pass: replace placeholder creatures with generated meshes
-- [ ] **Wipe test data before launch:** Studio play tests write to the same
-      DataStore as the live game. Bump `Config.Data.StoreScope` (e.g. "v1" →
-      "live1") so launch starts from clean saves.
-- [ ] Launch checklist: icon, thumbnails, description, Creator Dashboard
-      monetization
+- [x] Nest labels stud-sized and compact (egg countdown bar; your vault only
+      on your own cryptids)
+- [x] Sounds (40, all verified loading), eerie music + dread ambience, hatch
+      reveal, cash popups, idle life, toast polish
+- [x] Global leaderboards (cash earned, rebirths, steals) in the hub
+- [x] First-join tutorial
+- [x] Art pass: generated scary meshes for the cryptids, the Brood Mother and
+      her nest (eggs and props in progress — `docs/ART.md`)
+- [x] World pass: terrain, palisade camps, dressed hub, dense Wilds, night
+      lighting, player lanterns
+- [x] Studio and live saves separated (`StudioStoreScope` / `StoreScope =
+      live1`) — live launches on clean saves
+- [~] Anti-exploit audit, data-integrity and runtime review (multi-agent
+      review + adversarial verification)
+- [~] Economy re-simulation for the new design (`docs/ECONOMY.md`)
+- [ ] Mobile check on a phone-sized viewport (Test → Device)
+- [ ] Launch checklist (`docs/LAUNCH.md`): icon, thumbnails, description,
+      Creator Dashboard monetization
+
+## Step 9 — Redesign: steal eggs, no heat, the Brood Mother `[x]` (owner direction)
+
+Owner: "I just want the game to be about stealing other people's eggs. I
+don't like the heat. Make the game fun with a scary vibe/twist." and "the
+characters are supposed to be scary."
+
+- [x] Heat removed: eggs count down a per-tier hatch time and hatch by
+      themselves; stolen eggs keep their progress; save migration v1 → v2
+- [x] Fixed odds per egg (old weights with ~40% heat baked in); luck only
+- [x] Only eggs can be stolen; hatched cryptids are safe; Sell your cryptids
+- [x] Big eggs (Sky, Void) announce themselves in a nest; eggs in their last
+      20% glow and throw a light pillar into the sky
+- [x] The Brood Mother: periodic Hunt; she chases egg carriers, can't enter
+      camps or the campfire light; jumpscare + stun + reclaim
+- [x] Scary art direction for every cryptid
+- [x] Products: Hatch Boost (was Nest Warmer), Instant Hatch (was Max Heat)
+- [x] Economy: flatter egg prices, cheaper upgrades, $1,500 after rebirth,
+      starting cash $500, rescue egg
+
+**Tested solo:** the owner's v1 save migrated cleanly; a Forest egg at 85%
+glowed, pillared, hatched by itself into a Goatman with the reveal; Sell paid
+vault + 60s; Hunt warning → emergence → chase ("SHE'S COMING FOR YOU") →
+catch, jumpscare, belt egg reclaimed — no errors. Owner's save snapshotted
+before and restored after.
 
 ---
 
@@ -353,79 +392,84 @@ Kit screens already exist for each; hidden until built.
 Things only the owner can do. Ticked when done.
 
 - [x] **Enable Studio Access to API Services** — confirmed working at Step 1
-- [ ] **Allow HTTP Requests** — File → Game Settings → Security (only if we end
-      up needing it)
-- [x] **Two-player test setup** — Test tab → Clients and Servers → Players: 2
-      (done for Step 2; needed again for Step 4)
-- [ ] **Set Server Size to 10** (= `Config.Plot.Count`) for the place in the
-      Creator Dashboard place settings (look for "Server Size" / max
-      players). An 11th player has no plot and is turned away with a message.
-- [ ] **Save the place** (File → Save to Roblox) so the place settings and
-      map preview are kept
-- [ ] **Create game passes and dev products**, paste IDs into `Config` — Step 6.
-      5 passes (`Config.GamePasses`) and 8 products (`Config.DevProducts`);
-      prices in the brief. Then a Studio test purchase of each.
+- [x] **Click Connect in the Rojo plugin** each session
+- [ ] **Terrain grass blades:** Explorer → Workspace → Terrain → Properties →
+      tick **Decoration** (scripts can't set it)
+- [ ] **Save the place** (File → Save to Roblox) after the map preview is
+      rebuilt, so the place settings, terrain and preview are kept
+- [ ] **Set Server Size to 10** (= `Config.Plot.Count`) in the Creator
+      Dashboard place settings. An 11th player has no plot and is turned away.
+- [ ] **Create game passes and dev products**, paste IDs into `Config`:
+      5 passes (`Config.GamePasses`) and 10 products (`Config.DevProducts`,
+      including Hatch Boost, Instant Hatch, 3 Extra Spins, Double Offline
+      Cash). Then a Studio test purchase of each.
+- [ ] **Two-player test** (Test → Clients and Servers → 2 players): stealing
+      an egg, contested sighting capture, the Brood Mother chasing a thief,
+      buying belt eggs from anywhere round the belt
+- [ ] **Publish** when happy (File → Publish to Roblox)
 
 ---
 
 ## Decisions log
 
+- **Redesign (owner, Step 9):** the game is about stealing eggs. Heat is
+  gone (eggs hatch on a countdown); only eggs can be stolen; cryptids can be
+  sold; the Brood Mother is the scary twist. Claude's calls inside that brief:
+  hatch times 40s → 6m by tier (the best eggs are exposed longest); odds keep
+  the old ~40%-heat level so nothing feels nerfed; Sell pays vault + 60s of
+  income; the Brood Mother chases carriers only (empty-handed players only if
+  close), never enters camps or the campfire light, and reclaims rather than
+  destroys stolen eggs (they go home to their owner); Sky/Void eggs announce
+  themselves in nests; every player carries a lantern glow (the woods were
+  too dark to play).
+- **Scary creatures (owner):** cryptid art is menacing folklore, not cute.
+- **Studio saves are separate from live** (Claude, Step 8): Studio uses
+  `StudioStoreScope = "v1"` (all pre-launch test data), live uses
+  `StoreScope = "live1"` — launch starts clean and testing can't touch real
+  players.
+- **Starting cash and the rescue egg** (Claude, Step 8): new players had $0
+  and couldn't buy the $100 egg; they now start with $500 (economy sim), and
+  anyone with no cash, eggs or creatures gets a free Forest egg (3-min
+  cooldown).
+- **Art is generated meshes** (Claude, Step 8): `generate_mesh`, recorded in
+  `Config.Art` and `docs/ART.md`, built into templates at boot by
+  `ArtService`; part-built fallbacks keep the game working if one fails.
 - **Egg belt replaces the Egg Shop** (owner request, after Step 6.5).
-  Claude's calls, all in Config: knocked-loose eggs are anyone's for 30s
-  then vanish; eggs above your rebirth still ride past (marked, unbuyable);
-  you need a free nest to buy or grab one; leaving with an egg in hand
-  saves it (you paid); belt chances Forest 50 / Swamp 26 / Mountain 14 /
-  Deep Sea 6.5 / Sky 2.8 / Void 0.7 percent.
-- **Heat bonus scales by rarity** (owner chose option b, after Step 1).
-  Full-heat multipliers: Rare ×2, Epic ×3, Legendary ×4, Mythic ×5,
-  Secret ×6, in `Config.Heat.MaxMultiplierByRarity`. Void egg Legendary+ odds
-  now go 46% → 59% with heat (were 46% → 47%). See DESIGN.md §2.
+  Knocked-loose eggs are anyone's for 30s then vanish; eggs above your
+  rebirth still ride past (marked, unbuyable); you need a free nest to buy
+  or grab one; leaving with an egg in hand saves it (you paid); belt chances
+  Forest 50 / Swamp 26 / Mountain 14 / Deep Sea 6.5 / Sky 2.8 / Void 0.7.
+- ~~Heat bonus scales by rarity~~ (superseded by the redesign: no heat).
 - **Rojo is the sync path** (after Step 1). Scripts are edited in `src/`;
   `rojo serve` pushes them into Studio. Owner clicks Connect once per session.
-- **Door + Lock interpretation** (Claude's call at Step 2, owner can
-  overrule): the doorway is open normally so thieves can get in; Lock closes
-  it for everyone but the owner and ejects anyone inside.
-- **Lock works from anywhere** via the HUD panel, per the brief's plot panel.
-  Flip `Config.Plot.LockRequiresPresence` to require standing in your camp.
-- **Lock cooldown counts from activation**: 60s lock + 300s cooldown means
-  the camp is open 4 of every 5 minutes.
-- **Map is generated** from Config for now; may move to a hand-built map at
-  the art pass.
-- **Spawn protection on every join** (owner didn't pick; Claude's
-  recommendation used as the default): 5 min on a first-ever join, 2 min
-  after (`Config.Steal.NewPlayerSpawnLock` / `ReturningPlayerSpawnLock`).
-  Stealing ends your own protection early.
-- **Stealing rules Claude chose** (all in `Config.Steal` / `Config.Bat`):
-  owner keeps a creature's uncollected vault cash when it's stolen; owner
-  leaving mid-steal forfeits the item; thief leaving or timing out sends it
-  home; anyone's Bat can knock a stolen item loose; stun immunity 1.5s.
-- **Vault cap scales with the creature** (owner didn't pick; Claude's
-  recommendation used as the default at Step 5): each creature holds at
-  least 10 minutes of its own income, or the Vault Size upgrade value if
-  bigger. `Config.Income.MinVaultSeconds = 0` turns it off.
-- **Rebirth is blocked while stealing is in progress** on either side
-  (you're carrying, or one of yours is being carried) — wiping nests mid-
-  steal would make the item vanish for both players.
-- **Rebirth keeps active potions** (they're paid for with Robux).
-- **Upgrades are bought at the Upgrades cabin**, like eggs at the Egg Shop.
-- **Product rules Claude chose** (Step 6): Max Heat goes to your most
-  valuable not-yet-maxed egg; Emergency Lock locks immediately ignoring the
-  cooldown (and stacks); paid items that can't apply yet (Max Heat with no
-  egg, bundle eggs with no nest) are saved and applied automatically later;
-  Emergency Lock works even while carrying (it's paid for). Buffs stack by
-  extending their time.
-- **UI kit swap now, before Step 7** (owner, after Step 6), so the Codex is
-  built straight into the kit's Index screen.
-- **Retention features wanted** (owner): Daily Rewards, Spin Wheel,
-  Playtime Gifts, Offline Earnings → Step 7.5. (This reverses the Step 3
-  "no offline earnings" default.)
-- **Icons:** owner's RhosGFX pack. Chosen by file name and verified by load
-  status; the owner OK'd screenshots of the finished UI. Raw PNGs never go
-  in the repo (license forbids redistribution).
+- **Door + Lock:** the doorway is open normally so thieves can get in; Lock
+  closes it for everyone but the owner and ejects anyone inside. Works from
+  anywhere via the HUD (`Config.Plot.LockRequiresPresence`). Cooldown counts
+  from activation (open 4 of every 5 minutes).
+- **Spawn protection on every join:** 5 min on a first-ever join, 2 min
+  after. Stealing ends your own protection early.
+- **Stealing rules:** owner leaving mid-steal forfeits the egg; thief leaving
+  or timing out sends it home; anyone's Bat can knock it loose; stun immunity
+  1.5s; steal cooldown 20s (was 30 — more action).
+- **Vault cap scales with the creature:** at least 10 minutes of its own
+  income, or the Vault Size upgrade value if bigger.
+- **Rebirth** is blocked while stealing is in progress on either side, keeps
+  active potions, and now leaves you $1,500 to restart with.
+- **Product rules:** Instant Hatch hatches your most valuable egg (saved for
+  the next egg if you have none); Emergency Lock locks now ignoring the
+  cooldown (stacks; works while carrying); paid items that can't apply yet
+  are saved and applied automatically; buffs stack by extending.
+- **UI kit:** the owner's STUD UI Pack; our code fills its screens.
+- **Retention features** (owner): Daily Rewards, Spin Wheel, Playtime Gifts,
+  Offline Earnings.
+- **Icons:** owner's RhosGFX pack, chosen by file name; raw PNGs never in the
+  repo (license).
 
 ---
 
 ## Open questions for the owner
 
-### 2. ~~Vault cap~~ — defaulted at Step 5 to a 10-minute minimum (see decisions log).
-### 1. ~~Spawn lock~~ — defaulted at Step 4 (see decisions log); change anytime.
+None blocking. Things you may want to tune after playing (all in Config):
+how often the Brood Mother comes (`Config.Hunt.MinInterval/MaxInterval`),
+how fast she is (`Speed`), egg hatch times (`Config.Eggs[*].HatchTime`), and
+how dark the night is (`Config.Atmosphere.Brightness`, `PlayerLantern`).

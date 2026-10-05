@@ -135,9 +135,12 @@ LocalScript, plain `.luau` = ModuleScript.
 - If a profile can't load safely, kick. Never play on a blank profile.
 - Studio-only test hook: `ServerStorage.SAC_Debug:Invoke(command, playerName, ...)`.
   Commands are listed at the top of `Modules/DebugCommands` (status, give,
-  dump, save, wipe, plots, resetlock, simulate, giveegg, setheat, hatch,
-  setslot, nests, carries, unprotect, clearcooldown, snapshot, restore,
-  receipt, pass, belt, beltspawn, beltroll, knock).
+  dump, save, wipe, plots, resetlock, simulate, giveegg, setprogress, hatch,
+  sell, setslot, nests, carries, carry, unprotect, clearcooldown, snapshot,
+  restore, receipt, pass, belt, beltspawn, beltroll, knock, hunt, huntend,
+  huntstate, sighting, sightingend, sightings, codex, codexadd, codexclear,
+  retention, dailyskip, dailymiss, spinready, gifttime, offline, hatchfx,
+  cashfx, tutorial, mapstats, leaderboard).
   Must be used via a BindableFunction because MCP/command-bar code runs in a
   separate Luau VM and gets its own copies of modules.
 
@@ -168,18 +171,30 @@ LocalScript, plain `.luau` = ModuleScript.
 - Edit-only place settings live in `tools/place-settings.luau`.
 
 ### Eggs, creatures and boosts
-- **Luck, income multiplier, heat rate, nest capacity and vault cap come
+- **Luck, income multiplier, hatch speed, nest capacity and vault cap come
   from `BoostService` only.** A new bonus source (pass, potion, rebirth,
   codex) is added there, nowhere else. Game passes go through
   `BoostService.HasPass`, wired to MarketplaceService in Step 6.
 - Change what's in a nest only through `NestService` (`SetSlot`, `TakeSlot`,
-  `PlaceEgg`, `Hatch`). It saves, pushes and redraws in one go.
-- The one exception to "write through the DataService API": the heat and
-  income ticks write `slot.Heat` / `slot.Vault` straight into the profile
-  every second without a client push. Display goes through model attributes.
+  `PlaceEgg`, `Hatch`, `Sell`). It saves, pushes and redraws in one go.
+- **No heat.** An egg counts `slot.Incubated` seconds up to its
+  `Config.Eggs[id].HatchTime` and `NestService` hatches it by itself. Only
+  eggs are stealable (`Config.Steal.StealableKinds`); creatures are sold.
+- The one exception to "write through the DataService API": the incubation
+  and income ticks write `slot.Incubated` / `slot.Vault` straight into the
+  profile every second without a client push. Display goes through model
+  attributes (`Progress`, `Remaining`, `Vault`).
 - Rolls happen in `Modules/EggRoller` on the server. Never roll on a client.
-- Placeholder art is built in `Modules/ItemVisuals`; the art pass replaces
-  those builders without touching game logic.
+- **Art:** `Shared/ItemVisuals` builds eggs and creatures (client and
+  server). It clones generated-mesh templates from
+  `ReplicatedStorage.ArtTemplates`, which `ArtService` builds at boot from
+  `Config.Art` (ids + heights; `docs/ART.md` has the prompts). Missing or
+  failed meshes fall back to block art, so an asset can never break the game.
+  The art direction is **scary**: menacing folklore cryptids, not cute.
+- **The Hunt:** `HuntService` owns the Brood Mother's logical position and
+  publishes it on `ReplicatedStorage.HuntState` attributes; `HuntController`
+  draws her locally (like the belt). Catches are decided on the server;
+  `StealService.Reclaim` takes back what a caught player carries.
 
 ### Egg belt
 - Eggs are only sold on the belt (`EggBeltService`). Which egg spawns is
@@ -253,9 +268,10 @@ LocalScript, plain `.luau` = ModuleScript.
   `Icon.addLeft`). Bootstrap rejects icon names missing from `Config.Icons`.
 
 ### Test data
-Studio play tests read and write the **same DataStore as the live game**.
-Don't leave debug-spawned items in the owner's save (remove them after
-testing), and bump `Config.Data.StoreScope` before launch to start clean.
+Studio play tests use their own DataStore scope (`Config.Data.StudioStoreScope`),
+separate from live servers (`StoreScope`), so testing never touches real
+players. The owner's Studio save still matters to them: don't leave
+debug-spawned items in it (snapshot before, restore after).
 - **Prefer test accounts for destructive tests** (rebirth, wipes): ask the
   owner to start Test → Clients and Servers with 1 player and test on
   "Player1". The owner's real save is never touched.
@@ -321,6 +337,16 @@ of `tools/checksum.luau` in the Edit datamodel. The outputs must be identical
 line for line — that proves the repo and Studio match byte-for-byte, and that
 Studio has no scripts the repo doesn't.
 
+### Static type check
+`bash tools/analyze-summary.sh` runs luau-lsp (installed by aftman; Roblox
+type definitions are downloaded to the git-ignored `tools/.luau/` — the
+script prints the command if they're missing) over `src/` and lists each
+problem once. Run it before every push. The existing code carries a few
+dozen classic-solver nits that are harmless ("Key 'X' not found in external
+type 'Instance'", guarded "could be nil", Signal "Expected this to be",
+pcall "Function only returns 1 value"); anything else in a file you touched
+is a real bug.
+
 ### Content rules (legal)
 - Common through Legendary are **real folklore cryptids** — public domain.
 - Mythic and Secret are **originals** created for this game.
@@ -336,8 +362,10 @@ The Roblox Studio MCP is connected. Useful tools:
 - `get_console_output` — read the output window
 - `start_stop_play` — start/stop a play test
 - `screen_capture` — screenshot Studio
-- `generate_mesh`, `generate_texture`, `generate_material`,
-  `generate_procedural_model` — art generation (art pass, Step 8)
+- `generate_mesh` — art generation (see `docs/ART.md`). **A play test
+  kills in-flight generation jobs** ("Model generation should only be called
+  from the server"): pause generation before play-testing. Run at most 2
+  jobs at once; prompts with violent words fail moderation.
 
 `execute_luau` needs `studio_id` and `datamodel_type` (`Edit`, `Server` or
 `Client`). Get `studio_id` from `list_roblox_studios` at the start of a session;
