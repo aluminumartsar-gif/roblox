@@ -9,7 +9,14 @@
 	    see faintly and walk through. (The server ejects intruders by
 	    position, so this is presentation, not security.)
 	  * Lock prompts. Only your own plot's lock button shows a prompt.
-	  * Plot panel: Lock button with countdown, and nests used.
+	  * Camp panel (ScreenGui "PlotPanel", frame "Panel"): one row, top left,
+	    Config.UI.Layout.TopGap under Roblox's top bar and CampHeight tall
+	    (the HUD's side tiles start below it). Shows the spawn-protection
+	    timer while it runs, nests used / capacity, and the Lock button:
+	    LOCK CAMP (ember) -> LOCKED m:ss (moonlight) -> RECHARGE m:ss
+	    (greyed). Pressing it always asks the server, which answers with a
+	    toast (locked, or why not); NO CAMP while you have no plot.
+	    Built on Components/UI, scaled with the screen.
 
 	Works with StreamingEnabled: plots arrive and leave via CollectionService
 	signals, and the panel reads Player attributes, which always replicate.
@@ -25,12 +32,21 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 local SoundController = require(script.Parent:WaitForChild("SoundController"))
-local Icon = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Icon"))
-local ScreenScale = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("ScreenScale"))
+local Components = script.Parent.Parent:WaitForChild("Components")
+local Theme = require(Components:WaitForChild("Theme"))
+local UI = require(Components:WaitForChild("UI"))
+local Icon = require(Components:WaitForChild("Icon"))
 
 local PlotController = {}
 
 local localPlayer = Players.LocalPlayer
+
+local C = Theme.Colors
+local layout = Config.UI.Layout
+local tuning = Config.UI.Hud
+
+-- Space between the camp panel's edge and the Lock button (px).
+local CAMP_PADDING = 4
 
 type DoorState = { locked: boolean, mine: boolean }
 local doorStates: { [BasePart]: DoorState } = {}
@@ -116,81 +132,71 @@ end
 -- Plot panel
 --------------------------------------------------------------------------
 
+--- A text label with an icon on its left, for the camp panel row.
+local function campLabel(frame: Frame, name: string, order: number, iconName: string, color: Color3, text: string): TextLabel
+	local label = UI.Text({
+		Name = name,
+		Role = "Heading",
+		Weight = "Bold",
+		Text = text,
+		TextSize = tuning.CampTextSize,
+		TextColor3 = color,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.fromOffset(0, tuning.CampIconSize + 2),
+		AutomaticSize = Enum.AutomaticSize.X,
+		LayoutOrder = order,
+		Parent = frame,
+	})
+	local icon = Icon.addLeft(label, iconName, tuning.CampIconSize, 0)
+	icon.ImageColor3 = color
+	return label
+end
+
 local function buildPanel(): (TextButton, TextLabel, TextLabel)
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "PlotPanel"
-	gui.ResetOnSpawn = false
+	local gui = UI.new("ScreenGui", {
+		Name = "PlotPanel",
+		ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		DisplayOrder = Config.UI.Layers.Hud,
+	}) :: ScreenGui
 
-	local frame = Instance.new("Frame")
-	frame.Name = "Panel"
-	-- One compact row, top-left under the Roblox top bar and above the kit
-	-- HUD's side buttons (a column didn't fit there on phones).
-	frame.AnchorPoint = Vector2.new(0, 0)
-	frame.Position = UDim2.new(0.01, 0, 0.015, 0)
-	frame.Size = UDim2.fromOffset(0, 0)
-	frame.AutomaticSize = Enum.AutomaticSize.XY
-	frame.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
-	frame.BackgroundTransparency = 0.25
-	frame.Parent = gui
-	ScreenScale.Apply(frame)
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = frame
-	local padding = Instance.new("UIPadding")
-	padding.PaddingTop = UDim.new(0, 6)
-	padding.PaddingBottom = UDim.new(0, 6)
-	padding.PaddingLeft = UDim.new(0, 10)
-	padding.PaddingRight = UDim.new(0, 6)
-	padding.Parent = frame
-	local layout = Instance.new("UIListLayout")
-	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0, 12)
-	layout.Parent = frame
+	-- One compact row, top left under Roblox's top bar (this ScreenGui
+	-- keeps the inset) and above the HUD's side tiles.
+	local frame = UI.Panel({
+		Name = "Panel",
+		AnchorPoint = Vector2.new(0, 0),
+		Size = UDim2.fromOffset(0, layout.CampHeight),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Parent = gui,
+	})
+	UI.Padding({ Top = CAMP_PADDING, Bottom = CAMP_PADDING, Left = 10, Right = CAMP_PADDING }).Parent = frame
+	UI.List({
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = 12,
+	}).Parent = frame
+	-- Scales with the screen; the margins (px at the reference height) scale too.
+	local scale = UI.Scale(frame)
+	local function place()
+		frame.Position = UDim2.fromOffset(layout.EdgeMargin * scale.Scale, layout.TopGap * scale.Scale)
+	end
+	scale:GetPropertyChangedSignal("Scale"):Connect(place)
+	place()
 
-	local nests = Instance.new("TextLabel")
-	nests.Name = "Nests"
-	nests.LayoutOrder = 1
-	nests.Size = UDim2.fromOffset(0, 22)
-	nests.AutomaticSize = Enum.AutomaticSize.X
-	nests.BackgroundTransparency = 1
-	nests.Font = Enum.Font.GothamBold
-	nests.TextSize = 18
-	nests.TextColor3 = Color3.fromRGB(255, 236, 200)
-	nests.TextXAlignment = Enum.TextXAlignment.Left
-	nests.Text = "Nests -/-"
-	nests.Parent = frame
-	Icon.addLeft(nests, "Egg", 20, 0)
-
-	local button = Instance.new("TextButton")
-	button.Name = "Lock"
-	button.LayoutOrder = 2
-	button.Size = UDim2.fromOffset(170, 44) -- tall enough for a thumb
-	button.Font = Enum.Font.GothamBold
-	button.TextSize = 16
-	button.TextColor3 = Color3.new(1, 1, 1)
-	button.AutoButtonColor = true
-	button.Text = "LOCK CAMP"
-	button.Parent = frame
-	Icon.addLeft(button, "Lock", 28)
-	local buttonCorner = Instance.new("UICorner")
-	buttonCorner.CornerRadius = UDim.new(0, 8)
-	buttonCorner.Parent = button
-
-	local protection = Instance.new("TextLabel")
-	protection.Name = "Protection"
-	protection.LayoutOrder = 0
-	protection.Size = UDim2.fromOffset(0, 20)
-	protection.AutomaticSize = Enum.AutomaticSize.X
-	protection.BackgroundTransparency = 1
-	protection.Font = Enum.Font.GothamBold
-	protection.TextSize = 16
-	protection.TextColor3 = Color3.fromRGB(140, 210, 255)
-	protection.TextXAlignment = Enum.TextXAlignment.Left
+	local protection = campLabel(frame, "Protection", 0, "Shield", C.Moon, "")
 	protection.Visible = false
-	protection.Parent = frame
-	Icon.addLeft(protection, "Shield", 18, 0)
+	local nests = campLabel(frame, "Nests", 1, "Egg", C.Text, "Nests -/-")
+	local button = UI.Button({
+		Name = "Lock",
+		Variant = "Primary",
+		Icon = "Lock",
+		IconSize = tuning.CampIconSize,
+		Text = "Lock camp",
+		TextSize = tuning.CampTextSize,
+		Size = UDim2.fromOffset(tuning.LockWidth, layout.CampHeight - 2 * CAMP_PADDING), -- tall enough for a thumb
+		LayoutOrder = 2,
+		Parent = frame,
+	})
 
 	gui.Parent = localPlayer:WaitForChild("PlayerGui")
 	return button, nests, protection
@@ -204,28 +210,33 @@ local function renderProtection(label: TextLabel)
 	end
 end
 
-local LOCK_READY = Color3.fromRGB(46, 140, 80)
-local LOCK_ACTIVE = Color3.fromRGB(50, 100, 170)
-local LOCK_COOLDOWN = Color3.fromRGB(70, 72, 80)
+-- The Lock button's look: "Ready" (ember, the main action), "Locked"
+-- (moonlight, counting down), "Recharge" and "NoCamp" (greyed out; a press
+-- still asks the server, which explains the refusal).
+local lockState: string? = nil
 
 local function renderLockButton(button: TextButton)
+	local state: string, text: string
 	if not localPlayer:GetAttribute("PlotIndex") then
-		button.Text = "NO CAMP"
-		button.BackgroundColor3 = LOCK_COOLDOWN
-		return
-	end
-	local t = now()
-	local lockedUntil = localPlayer:GetAttribute("PlotLockedUntil") or 0
-	local cooldownUntil = localPlayer:GetAttribute("PlotLockCooldownUntil") or 0
-	if lockedUntil > t then
-		button.Text = "LOCKED " .. formatClock(lockedUntil - t)
-		button.BackgroundColor3 = LOCK_ACTIVE
-	elseif cooldownUntil > t then
-		button.Text = "RECHARGE " .. formatClock(cooldownUntil - t)
-		button.BackgroundColor3 = LOCK_COOLDOWN
+		state, text = "NoCamp", "NO CAMP"
 	else
-		button.Text = "LOCK CAMP"
-		button.BackgroundColor3 = LOCK_READY
+		local t = now()
+		local lockedUntil = localPlayer:GetAttribute("PlotLockedUntil") or 0
+		local cooldownUntil = localPlayer:GetAttribute("PlotLockCooldownUntil") or 0
+		if lockedUntil > t then
+			state, text = "Locked", "LOCKED " .. formatClock(lockedUntil - t)
+		elseif cooldownUntil > t then
+			state, text = "Recharge", "RECHARGE " .. formatClock(cooldownUntil - t)
+		else
+			state, text = "Ready", "LOCK CAMP"
+		end
+	end
+	UI.SetButtonText(button, text)
+	-- Repaint only on a change, so a hover highlight isn't wiped every tick.
+	if state ~= lockState then
+		lockState = state
+		UI.SetButtonVariant(button, if state == "Locked" then "Moon" else "Primary")
+		UI.SetButtonEnabled(button, state == "Ready" or state == "Locked")
 	end
 end
 
@@ -302,7 +313,7 @@ function PlotController.Start()
 			wasLocked = lockedNow
 			renderLockButton(lockButton)
 			renderProtection(protectionLabel)
-			task.wait(0.2)
+			task.wait(tuning.CampTickInterval)
 		end
 	end)
 end

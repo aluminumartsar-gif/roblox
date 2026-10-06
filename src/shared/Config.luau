@@ -1875,13 +1875,20 @@ Config.UI = {
 	--   right middle Daily + quick-buy offers
 	--   bottom centre buff chips, cash, then the tool hotbar at the very bottom
 	-- The bottom corners stay clear for the phone thumbstick and jump button.
+	-- Offsets scale with the HUD too (HudController lays out on a canvas in
+	-- these units). Checked on a 749x368 phone (scale 0.7, 58 px top bar):
+	-- camp panel 64-100 px from the top; side tiles (2 columns of 4) start
+	-- under it at 104 and end 94 px above the bottom, clear of the
+	-- thumbstick; the right cluster is centred (132-236), above the jump
+	-- button; cash sits 55 px up, over a hotbar that tops out at <= 49.
 	Layout = {
 		EdgeMargin = 12,        -- px from the screen's left/right edges to HUD clusters
 		TopGap = 8,             -- px between Roblox's top bar and the camp panel
+		CampHeight = 52,        -- px, the camp panel's height (the side tiles start below it)
 		TravelTop = 10,         -- px from the very top of the screen to the Base/Eggs buttons
 		TravelHeight = 46,
-		SideButtonSize = 60,    -- px HUD tiles
-		SideButtonGap = 8,
+		SideButtonSize = 56,    -- px HUD tiles (side tiles and Daily)
+		SideButtonGap = 6,
 		HotbarBottom = 10,      -- px from the bottom edge to the hotbar slots
 		HotbarSlot = 56,
 		CashBottom = 78,        -- px from the bottom edge to the bottom of the cash block (clears the hotbar)
@@ -1910,7 +1917,39 @@ Config.UI = {
 	CustomHotbar = true,
 
 	-- HUD tiles, cash block, buff chips, travel buttons, camp panel (HudController, PlotController).
+	-- Sizes are px at the reference height (they scale with the screen).
 	Hud = {
+		SideColumns = 2,             -- side tiles grid (Store, Codex, Gifts, Spin, Rebirth, Invite, Settings)
+		-- Cash block (bottom centre)
+		CashTextSize = 34,
+		CashIconSize = 30,
+		CashRowHeight = 44,
+		StatusTextSize = 15,         -- "Rebirth 2 · +20% cash" under the cash
+		AddButtonSize = 40,          -- the "+" next to the cash (opens the Store)
+		AddIconSize = 20,
+		AddButtonVariant = "Cash",   -- UI.Button variant of the "+"
+		CashPunchTime = 0.35,        -- seconds the cash takes to settle after its punch (size: Config.Feedback.CashPunchScale)
+		-- Buff chips and the "PROGRESS NOT SAVING" warning, just above the cash
+		ChipHeight = 26,
+		ChipTextSize = 15,
+		ChipIconSize = 18,
+		ChipGap = 6,
+		-- Base / Eggs travel buttons (top centre; height is Layout.TravelHeight)
+		TravelWidth = 124,
+		TravelGap = 8,
+		TravelTextSize = 20,
+		TravelVariant = "Secondary",
+		-- Quick-buy offers (right middle): a tile with a Robux price strip
+		OfferSize = 64,              -- tile width (and the height above the price strip)
+		OfferPriceHeight = 22,
+		OfferPriceTextSize = 13,
+		-- Camp panel (top left; height is Layout.CampHeight)
+		CampTextSize = 16,
+		CampIconSize = 20,
+		LockWidth = 150,             -- fits "RECHARGE 5:00"
+		-- Refresh rates (seconds)
+		TickInterval = 0.5,          -- buff countdowns, rebirth "!", offer prices
+		CampTickInterval = 0.2,      -- doors, lock countdown, protection timer
 	},
 
 	-- Store, Upgrades and Rebirth screens (RobuxShopController, UpgradeShopController, RebirthController).
