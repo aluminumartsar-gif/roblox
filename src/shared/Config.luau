@@ -984,14 +984,11 @@ Config.Tutorial = {
 	Enabled = true,
 	CheckInterval = 0.25,       -- seconds between progress checks / re-aiming the guide
 	StepDoneDelay = 1.6,        -- how long "Nice!" shows before the next step
-	-- Instruction panel (our own UI; ScreenScale shrinks it on phones).
-	PanelTop = 0.125,           -- fraction of screen height: just under the kit HUD's Base/Eggs buttons
-	PanelWidth = 470,           -- pixels at Config.UI.ScreenScale.ReferenceHeight
-	DisplayOrder = 2,           -- over the kit HUD (1), under kit popups (5), steal banners (8), toasts (10)
+	-- The instruction panel's look and size: Config.UI.Tutorial.Panel; its
+	-- draw order: Config.UI.Layers.Tutorial.
 	SkipConfirmTime = 3,        -- seconds the "tap again to skip" prompt waits for a second tap
-	-- 3D guide: a glowing line from you to the target plus a bouncing arrow over it.
-	BeamColorNear = Color3.fromRGB(255, 214, 120), -- the player's end
-	BeamColorFar = Color3.fromRGB(120, 255, 180),  -- the target's end
+	-- 3D guide: a glowing line from you to the target plus a bouncing arrow
+	-- over it (theme colours: ember at your end, moss at the target's).
 	BeamWidth = 0.7,
 	BeamHideDistance = 9,       -- studs: hide the line once you're this close
 	MarkerHeight = 9,           -- studs above the target (clears the egg/creature labels)
@@ -2172,7 +2169,59 @@ Config.UI = {
 	},
 
 	-- Tutorial panel and steal alerts (TutorialController, StealController).
+	-- Both sit at the top centre, under Roblox's top bar, the Base/Eggs
+	-- buttons and any sighting/Hunt banner: the steal banners first, then
+	-- the tutorial panel, then toasts. Sizes are px at the reference height
+	-- (they scale with the screen).
 	Tutorial = {
+		StackGap = 8,              -- px between whatever is above and the steal banners / tutorial panel
+		-- The first-join tutorial's field-kit card (behaviour: Config.Tutorial).
+		Panel = {
+			Width = 470,
+			Padding = 14,           -- px inside the card's edge
+			RowGap = 6,             -- px between its rows
+			HeaderHeight = 40,      -- step label, progress dots and Skip (a 40 px touch target)
+			StepTextSize = 15,      -- "STEP 2 OF 4"
+			StepGap = 10,           -- px between that label and the progress dots
+			TitleSize = 24,
+			BodySize = 18,
+			DotSize = 10,           -- one progress dot per action step
+			DotGap = 6,
+			SkipWidth = 84,
+			SkipArmedWidth = 176,   -- wide enough for "TAP AGAIN TO SKIP"
+			SkipTextSize = 15,
+			ButtonSize = Vector2.new(220, 48), -- "Let's go!" / "Let's play!" (thumb-sized)
+			ButtonTextSize = 20,
+			DropIn = 16,            -- px a new step drops in from
+			DropInTime = 0.3,       -- seconds
+			SlideOutTime = 0.3,     -- seconds to slide up off the screen when finished or skipped
+			-- A card too tall for the space left under the banners (the tips
+			-- card on a phone) shrinks to fit, down to MinFit of its size.
+			ScreenMargin = 8,       -- px kept clear above the bottom of the screen
+			MinFit = 0.6,
+		},
+		-- Steal banners: the owner's alarm and the carrier's "run home" banner.
+		StealAlerts = {
+			Width = 470,
+			Height = 46,
+			Gap = 6,                -- px between the alarm and the carry banner when both show
+			TextSize = 22,          -- largest text size; long names shrink to fit
+			MinTextSize = 12,
+			TextPadding = 6,        -- px above and below the text
+			Padding = 12,           -- px from the banner's left edge to its icon
+			IconSize = 28,
+			DropIn = 10,            -- px the alarm drops in from when it appears
+			DropInTime = 0.25,      -- seconds
+			-- Owner alarm: how long a banner stays up (stolen/dropped ones stay
+			-- until the item runs home), and how many times the alarm rings.
+			StartedShowTime = 6,    -- "X is stealing your ...!" stays at most this long (gone at once if they stop)
+			EndedShowTime = 4,      -- "got away with" / "home safe"
+			AlarmRings = { Started = 2, Stolen = 3, Dropped = 1 },
+			PulseTime = 0.45,       -- seconds per half-beat of an urgent alarm's glow
+			PulseTransparency = 0.65, -- the glow at its brightest (1 = no glow)
+			RefreshInterval = 0.2,  -- seconds between banner, outline and prompt refreshes
+			OutlineFillTransparency = 0.8, -- the see-through-walls highlight on your stolen item
+		},
 	},
 
 	-- Sighting and Hunt banners, markers and overlays (SightingController, HuntController).

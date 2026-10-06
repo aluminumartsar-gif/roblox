@@ -16,11 +16,22 @@
 	  5. Collect from your cryptid          done: a CashCollected event arrived
 	  6. Tips card                          -> "Let's play!"
 
-	Each step shows a short panel near the top centre (under the kit HUD's
-	Base/Eggs buttons, ScreenScale'd for phones, with a Skip button) and a
-	3D guide: a glowing Beam from your character to the target plus a
-	bouncing arrow over it. The guide's parts are created locally (only this
-	client sees them) in Workspace.
+	Each step shows a field-kit card at the top centre (ScreenGui "Tutorial",
+	draw order Config.UI.Layers.Tutorial, scaled for phones): a "STEP 2 OF 4"
+	label with one progress dot per action step, a Skip button, the step's
+	title, its instructions, and on the two cards a "Let's go!" / "Let's
+	play!" button. It sits under Roblox's top bar, the HUD's Base/Eggs
+	buttons, any sighting/Hunt banner (NotificationController.ReservedBottom
+	+ ReservationsChanged) and the steal banners (StealController.
+	BannerBottom + BannersChanged), and reserves its own bottom edge
+	(ReserveTop "Tutorial") so toasts slide in below it. While it shows,
+	the player attribute TutorialActive is true: Daily Rewards and the
+	Offline Earnings popup wait for it.
+
+	Each step also has a 3D guide: a glowing Beam from your character to
+	the target plus a bouncing arrow over it, in the theme's ember and moss.
+	The guide's parts are created locally (only this client sees them) in
+	Workspace.
 
 	StreamingEnabled: targets (belt eggs, your pad, your eggs and cryptids)
 	may not be on this client yet. Each target falls back to a position
@@ -35,14 +46,14 @@
 	Studio test: ServerStorage.SAC_Debug:Invoke("tutorial", name, "fresh")
 	wipes that player to a new profile and replays it on their screen.
 
-	Tunables: Config.Tutorial.
+	Tunables: Config.Tutorial (steps, guide), Config.UI.Tutorial.Panel (look).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -50,25 +61,28 @@ local Config = require(Shared:WaitForChild("Config"))
 local BeltPath = require(Shared:WaitForChild("BeltPath"))
 
 local Components = script.Parent.Parent:WaitForChild("Components")
-local ScreenScale = require(Components:WaitForChild("ScreenScale"))
+local Theme = require(Components:WaitForChild("Theme"))
+local UI = require(Components:WaitForChild("UI"))
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
+local SoundController = require(script.Parent:WaitForChild("SoundController"))
+local StealController = require(script.Parent:WaitForChild("StealController"))
 
 local TutorialController = {}
 
 local localPlayer = Players.LocalPlayer
 local tuning = Config.Tutorial
+local look = Config.UI.Tutorial.Panel
+local layout = Config.UI.Layout
+local C = Theme.Colors
 
--- Panel colours (presentation only, not designer-tunable numbers).
-local PANEL_COLOR = Color3.fromRGB(24, 22, 30)
-local STROKE_COLOR = Color3.fromRGB(255, 196, 120)
-local TITLE_COLOR = Color3.fromRGB(255, 226, 170)
-local BODY_COLOR = Color3.fromRGB(236, 232, 224)
-local MUTED_COLOR = Color3.fromRGB(170, 164, 156)
-local GO_COLOR = Color3.fromRGB(56, 156, 88)
-local SKIP_COLOR = Color3.fromRGB(70, 64, 76)
-local NICE_COLOR = Color3.fromRGB(140, 255, 170)
-local HIGHLIGHT = "#FFD27A" -- rich-text colour for button/prompt names
+-- Rich-text colour for button/prompt names in the instructions.
+local HIGHLIGHT = "#" .. C.EmberBright:ToHex()
+
+-- NotificationController.ReserveTop key for the panel (toasts go below it).
+local RESERVE_KEY = "Tutorial"
+-- The card's fit scale only changes by more than this (no jitter).
+local FIT_STEP = 0.01
 
 -- Studio test hook (DebugCommands "tutorial"): the server bumps this player
 -- attribute to replay the tutorial; we wait a moment for the new snapshot.
@@ -114,17 +128,11 @@ type Step = {
 }
 
 --------------------------------------------------------------------------
--- Sounds (SoundController is written in parallel; unknown names are a
--- silent no-op there, and a missing controller is a no-op here)
+-- Sounds (button clicks come from SoundController's hook on every button)
 --------------------------------------------------------------------------
 
-local soundController: any = nil
-
 local function playSound(name: string)
-	local sc = soundController
-	if sc and typeof(sc.Play) == "function" then
-		pcall(sc.Play, name)
-	end
+	SoundController.Play(name)
 end
 
 --------------------------------------------------------------------------
@@ -467,143 +475,219 @@ end
 
 type Panel = {
 	gui: ScreenGui,
-	frame: Frame,
+	origin: Frame,     -- zero-size frame at the gui's (0, 0): converts screen px to gui px
+	holder: Frame,     -- placed under the top bar and banners; carries the screen scale
+	scale: UIScale,
+	frame: Frame,      -- the card itself (drops in inside the holder)
+	fit: UIScale,      -- shrinks the card when it's too tall for the space left
 	stepLabel: TextLabel,
+	dots: { Frame },
 	title: TextLabel,
 	body: TextLabel,
 	button: TextButton,
 	skip: TextButton,
 }
 
-local function corner(parent: Instance, radius: number)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, radius)
-	c.Parent = parent
+--- Gui y (px from the very top of the screen) just under Roblox's top bar
+--- and the HUD's Base/Eggs buttons, which sit in the top-bar row.
+local function topCentreBase(scale: number): number
+	local insetY = GuiService:GetGuiInset().Y
+	local travelBottom = math.max(layout.TravelTop, layout.TravelTop * scale) + layout.TravelHeight * scale
+	return math.max(insetY, travelBottom) + layout.TopGap * scale
+end
+
+--- Number of action steps (not cards) among STEPS[1..index].
+local function actionNumber(index: number): number
+	local number = 0
+	for i = 1, math.min(index, #STEPS) do
+		if not STEPS[i].Card then
+			number += 1
+		end
+	end
+	return number
+end
+
+--- Progress dots: the first `done` are moss, dot `currentDot` (if any) is
+--- ember, the rest are hollow wells.
+local function paintProgress(panel: Panel, done: number, currentDot: number?)
+	for i, dot in ipairs(panel.dots) do
+		local fill, edge = C.Inset, C.Edge
+		if i <= done then
+			fill, edge = C.Moss, C.MossDeep
+		elseif i == currentDot then
+			fill, edge = C.Ember, C.EmberBright
+		end
+		dot.BackgroundColor3 = fill
+		local stroke = dot:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Color = edge
+		end
+	end
 end
 
 local function buildPanel(): Panel
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "Tutorial"
-	gui.ResetOnSpawn = false
-	gui.IgnoreGuiInset = true -- same coordinates as the kit HUD
-	gui.DisplayOrder = tuning.DisplayOrder
-	gui.Enabled = false
+	local gui = UI.new("ScreenGui", {
+		Name = "Tutorial",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true, -- placed from the very top, like the HUD's top row
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		DisplayOrder = Config.UI.Layers.Tutorial,
+		Enabled = false,
+	}) :: ScreenGui
+	local origin = UI.new("Frame", {
+		Name = "Origin",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(),
+		Parent = gui,
+	}) :: Frame
+	local holder = UI.new("Frame", {
+		Name = "Holder",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
+		Size = UDim2.fromOffset(look.Width, 0),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}) :: Frame
+	local scale = UI.Scale(holder)
 
-	local frame = Instance.new("Frame")
-	frame.Name = "Panel"
-	frame.AnchorPoint = Vector2.new(0.5, 0)
-	frame.Position = UDim2.new(0.5, 0, tuning.PanelTop, 0)
-	frame.Size = UDim2.fromOffset(tuning.PanelWidth, 0)
-	frame.AutomaticSize = Enum.AutomaticSize.Y
-	frame.BackgroundColor3 = PANEL_COLOR
-	frame.BackgroundTransparency = 0.1
-	frame.Parent = gui
-	corner(frame, 14)
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = STROKE_COLOR
-	stroke.Thickness = 2
-	stroke.Transparency = 0.25
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Parent = frame
-	local padding = Instance.new("UIPadding")
-	padding.PaddingTop = UDim.new(0, 10)
-	padding.PaddingBottom = UDim.new(0, 12)
-	padding.PaddingLeft = UDim.new(0, 16)
-	padding.PaddingRight = UDim.new(0, 16)
-	padding.Parent = frame
-	local layout = Instance.new("UIListLayout")
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	layout.Padding = UDim.new(0, 6)
-	layout.Parent = frame
-	ScreenScale.Apply(frame)
+	-- The card: a charred-wood panel that grows to fit its rows. Anchored
+	-- at its top centre so the fit scale shrinks it towards that point.
+	local frame = UI.Panel({
+		Name = "Panel",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Parent = holder,
+	})
+	local fit = UI.new("UIScale", { Name = "Fit", Parent = frame }) :: UIScale
+	UI.Padding(look.Padding).Parent = frame
+	UI.List({ Padding = look.RowGap, HorizontalAlignment = Enum.HorizontalAlignment.Center }).Parent = frame
 
-	-- Header: "STEP 1 OF 4" on the left, Skip on the right.
-	local header = Instance.new("Frame")
-	header.Name = "Header"
-	header.LayoutOrder = 1
-	header.BackgroundTransparency = 1
-	header.Size = UDim2.new(1, 0, 0, 32)
-	header.Parent = frame
+	-- Header: "STEP 2 OF 4" and the progress dots on the left, Skip on the right.
+	local header = UI.new("Frame", {
+		Name = "Header",
+		LayoutOrder = 1,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, look.HeaderHeight),
+		Parent = frame,
+	}) :: Frame
+	local progress = UI.new("Frame", {
+		Name = "Progress",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, -look.SkipArmedWidth, 1, 0),
+		Parent = header,
+	}, {
+		UI.List({
+			FillDirection = Enum.FillDirection.Horizontal,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			Padding = look.StepGap,
+		}),
+	}) :: Frame
+	local stepLabel = UI.Text({
+		Name = "Step",
+		Role = "Heading",
+		Weight = "SemiBold",
+		Text = "",
+		TextSize = look.StepTextSize,
+		TextColor3 = C.TextDim,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromScale(0, 1),
+		LayoutOrder = 1,
+		Visible = false,
+		Parent = progress,
+	})
+	local dotRow = UI.new("Frame", {
+		Name = "Dots",
+		BackgroundTransparency = 1,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromScale(0, 1),
+		LayoutOrder = 2,
+		Parent = progress,
+	}, {
+		UI.List({
+			FillDirection = Enum.FillDirection.Horizontal,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			Padding = look.DotGap,
+		}),
+	}) :: Frame
+	local dots: { Frame } = {}
+	for i = 1, ACTION_STEP_COUNT do
+		local dot = UI.new("Frame", {
+			Name = "Dot" .. i,
+			BackgroundColor3 = C.Inset,
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(look.DotSize, look.DotSize),
+			LayoutOrder = i,
+			Parent = dotRow,
+		}, {
+			UI.Corner(math.ceil(look.DotSize / 2)),
+			UI.Stroke({ Color = C.Edge }),
+		}) :: Frame
+		table.insert(dots, dot)
+	end
+	local skip = UI.Button({
+		Name = "Skip",
+		Text = "Skip",
+		Variant = "Ghost",
+		TextSize = look.SkipTextSize,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.fromScale(1, 0.5),
+		Size = UDim2.fromOffset(look.SkipWidth, look.HeaderHeight),
+		Parent = header,
+	})
 
-	local stepLabel = Instance.new("TextLabel")
-	stepLabel.Name = "Step"
-	stepLabel.BackgroundTransparency = 1
-	stepLabel.Size = UDim2.new(1, -90, 1, 0)
-	stepLabel.Font = Enum.Font.GothamBold
-	stepLabel.TextSize = 14
-	stepLabel.TextColor3 = MUTED_COLOR
-	stepLabel.TextXAlignment = Enum.TextXAlignment.Left
-	stepLabel.Text = ""
-	stepLabel.Parent = header
-
-	local skip = Instance.new("TextButton")
-	skip.Name = "Skip"
-	skip.AnchorPoint = Vector2.new(1, 0)
-	skip.Position = UDim2.fromScale(1, 0)
-	skip.Size = UDim2.new(0, 84, 1, 0)
-	skip.AutomaticSize = Enum.AutomaticSize.X
-	skip.BackgroundColor3 = SKIP_COLOR
-	skip.BackgroundTransparency = 0.2
-	skip.Font = Enum.Font.GothamBold
-	skip.TextSize = 14
-	skip.TextColor3 = BODY_COLOR
-	skip.Text = "Skip"
-	skip.AutoButtonColor = true
-	skip.Parent = header
-	corner(skip, 8)
-	local skipPadding = Instance.new("UIPadding")
-	skipPadding.PaddingLeft = UDim.new(0, 10)
-	skipPadding.PaddingRight = UDim.new(0, 10)
-	skipPadding.Parent = skip
-
-	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.LayoutOrder = 2
-	title.BackgroundTransparency = 1
-	title.Size = UDim2.new(1, 0, 0, 0)
-	title.AutomaticSize = Enum.AutomaticSize.Y
-	title.Font = Enum.Font.GothamBlack
-	title.TextSize = 24
-	title.TextWrapped = true
-	title.TextColor3 = TITLE_COLOR
-	title.Text = ""
-	title.Parent = frame
-
-	local body = Instance.new("TextLabel")
-	body.Name = "Body"
-	body.LayoutOrder = 3
-	body.BackgroundTransparency = 1
-	body.Size = UDim2.new(1, 0, 0, 0)
-	body.AutomaticSize = Enum.AutomaticSize.Y
-	body.Font = Enum.Font.GothamMedium
-	body.TextSize = 18
-	body.TextWrapped = true
-	body.RichText = true
-	body.TextXAlignment = Enum.TextXAlignment.Left
-	body.TextColor3 = BODY_COLOR
-	body.Text = ""
-	body.Parent = frame
-
-	local button = Instance.new("TextButton")
-	button.Name = "Continue"
-	button.LayoutOrder = 4
-	button.Size = UDim2.fromOffset(220, 48) -- a thumb-sized target
-	button.BackgroundColor3 = GO_COLOR
-	button.Font = Enum.Font.GothamBlack
-	button.TextSize = 20
-	button.TextColor3 = Color3.new(1, 1, 1)
-	button.Text = ""
-	button.AutoButtonColor = true
-	button.Visible = false
-	button.Parent = frame
-	corner(button, 10)
+	local title = UI.Text({
+		Name = "Title",
+		Role = "Heading",
+		Weight = "Bold",
+		Text = "",
+		TextSize = look.TitleSize,
+		TextColor3 = C.EmberBright,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.fromScale(1, 0),
+		LayoutOrder = 2,
+		Parent = frame,
+	})
+	UI.Divider({ LayoutOrder = 3, Parent = frame })
+	local body = UI.Text({
+		Name = "Body",
+		Role = "Body",
+		Text = "",
+		TextSize = look.BodySize,
+		TextColor3 = C.Text,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.fromScale(1, 0),
+		LayoutOrder = 4,
+		Parent = frame,
+	})
+	-- "Let's go!" / "Let's play!" on the two cards; hidden on action steps.
+	local button = UI.Button({
+		Name = "Continue",
+		Text = "",
+		Variant = "Primary",
+		TextSize = look.ButtonTextSize,
+		Size = UDim2.fromOffset(look.ButtonSize.X, look.ButtonSize.Y),
+		LayoutOrder = 5,
+		Visible = false,
+		Parent = frame,
+	})
 
 	gui.Parent = localPlayer:WaitForChild("PlayerGui")
 	return {
 		gui = gui,
+		origin = origin,
+		holder = holder,
+		scale = scale,
 		frame = frame,
+		fit = fit,
 		stepLabel = stepLabel,
+		dots = dots,
 		title = title,
 		body = body,
 		button = button,
@@ -642,7 +726,7 @@ local function buildGuide(): GuideParts
 	local beam = Instance.new("Beam")
 	beam.Name = "GuideBeam"
 	beam.Attachment1 = targetAttachment
-	beam.Color = ColorSequence.new(tuning.BeamColorNear, tuning.BeamColorFar)
+	beam.Color = ColorSequence.new(C.EmberBright, C.MossBright) -- your end, the target's end
 	beam.Transparency = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 0.6),
 		NumberSequenceKeypoint.new(0.15, 0.25),
@@ -666,26 +750,27 @@ local function buildGuide(): GuideParts
 	marker.StudsOffsetWorldSpace = Vector3.new(0, tuning.MarkerHeight, 0)
 	marker.Enabled = false
 	marker.Parent = anchor
-	-- A downward chevron made of two rounded bars (no image asset needed).
-	-- Bars are ARROW_LENGTH tall, tilted 45 degrees, meeting at ARROW_TIP.
+	-- A downward chevron made of two rounded ember bars (no image asset
+	-- needed). Bars are ARROW_LENGTH tall, tilted 45 degrees, meeting at
+	-- ARROW_TIP, with a dark edge so they read against the night sky.
 	local ARROW_LENGTH, ARROW_THICKNESS = 0.56, 0.17
 	local ARROW_TIP = Vector2.new(0.5, 0.8)
+	local ARROW_CORNER, ARROW_OUTLINE = 6, 2
 	local half = ARROW_LENGTH / 2 * math.sin(math.rad(45))
 	for _, side in ipairs({ -1, 1 }) do
-		local bar = Instance.new("Frame")
-		bar.Name = "ArrowBar"
-		bar.AnchorPoint = Vector2.new(0.5, 0.5)
-		bar.Position = UDim2.fromScale(ARROW_TIP.X + side * half, ARROW_TIP.Y - half)
-		bar.Size = UDim2.fromScale(ARROW_THICKNESS, ARROW_LENGTH)
-		bar.Rotation = side * 45
-		bar.BackgroundColor3 = tuning.BeamColorNear
-		bar.BorderSizePixel = 0
-		bar.Parent = marker
-		corner(bar, 6)
-		local outline = Instance.new("UIStroke")
-		outline.Color = Color3.fromRGB(40, 24, 10)
-		outline.Thickness = 2
-		outline.Parent = bar
+		UI.new("Frame", {
+			Name = "ArrowBar",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(ARROW_TIP.X + side * half, ARROW_TIP.Y - half),
+			Size = UDim2.fromScale(ARROW_THICKNESS, ARROW_LENGTH),
+			Rotation = side * 45,
+			BackgroundColor3 = C.EmberBright,
+			BorderSizePixel = 0,
+			Parent = marker,
+		}, {
+			UI.Corner(ARROW_CORNER),
+			UI.Stroke({ Color = C.TextOnAccent, Thickness = ARROW_OUTLINE }),
+		})
 	end
 
 	anchor.Parent = Workspace
@@ -719,13 +804,6 @@ function TutorialController.Start()
 	if not tuning.Enabled then
 		return
 	end
-	local soundModule = script.Parent:FindFirstChild("SoundController")
-	if soundModule and soundModule:IsA("ModuleScript") then
-		local ok, result = pcall(require, soundModule :: any)
-		if ok then
-			soundController = result
-		end
-	end
 	-- Count real collects (step 5). Waited for off the start-up thread.
 	task.spawn(function()
 		local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CashCollected") :: RemoteEvent
@@ -758,12 +836,16 @@ end
 
 function TutorialController.Run()
 	running = true
-	-- Other screens (Daily Rewards) don't pop up over the tutorial.
+	-- Other screens (Daily Rewards, Offline Earnings) don't pop up over the tutorial.
 	localPlayer:SetAttribute("TutorialActive", true)
 	runCollectBase = cashCollects
+	-- The panel sits under the steal banners and, while it's up, holds the
+	-- toast reservation for both.
+	StealController.SetPanelBelow(RESERVE_KEY)
 	local panel = buildPanel()
 	local guide = buildGuide()
 	local connections: { RBXScriptConnection } = {}
+	local signalConnections: { any } = {} -- Shared/Util/Signal connections
 
 	local current = 0
 	local doneAt: number? = nil -- os.clock() when the current step was completed
@@ -772,10 +854,61 @@ function TutorialController.Run()
 	local fallbackPoint: Vector3? = nil
 	local skipArmedUntil = 0
 	local lastBody = ""
+	-- The card's height in screen px at Fit 1, measured whenever its size
+	-- changes (so it always matches the Fit scale it was laid out with).
+	local naturalHeight = 0
 
 	local function setTarget(target: Instance?, point: Vector3?)
 		followed = target
 		fallbackPoint = point
+	end
+
+	-- Top centre: under the top bar and Base/Eggs buttons, any banner
+	-- (sighting, Hunt) and the steal banners. Shrinks to fit the space left
+	-- above the bottom of the screen, and reserves its bottom edge so toasts
+	-- slide in below the panel, never over it.
+	local function place()
+		if finished then
+			return
+		end
+		local scale = panel.scale.Scale
+		local originY = panel.origin.AbsolutePosition.Y
+		local gap = Config.UI.Tutorial.StackGap * scale
+		local top = topCentreBase(scale)
+		local above = NotificationController.ReservedBottom(RESERVE_KEY)
+		if above then
+			top = math.max(top, above - originY + gap)
+		end
+		local stealBottom = StealController.BannerBottom()
+		if stealBottom then
+			top = math.max(top, stealBottom - originY + gap)
+		end
+		top = math.floor(top + 0.5)
+		panel.holder.Position = UDim2.new(0.5, 0, 0, top)
+
+		local camera = Workspace.CurrentCamera
+		if camera and naturalHeight > 0 then
+			local available = camera.ViewportSize.Y - top - look.ScreenMargin * scale
+			local wanted = math.clamp(available / naturalHeight, look.MinFit, 1)
+			if math.abs(wanted - panel.fit.Scale) > FIT_STEP then
+				panel.fit.Scale = wanted
+			end
+		end
+
+		if panel.gui.Enabled then
+			NotificationController.ReserveTop(RESERVE_KEY, originY + top + panel.frame.AbsoluteSize.Y)
+		end
+	end
+
+	local function measure()
+		naturalHeight = panel.frame.AbsoluteSize.Y / panel.fit.Scale
+		place()
+	end
+
+	local function setSkipArmed(armed: boolean)
+		UI.SetButtonText(panel.skip, if armed then "Tap again to skip" else "Skip")
+		UI.SetButtonVariant(panel.skip, if armed then "Danger" else "Ghost")
+		panel.skip.Size = UDim2.fromOffset(if armed then look.SkipArmedWidth else look.SkipWidth, look.HeaderHeight)
 	end
 
 	local function finish()
@@ -786,15 +919,19 @@ function TutorialController.Run()
 		for _, connection in ipairs(connections) do
 			connection:Disconnect()
 		end
-		NotificationController.ReserveTop("Tutorial", nil)
+		for _, connection in ipairs(signalConnections) do
+			connection:Disconnect()
+		end
+		NotificationController.ReserveTop(RESERVE_KEY, nil)
+		StealController.SetPanelBelow(nil)
 		setTarget(nil, nil)
 		guide.beam.Enabled = false
 		guide.marker.Enabled = false
 		-- Slide up off the top of the screen, then clean everything up.
-		TweenService:Create(panel.frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			Position = UDim2.new(0.5, 0, 0, -400),
-		}):Play()
-		task.delay(0.35, function()
+		UI.Tween(panel.holder, look.SlideOutTime, {
+			Position = UDim2.new(0.5, 0, 0, -(panel.frame.AbsoluteSize.Y + look.DropIn)),
+		}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		task.delay(look.SlideOutTime, function()
 			running = false
 			localPlayer:SetAttribute("TutorialActive", nil)
 			panel.gui:Destroy()
@@ -815,20 +952,19 @@ function TutorialController.Run()
 
 	local function show(step: Step, state: State)
 		panel.title.Text = step.Title
-		panel.title.TextColor3 = TITLE_COLOR
+		panel.title.TextColor3 = C.EmberBright
+		local number = actionNumber(current)
 		if step.Card then
 			panel.stepLabel.Text = ""
+			panel.stepLabel.Visible = false
+			paintProgress(panel, number, nil)
 		else
-			local number = 0
-			for i = 1, current do
-				if not STEPS[i].Card then
-					number += 1
-				end
-			end
 			panel.stepLabel.Text = string.format("STEP %d OF %d", number, ACTION_STEP_COUNT)
+			panel.stepLabel.Visible = true
+			paintProgress(panel, number - 1, number)
 		end
 		panel.button.Visible = step.Card
-		panel.button.Text = step.Button or ""
+		UI.SetButtonText(panel.button, step.Button or "")
 		local guideFn = step.Guide
 		if guideFn then
 			local g = guideFn(state)
@@ -839,11 +975,11 @@ function TutorialController.Run()
 			setTarget(nil, nil)
 		end
 		-- A little drop-in so a new step catches the eye.
-		panel.frame.Position = UDim2.new(0.5, 0, tuning.PanelTop, -16)
-		TweenService:Create(panel.frame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Position = UDim2.new(0.5, 0, tuning.PanelTop, 0),
-		}):Play()
+		panel.frame.Position = UDim2.new(0.5, 0, 0, -look.DropIn)
+		UI.Tween(panel.frame, look.DropInTime, { Position = UDim2.fromScale(0.5, 0) },
+			Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		panel.gui.Enabled = true
+		place()
 	end
 
 	local function advance()
@@ -873,10 +1009,8 @@ function TutorialController.Run()
 		if finished then
 			return
 		end
-		-- Toasts slide in below the panel, never over it.
-		if panel.gui.Enabled then
-			NotificationController.ReserveTop("Tutorial", panel.frame.AbsolutePosition.Y + panel.frame.AbsoluteSize.Y)
-		end
+		-- Keep the panel under the banners and the toasts under the panel.
+		place()
 		local step = STEPS[current]
 		if not step then
 			return
@@ -894,7 +1028,8 @@ function TutorialController.Run()
 		if done and done(state) then
 			doneAt = os.clock()
 			panel.title.Text = "Nice!"
-			panel.title.TextColor3 = NICE_COLOR
+			panel.title.TextColor3 = C.MossBright
+			paintProgress(panel, actionNumber(current), nil)
 			setTarget(nil, nil)
 			playSound("Notify")
 			return
@@ -912,29 +1047,32 @@ function TutorialController.Run()
 		end
 	end
 
-	-- Buttons
+	-- Buttons (SoundController clicks every button by itself)
 	table.insert(connections, panel.button.Activated:Connect(function()
 		local step = STEPS[current]
 		if step and step.Card and not doneAt then
-			playSound("UIClick")
 			advance()
 		end
 	end))
 	table.insert(connections, panel.skip.Activated:Connect(function()
 		-- Two taps, so a stray thumb on a phone doesn't throw it away.
 		if os.clock() < skipArmedUntil then
-			playSound("UIClick")
 			finish()
 			return
 		end
 		skipArmedUntil = os.clock() + tuning.SkipConfirmTime
-		panel.skip.Text = "Tap again to skip"
+		setSkipArmed(true)
 		task.delay(tuning.SkipConfirmTime, function()
 			if not finished and os.clock() >= skipArmedUntil then
-				panel.skip.Text = "Skip"
+				setSkipArmed(false)
 			end
 		end)
 	end))
+
+	-- Re-place when anything above moves or the panel changes size.
+	table.insert(signalConnections, NotificationController.ReservationsChanged:Connect(place))
+	table.insert(signalConnections, StealController.BannersChanged:Connect(place))
+	table.insert(connections, panel.frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(measure))
 
 	-- Character (re)spawns: the beam starts at your HumanoidRootPart.
 	if localPlayer.Character then
