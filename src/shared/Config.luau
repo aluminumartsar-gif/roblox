@@ -1126,9 +1126,8 @@ Config.Feedback = {
 	CashStreakPitchMax = 1.4,
 	CashCountUpTime = 0.45,          -- HUD cash counts up to the new value over this long
 	CashPunchScale = 1.15,           -- HUD cash label grows to this, then settles
-	CashBigAmount = 10000,           -- popups this big or bigger are gold and larger
-	CashColor = Color3.fromRGB(120, 255, 140),
-	CashBigColor = Color3.fromRGB(255, 214, 90),
+	CashBigAmount = 10000,           -- popups this big or bigger are gold and larger (colours: Config.UI.Toasts)
+	CashBigColor = Color3.fromRGB(255, 214, 90), -- gold sparks in the world (collects, claims)
 	CashBurstParticles = 8,          -- little gold sparks per collect
 
 	-- Nest labels (sized in studs, so they shrink with distance)
@@ -2125,7 +2124,51 @@ Config.UI = {
 	},
 
 	-- Toasts, hatch reveal, cash popups and celebrations (NotificationController, FeedbackController).
+	-- Colours here are names from Theme.Colors above. Timings and amounts
+	-- live in Config.Feedback.
 	Toasts = {
+		-- Toast cards: charred field-kit cards whose edge strip, border and
+		-- icon show the kind. Announcements are bigger and take the rarity's colour.
+		Top = 52,                 -- px under Roblox's top bar to the first toast when no banner is up
+		BannerGap = 8,            -- px kept between the lowest banner / tutorial panel and the toasts
+		Gap = 6,                  -- px between toasts
+		Height = 36,              -- px, smallest card height (one line)
+		AnnounceHeight = 44,
+		TextSize = 18,            -- Heading font
+		AnnounceTextSize = 22,
+		IconSize = 22,
+		AnnounceIconSize = 28,
+		MaxWidth = 460,           -- px of text before a long message wraps onto another line
+		AnnounceMaxWidth = 560,
+		SlideFrom = 14,           -- px a card drops in from
+		FadeOutTime = 0.3,        -- seconds
+		CardTransparency = 0.06,
+		KindColors = { Info = "Moon", Success = "Moss", Warning = "Ember", Error = "Blood", Announce = "EmberBright" },
+		AnnounceTint = 0.25,      -- how much of the rarity colour soaks into an announcement card (0..1)
+
+		-- Hatch reveal. The RARITY stamp and the cryptid's name use the
+		-- Display font, so keep those two at 28 or more.
+		RevealBackdrop = 0.35,    -- transparency of the dimming behind the reveal (1 = none)
+		RevealStampTextSize = 60,
+		RevealNameTextSize = 42,
+		RevealIncomeTextSize = 28,
+		RevealEggTextSize = 20,
+		RevealPlateTransparency = 0.12, -- the charred plate under the name, income and egg
+		RevealAmbient = Color3.fromRGB(150, 150, 165), -- light on the cryptid in the reveal
+		SkipTextColor = "TextDim",
+		ConfettiColors = { "EmberBright", "Ember", "Text", "MoonBright", "MossBright", "BloodBright" },
+
+		-- Cash popups ("+$X" over the cryptid; big = Config.Feedback.CashBigAmount and up)
+		CashPopupSize = Vector2.new(160, 46),
+		CashPopupBigSize = Vector2.new(220, 60),
+		CashPopupColor = "MossBright",
+		CashPopupBigColor = "EmberBright",
+
+		-- Rebirth celebration (flash, confetti, "REBIRTH N!" stamp)
+		RebirthFlashColor = "Text",
+		RebirthStampColor = "EmberBright",
+		RebirthStampTextSize = 76,
+		RebirthStampTime = 2,     -- seconds the stamp stays before it fades
 	},
 
 	-- Tutorial panel and steal alerts (TutorialController, StealController).

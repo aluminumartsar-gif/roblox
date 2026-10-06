@@ -8,24 +8,35 @@
 
 	  * Hatch reveal (HatchResult remote, only on the hatcher's screen): the
 	    screen dims, light rays in the rarity colour turn behind the new
-	    cryptid spinning in a ViewportFrame, a RARITY stamp punches in, then
-	    the name, its income and the egg it came from. The shell crack is
-	    followed by a sting that gets bigger with rarity. Legendary and up
-	    add a camera shake and confetti; Secret gets TV static and a name
-	    that won't hold still. Closes itself after a few seconds; a tap
-	    skips it. Several hatches in a row queue up (and hurry).
+	    cryptid spinning in a ViewportFrame, a RARITY stamp (horror font, in
+	    a rubber-stamp box) punches in, then a charred plate fades in with
+	    the cryptid's name, its income and the egg it came from. The shell
+	    crack is followed by a sting that gets bigger with rarity. Legendary
+	    and up add a camera shake and confetti; Secret gets TV static and a
+	    name that won't hold still. Closes itself after a few seconds; the
+	    Skip button (top right) closes it early. Several hatches in a row
+	    queue up (and hurry). While you carry something home the reveal
+	    waits until you drop it off.
+	    The reveal's ScreenGui is called "HatchReveal" and sits in PlayerGui
+	    from the moment a reveal is due until it closes: CodexController
+	    holds its "NEW CODEX ENTRY" polaroid while it is there, so the two
+	    celebrations play one after the other.
 	  * World burst at the nest (sparks + a flash in the rarity colour).
 	    Other players near a Legendary+ hatch see a smaller one
 	    (FeedbackCue "HatchBurst").
 	  * Cash (CashCollected remote): a "+$1.2K" that pops and floats up from
-	    the creature, gold sparks, and a coin sound that climbs in pitch
-	    while you sweep along a row of creatures. (The HUD cash bounce is in
-	    HudController.)
+	    the creature (moss green, gold for big amounts), gold sparks, and a
+	    coin sound that climbs in pitch while you sweep along a row of
+	    creatures. (The HUD cash count-up and bounce are in HudController.)
 	  * FeedbackCue: bat hits (3D bonk + dust for everyone), belt purchase,
-	    steal/pickup, claim, and the rebirth flash.
+	    steal/pickup, claim, and rebirth (a flash, then confetti and a
+	    "REBIRTH N!" stamp).
 	  * Dropping what you carry plays a sound.
 
-	Tunables: Config.Feedback. Sounds: Config.Sounds via SoundController.
+	Layers (Config.UI.Layers): the reveal on Reveal, the rebirth flash on
+	Flash, the rebirth stamp and confetti on Celebration.
+	Tunables: Config.Feedback (timings, amounts), Config.UI.Toasts (look).
+	Sounds: Config.Sounds via SoundController.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -33,31 +44,47 @@ local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local ItemVisuals = require(Shared:WaitForChild("ItemVisuals"))
 
+local Components = script.Parent.Parent:WaitForChild("Components")
+local Theme = require(Components:WaitForChild("Theme"))
+local UI = require(Components:WaitForChild("UI"))
+
 local SoundController = require(script.Parent:WaitForChild("SoundController"))
 
 local FeedbackController = {}
 
 local FX = Config.Feedback
+local LOOK = Config.UI.Toasts
+local LAYERS = Config.UI.Layers
+local C = Theme.Colors
 local localPlayer = Players.LocalPlayer
 
 -- Look, not balance: fixed style choices for the animations.
-local WHITE = Color3.new(1, 1, 1)
-local BLACK = Color3.new(0, 0, 0)
-local CONFETTI_COLORS = {
-	Color3.fromRGB(255, 214, 90), Color3.fromRGB(255, 120, 150), Color3.fromRGB(120, 220, 255),
-	Color3.fromRGB(150, 255, 160), Color3.fromRGB(255, 255, 255), Color3.fromRGB(200, 150, 255),
-}
+local WHITE = Color3.new(1, 1, 1) -- neutral light / gradient base, not a palette colour
 local GLYPHS = { "#", "%", "&", "?", "!", "/", "\\", "_", "~", "*", "@", "$" }
 local CAMERA_FOV = 35
 local STATIC_COLUMNS, STATIC_ROWS = 16, 9
 local SECRET_TICK = 0.07
+-- Reveal stage geometry, px at the reference height (the stage scales).
+local STAGE_SIZE = Vector2.new(420, 440)
+local CREATURE_Y = 0.42 -- centre of the cryptid, as a fraction of the stage height
+local CREATURE_SIZE = 300
+local RAYS_SIZE = 640
+local RAY_WIDTH = 46
+local GLOW_SIZE = 250
+local GLOW_PULSE = 14
+local PLATE_TOP = 326 -- px from the top of the stage
+local PLATE_WIDTH = 380
+local STAMP_HEIGHT = 76
+local SKIP_SIZE = Vector2.new(120, 40)
+local SKIP_TOP = 64 -- px from the very top of the screen (clears Roblox's top bar)
+local REBIRTH_STAMP_SIZE = Vector2.new(460, 80)
+local DISPLAY_MIN_SIZE = 28 -- the Display font is only legible this big
 
 type Reveal = {
 	CreatureId: string,
@@ -67,26 +94,41 @@ type Reveal = {
 	Position: Vector3?,
 }
 
+-- One property of one part that fades in: the instance, the property and
+-- its value once shown.
+type Fade = { Target: Instance, Property: string, Shown: number }
+
 local queue: { Reveal } = {}
 local showing = false
 local playerGui: PlayerGui
-local fxGui: ScreenGui -- persistent full-screen layer for flashes and confetti
+local fxGui: ScreenGui -- persistent full-screen layer for flashes
+local celebrationGui: ScreenGui -- persistent layer for the rebirth stamp and confetti
 
 --------------------------------------------------------------------------
 -- Small helpers
 --------------------------------------------------------------------------
 
 local function tween(object: Instance, seconds: number, props: { [string]: any }, style: Enum.EasingStyle?, direction: Enum.EasingDirection?): Tween
-	local t = TweenService:Create(object, TweenInfo.new(seconds, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out), props)
-	t:Play()
-	return t
+	return UI.Tween(object, seconds, props, style, direction)
 end
 
---- The colour a rarity shows as. Secret's own colour is near-black.
+--- A colour from Theme.Colors by name (Config.UI.Toasts names them).
+local function themeColor(name: string?, fallback: Color3): Color3
+	local color = if name then (C :: any)[name] else nil
+	return if typeof(color) == "Color3" then color else fallback
+end
+
+local CONFETTI_COLORS: { Color3 } = {}
+for _, name in ipairs(LOOK.ConfettiColors) do
+	table.insert(CONFETTI_COLORS, themeColor(name, C.Text))
+end
+
+--- The colour a rarity shows as in the effects. Secret's own colour is
+--- near-black, so the rays, glow and stamp use Config.Feedback.SecretAccent.
 local function accent(rarityName: string): Color3
 	local rarity = Config.Rarities[rarityName]
 	if not rarity then
-		return WHITE
+		return C.Text
 	end
 	return if rarity.NeverRenderClearly then FX.SecretAccent else rarity.Color
 end
@@ -127,23 +169,47 @@ local function nearCamera(position: Vector3, maxDistance: number): boolean
 	return camera == nil or (camera.CFrame.Position - position).Magnitude <= maxDistance
 end
 
-local function label(parent: Instance, props: { [string]: any }): TextLabel
-	local l = Instance.new("TextLabel")
-	l.BackgroundTransparency = 1
-	l.Font = Enum.Font.GothamBlack
-	l.TextScaled = true
-	l.TextColor3 = WHITE
-	l.AnchorPoint = Vector2.new(0.5, 0.5)
-	for key, value in pairs(props) do
-		(l :: any)[key] = value
+--- A dark outline round a label's text so it reads over the 3D world.
+--- Starts hidden (fade it in with the text).
+local function outline(label: TextLabel, color: Color3, thickness: number): UIStroke
+	return UI.Stroke({
+		Name = "Outline",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		Color = color,
+		Thickness = thickness,
+		Transparency = 1,
+		Parent = label,
+	}) :: UIStroke
+end
+
+--- Big horror-font text (Display, via UI.Title) that shrinks to fit its
+--- box but never below the legible size. Starts hidden.
+local function displayText(text: string, maxSize: number, props: { [string]: any }): (TextLabel, UIStroke)
+	local label = UI.Title(text, maxSize, props)
+	label.TextXAlignment = Enum.TextXAlignment.Center
+	label.TextScaled = true
+	label.RichText = false
+	label.TextTransparency = 1
+	UI.new("UITextSizeConstraint", {
+		MaxTextSize = maxSize,
+		MinTextSize = math.min(DISPLAY_MIN_SIZE, maxSize),
+		Parent = label,
+	})
+	local edge = label:FindFirstChildOfClass("UIStroke") :: UIStroke
+	edge.Transparency = 1
+	return label, edge
+end
+
+local function fadeIn(fades: { Fade }, seconds: number)
+	for _, fade in ipairs(fades) do
+		tween(fade.Target, seconds, { [fade.Property] = fade.Shown })
 	end
-	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 2.5
-	stroke.Color = BLACK
-	stroke.Transparency = 0.2
-	stroke.Parent = l
-	l.Parent = parent
-	return l
+end
+
+local function fadeOut(fades: { Fade }, seconds: number)
+	for _, fade in ipairs(fades) do
+		tween(fade.Target, seconds, { [fade.Property] = 1 })
+	end
 end
 
 --------------------------------------------------------------------------
@@ -223,17 +289,20 @@ end
 
 local function confetti(parent: Instance, color: Color3)
 	for _ = 1, FX.ConfettiCount do
-		local piece = Instance.new("Frame")
-		piece.Name = "Confetti"
-		piece.AnchorPoint = Vector2.new(0.5, 0.5)
-		piece.Size = UDim2.fromOffset(math.random(8, 12), math.random(14, 20))
 		local startX = math.random()
-		piece.Position = UDim2.new(startX, 0, -0.05 - math.random() * 0.15, 0)
-		piece.BackgroundColor3 = if math.random() < 0.4 then color else CONFETTI_COLORS[math.random(1, #CONFETTI_COLORS)]
-		piece.BorderSizePixel = 0
-		piece.Rotation = math.random(0, 360)
-		piece.ZIndex = 40
-		piece.Parent = parent
+		local piece = UI.new("Frame", {
+			Name = "Confetti",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromOffset(math.random(8, 12), math.random(14, 20)),
+			Position = UDim2.new(startX, 0, -0.05 - math.random() * 0.15, 0),
+			BackgroundColor3 = if math.random() < 0.4 or #CONFETTI_COLORS == 0
+				then color
+				else CONFETTI_COLORS[math.random(1, #CONFETTI_COLORS)],
+			BorderSizePixel = 0,
+			Rotation = math.random(0, 360),
+			ZIndex = 40,
+			Parent = parent,
+		}) :: Frame
 		local fall = 1.6 + math.random() * 1.2
 		tween(piece, fall, {
 			Position = UDim2.new(startX + (math.random() - 0.5) * 0.3, 0, 1.08, 0),
@@ -244,14 +313,15 @@ local function confetti(parent: Instance, color: Color3)
 end
 
 local function flash(color: Color3, seconds: number)
-	local frame = Instance.new("Frame")
-	frame.Name = "Flash"
-	frame.Size = UDim2.fromScale(1, 1)
-	frame.BackgroundColor3 = color
-	frame.BackgroundTransparency = 0.15
-	frame.BorderSizePixel = 0
-	frame.ZIndex = 30
-	frame.Parent = fxGui
+	local frame = UI.new("Frame", {
+		Name = "Flash",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = color,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+		ZIndex = 30,
+		Parent = fxGui,
+	})
 	tween(frame, seconds, { BackgroundTransparency = 1 })
 	Debris:AddItem(frame, seconds + 0.1)
 end
@@ -276,55 +346,149 @@ local function findHatchedModel(data: Reveal): Model?
 end
 
 local function buildRays(parent: Instance, color: Color3): Frame
-	local rays = Instance.new("Frame")
-	rays.Name = "Rays"
-	rays.AnchorPoint = Vector2.new(0.5, 0.5)
-	rays.Position = UDim2.fromScale(0.5, 0.42)
-	rays.Size = UDim2.fromOffset(640, 640)
-	rays.BackgroundTransparency = 1
-	rays.Parent = parent
+	local rays = UI.new("Frame", {
+		Name = "Rays",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, CREATURE_Y),
+		Size = UDim2.fromOffset(RAYS_SIZE, RAYS_SIZE),
+		BackgroundTransparency = 1,
+		ZIndex = 1,
+		Parent = parent,
+	}) :: Frame
 	for i = 1, FX.RayCount do
-		local ray = Instance.new("Frame")
-		ray.AnchorPoint = Vector2.new(0.5, 0.5)
-		ray.Position = UDim2.fromScale(0.5, 0.5)
-		ray.Size = UDim2.new(0, 46, 1, 0)
-		ray.Rotation = (i - 1) * 180 / FX.RayCount
-		ray.BackgroundColor3 = color
-		ray.BorderSizePixel = 0
-		ray.Parent = rays
-		-- Bright in the middle, fading out to the tips.
-		local gradient = Instance.new("UIGradient")
-		gradient.Rotation = 90
-		gradient.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 1),
-			NumberSequenceKeypoint.new(0.5, 0.35),
-			NumberSequenceKeypoint.new(1, 1),
+		UI.new("Frame", {
+			Name = "Ray",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.new(0, RAY_WIDTH, 1, 0),
+			Rotation = (i - 1) * 180 / FX.RayCount,
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			Parent = rays,
+		}, {
+			-- Bright in the middle, fading out to the tips.
+			UI.new("UIGradient", {
+				Rotation = 90,
+				Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 1),
+					NumberSequenceKeypoint.new(0.5, 0.35),
+					NumberSequenceKeypoint.new(1, 1),
+				}),
+			}),
 		})
-		gradient.Parent = ray
 	end
 	return rays
 end
 
 local function buildStatic(parent: Instance): (Frame, { Frame })
-	local static = Instance.new("Frame")
-	static.Name = "Static"
-	static.Size = UDim2.fromScale(1, 1)
-	static.BackgroundTransparency = 1
-	static.ZIndex = 35
-	static.Parent = parent
+	local static = UI.new("Frame", {
+		Name = "Static",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ZIndex = 35,
+		Parent = parent,
+	}) :: Frame
 	local cells: { Frame } = {}
 	for row = 0, STATIC_ROWS - 1 do
 		for column = 0, STATIC_COLUMNS - 1 do
-			local cell = Instance.new("Frame")
-			cell.BorderSizePixel = 0
-			cell.Position = UDim2.fromScale(column / STATIC_COLUMNS, row / STATIC_ROWS)
-			cell.Size = UDim2.fromScale(1 / STATIC_COLUMNS + 0.002, 1 / STATIC_ROWS + 0.002)
-			cell.ZIndex = 35
-			cell.Parent = static
+			local cell = UI.new("Frame", {
+				BorderSizePixel = 0,
+				Position = UDim2.fromScale(column / STATIC_COLUMNS, row / STATIC_ROWS),
+				Size = UDim2.fromScale(1 / STATIC_COLUMNS + 0.002, 1 / STATIC_ROWS + 0.002),
+				ZIndex = 35,
+				Parent = static,
+			}) :: Frame
 			table.insert(cells, cell)
 		end
 	end
 	return static, cells
+end
+
+--- The RARITY stamp: the rarity's name in the horror font inside a
+--- rubber-stamp box, tilted. Returns the box, its punch scale and fades.
+local function buildStamp(parent: Instance, text: string, color: Color3): (Frame, UIScale, { Fade })
+	local box = UI.new("Frame", {
+		Name = "Stamp",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.06),
+		Size = UDim2.fromOffset(0, STAMP_HEIGHT),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
+		Rotation = -6,
+		ZIndex = 5,
+		Parent = parent,
+	}, {
+		UI.Corner(Theme.Tuning.Corner),
+		UI.Padding({ Left = 18, Right = 18 }),
+	}) :: Frame
+	local border = UI.Stroke({ Name = "Border", Color = color, Thickness = 3, Transparency = 1, Parent = box }) :: UIStroke
+	local label = UI.Title(text, LOOK.RevealStampTextSize, {
+		Name = "Rarity",
+		TextColor3 = color,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextTransparency = 1,
+		RichText = false,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromScale(0, 1),
+		ZIndex = 5,
+		Parent = box,
+	})
+	-- A heavy dark edge instead of the title's ember one, so any rarity
+	-- colour reads over the rays.
+	local edge = label:FindFirstChildOfClass("UIStroke") :: UIStroke
+	edge.Color = C.Shadow
+	edge.Thickness = 4
+	edge.Transparency = 1
+	local punch = UI.new("UIScale", { Name = "Punch", Scale = 3, Parent = box }) :: UIScale
+	return box, punch, {
+		{ Target = label, Property = "TextTransparency", Shown = 0 },
+		{ Target = edge, Property = "Transparency", Shown = 0.1 },
+		{ Target = border, Property = "Transparency", Shown = 0.15 },
+	}
+end
+
+--- The Skip button, top right under the Roblox top bar. Eggs hatch on
+--- their own, so the reveal can open mid-chase: nothing in it may cover
+--- the screen and eat input (the thumbstick, jump button and tool taps
+--- must keep working). Everything else in the reveal is a non-Active
+--- Frame or label. Starts invisible; fades in after a moment.
+local function buildSkip(parent: Instance): (TextButton, { Fade })
+	local skip = UI.new("TextButton", {
+		Name = "Skip",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -16, 0, SKIP_TOP),
+		Size = UDim2.fromOffset(SKIP_SIZE.X, SKIP_SIZE.Y),
+		BackgroundColor3 = C.Panel,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Text = "",
+		AutoButtonColor = false,
+		ZIndex = 50,
+	}, {
+		UI.Corner(Theme.Tuning.Corner),
+	}) :: TextButton
+	skip:SetAttribute("SAC_NoClick", true)
+	local edge = UI.Stroke({ Name = "Edge", Color = C.Edge, Thickness = 1.5, Transparency = 1, Parent = skip }) :: UIStroke
+	local hint = UI.Text({
+		Name = "Hint",
+		Role = "Heading",
+		Weight = "SemiBold",
+		Text = "SKIP",
+		RichText = false,
+		TextSize = 20,
+		TextColor3 = themeColor(LOOK.SkipTextColor, C.TextDim),
+		TextTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 51,
+		Parent = skip,
+	})
+	fixedScale(skip)
+	skip.Parent = parent
+	return skip, {
+		{ Target = skip, Property = "BackgroundTransparency", Shown = 0.45 },
+		{ Target = edge, Property = "Transparency", Shown = 0.3 },
+		{ Target = hint, Property = "TextTransparency", Shown = 0.1 },
+	}
 end
 
 local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptConnection })
@@ -339,58 +503,65 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 	end
 
 	-- Backdrop (the whole screen; a plain Frame, so touches pass through).
-	local backdrop = Instance.new("Frame")
-	backdrop.Name = "Backdrop"
-	backdrop.Size = UDim2.fromScale(1, 1)
-	backdrop.BackgroundColor3 = BLACK
-	backdrop.BackgroundTransparency = 1
-	backdrop.BorderSizePixel = 0
-	backdrop.Parent = gui
+	local backdrop = UI.new("Frame", {
+		Name = "Backdrop",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = C.Backdrop,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 1,
+		Parent = gui,
+	})
 
-	local stage = Instance.new("Frame")
-	stage.Name = "Stage"
-	stage.AnchorPoint = Vector2.new(0.5, 0.5)
-	stage.Position = UDim2.fromScale(0.5, 0.46)
-	stage.Size = UDim2.fromOffset(420, 440)
-	stage.BackgroundTransparency = 1
-	stage.Parent = gui
+	local stage = UI.new("Frame", {
+		Name = "Stage",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.46),
+		Size = UDim2.fromOffset(STAGE_SIZE.X, STAGE_SIZE.Y),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+		Parent = gui,
+	}) :: Frame
 	fixedScale(stage)
 
 	-- Inner frame with its own UIScale for the pop-in (the stage's UIScale
 	-- belongs to the phone scaling).
-	local pop = Instance.new("Frame")
-	pop.Name = "Pop"
-	pop.Size = UDim2.fromScale(1, 1)
-	pop.BackgroundTransparency = 1
-	pop.Parent = stage
-	local popScale = Instance.new("UIScale")
-	popScale.Scale = 0.4
-	popScale.Parent = pop
+	local pop = UI.new("Frame", {
+		Name = "Pop",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Parent = stage,
+	})
+	local popScale = UI.new("UIScale", { Scale = 0.4, Parent = pop }) :: UIScale
 
 	local rays = buildRays(pop, color)
-	local glow = Instance.new("Frame")
-	glow.Name = "Glow"
-	glow.AnchorPoint = Vector2.new(0.5, 0.5)
-	glow.Position = UDim2.fromScale(0.5, 0.42)
-	glow.Size = UDim2.fromOffset(250, 250)
-	glow.BackgroundColor3 = color
-	glow.BackgroundTransparency = 0.72
-	glow.Parent = pop
-	local glowCorner = Instance.new("UICorner")
-	glowCorner.CornerRadius = UDim.new(0.5, 0)
-	glowCorner.Parent = glow
+	local glow = UI.new("Frame", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, CREATURE_Y),
+		Size = UDim2.fromOffset(GLOW_SIZE, GLOW_SIZE),
+		BackgroundColor3 = color,
+		BackgroundTransparency = 0.72,
+		BorderSizePixel = 0,
+		ZIndex = 2,
+		Parent = pop,
+	}, {
+		UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+	}) :: Frame
 
 	-- The cryptid itself.
-	local viewport = Instance.new("ViewportFrame")
-	viewport.Name = "Creature"
-	viewport.AnchorPoint = Vector2.new(0.5, 0.5)
-	viewport.Position = UDim2.fromScale(0.5, 0.42)
-	viewport.Size = UDim2.fromOffset(300, 300)
-	viewport.BackgroundTransparency = 1
-	viewport.Ambient = Color3.fromRGB(150, 150, 165)
-	viewport.LightColor = WHITE
-	viewport.LightDirection = Vector3.new(0.3, -1, 0.8)
-	viewport.Parent = pop
+	local viewport = UI.new("ViewportFrame", {
+		Name = "Creature",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, CREATURE_Y),
+		Size = UDim2.fromOffset(CREATURE_SIZE, CREATURE_SIZE),
+		BackgroundTransparency = 1,
+		Ambient = LOOK.RevealAmbient,
+		LightColor = WHITE,
+		LightDirection = Vector3.new(0.3, -1, 0.8),
+		ZIndex = 4,
+		Parent = pop,
+	}) :: ViewportFrame
 
 	local model: Model? = nil
 	local spinParts: { BasePart } = {}
@@ -421,85 +592,86 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 		warn("[SAC/Feedback] couldn't build " .. tostring(data.CreatureId) .. " for the reveal: " .. tostring(built))
 	end
 
-	-- Text.
-	local stamp = label(pop, {
-		Name = "Stamp",
-		Position = UDim2.fromScale(0.5, 0.05),
-		Size = UDim2.fromOffset(380, 70),
-		Text = string.upper(rarity.DisplayName),
-		TextColor3 = color,
-		Rotation = -6,
-		TextTransparency = 1,
-	})
-	local stampStroke = stamp:FindFirstChildOfClass("UIStroke") :: UIStroke
-	stampStroke.Thickness = 4
-	stampStroke.Transparency = 1
-	local stampScale = Instance.new("UIScale")
-	stampScale.Scale = 3
-	stampScale.Parent = stamp
+	-- The RARITY stamp.
+	local _, stampPunch, stampFades = buildStamp(pop, string.upper(rarity.DisplayName), color)
 
-	local nameLabel = label(pop, {
-		Name = "CreatureName",
-		Position = UDim2.fromScale(0.5, 0.8),
-		Size = UDim2.fromOffset(420, 48),
-		Text = def.Name,
-		TextTransparency = 1,
+	-- The charred plate with the name, income and egg (one line each).
+	local plate = UI.Panel({
+		Name = "Plate",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, PLATE_TOP),
+		Size = UDim2.fromOffset(PLATE_WIDTH, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = pop,
 	})
+	local plateEdge = plate:FindFirstChildOfClass("UIStroke") :: UIStroke
+	plateEdge.Color = Theme.Mix(C.Edge, color, 0.5)
+	plateEdge.Transparency = 1
+	UI.List({ HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = 2 }).Parent = plate
+	UI.Padding({ Top = 6, Bottom = 8, Left = 10, Right = 10 }).Parent = plate
+
+	local nameLabel, nameEdge = displayText(def.Name, LOOK.RevealNameTextSize, {
+		Name = "CreatureName",
+		Size = UDim2.new(1, 0, 0, LOOK.RevealNameTextSize + 4),
+		LayoutOrder = 1,
+		ZIndex = 3,
+		Parent = plate,
+	})
+
 	local income = rarity.IncomePerSecond
 	local mutation = data.Mutation and Config.Mutations[data.Mutation]
 	if mutation then
 		income *= mutation.IncomeMultiplier
 	end
-	local incomeLabel = label(pop, {
+	local incomeLabel = UI.Text({
 		Name = "Income",
-		Position = UDim2.fromScale(0.5, 0.9),
-		Size = UDim2.fromOffset(320, 34),
+		Role = "Heading",
 		Text = "+$" .. Config.FormatNumber(income) .. "/s",
-		TextColor3 = FX.CashColor,
+		RichText = false,
+		TextSize = LOOK.RevealIncomeTextSize,
+		TextColor3 = C.MossBright,
 		TextTransparency = 1,
+		Size = UDim2.new(1, 0, 0, LOOK.RevealIncomeTextSize + 4),
+		LayoutOrder = 2,
+		ZIndex = 3,
+		Parent = plate,
 	})
-	local eggDef = Config.Eggs[data.EggId or ""]
-	local eggLabel = label(pop, {
-		Name = "FromEgg",
-		Position = UDim2.fromScale(0.5, 0.975),
-		Size = UDim2.fromOffset(320, 24),
-		Font = Enum.Font.GothamBold,
-		Text = if eggDef then ("from a " .. eggDef.Name) else "",
-		TextColor3 = Color3.fromRGB(255, 190, 120),
-		TextTransparency = 1,
-	})
-	-- A small Skip button, top-right under the Roblox top bar. Eggs hatch on
-	-- their own, so the reveal can open mid-chase: nothing in it may cover
-	-- the screen and eat input (the thumbstick, jump button and tool taps
-	-- must keep working). Everything else here is a non-Active Frame/label.
-	local skip = Instance.new("TextButton")
-	skip.Name = "Skip"
-	skip.AnchorPoint = Vector2.new(1, 0)
-	skip.Position = UDim2.new(1, -16, 0, 64)
-	skip.Size = UDim2.fromOffset(120, 40)
-	skip.BackgroundColor3 = BLACK
-	skip.BackgroundTransparency = 1
-	skip.BorderSizePixel = 0
-	skip.Text = ""
-	skip.AutoButtonColor = false
-	skip.ZIndex = 50
-	skip:SetAttribute("SAC_NoClick", true)
-	local skipCorner = Instance.new("UICorner")
-	skipCorner.CornerRadius = UDim.new(0.3, 0)
-	skipCorner.Parent = skip
-	fixedScale(skip)
-	skip.Parent = gui
+	local incomeEdge = outline(incomeLabel, C.Shadow, 1.5)
 
-	local hint = label(skip, {
-		Name = "Hint",
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, -20, 1, -14),
-		Font = Enum.Font.GothamBold,
-		Text = "Skip",
-		TextColor3 = Color3.fromRGB(220, 220, 220),
+	local eggDef = Config.Eggs[data.EggId or ""]
+	local eggLabel = UI.Text({
+		Name = "FromEgg",
+		Role = "Notes",
+		Text = if eggDef then ("from a " .. eggDef.Name) else "",
+		RichText = false,
+		TextSize = LOOK.RevealEggTextSize,
+		TextColor3 = C.EmberBright,
 		TextTransparency = 1,
-		ZIndex = 51,
+		Size = UDim2.new(1, 0, 0, LOOK.RevealEggTextSize + 4),
+		LayoutOrder = 3,
+		ZIndex = 3,
+		Parent = plate,
 	})
+
+	local lines: { { Fade } } = {
+		{
+			{ Target = plate, Property = "BackgroundTransparency", Shown = LOOK.RevealPlateTransparency },
+			{ Target = plateEdge, Property = "Transparency", Shown = 0 },
+			{ Target = nameLabel, Property = "TextTransparency", Shown = 0 },
+			{ Target = nameEdge, Property = "Transparency", Shown = 0.15 },
+		},
+		{
+			{ Target = incomeLabel, Property = "TextTransparency", Shown = 0 },
+			{ Target = incomeEdge, Property = "Transparency", Shown = 0.3 },
+		},
+		{
+			{ Target = eggLabel, Property = "TextTransparency", Shown = 0 },
+		},
+	}
+
+	local skip, skipFades = buildSkip(gui)
 
 	local static: Frame? = nil
 	local staticCells: { Frame } = {}
@@ -519,21 +691,19 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 	end)
 
 	-- Animate in.
-	tween(backdrop, 0.25, { BackgroundTransparency = 0.35 })
+	tween(backdrop, 0.25, { BackgroundTransparency = LOOK.RevealBackdrop })
 	tween(popScale, 0.45, { Scale = 1 }, Enum.EasingStyle.Back)
 	task.delay(FX.HatchStingDelay, function()
-		tween(stampScale, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
-		tween(stamp, 0.2, { TextTransparency = 0 })
-		tween(stampStroke, 0.2, { Transparency = 0.1 })
+		tween(stampPunch, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
+		fadeIn(stampFades, 0.2)
 	end)
-	for i, l in ipairs({ nameLabel, incomeLabel, eggLabel }) do
+	for i, fades in ipairs(lines) do
 		task.delay(0.35 + i * 0.12, function()
-			tween(l, 0.25, { TextTransparency = 0 })
+			fadeIn(fades, 0.25)
 		end)
 	end
 	task.delay(1, function()
-		tween(hint, 0.4, { TextTransparency = 0.2 })
-		tween(skip, 0.4, { BackgroundTransparency = 0.45 })
+		fadeIn(skipFades, 0.4)
 	end)
 	if big then
 		task.delay(FX.HatchStingDelay, function()
@@ -558,7 +728,7 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 	table.insert(connections, RunService.RenderStepped:Connect(function(dt)
 		local elapsed = os.clock() - started
 		rays.Rotation = (rays.Rotation + FX.RaySpinSpeed * dt) % 360
-		local pulse = 250 + math.sin(elapsed * 4) * 14
+		local pulse = GLOW_SIZE + math.sin(elapsed * 4) * GLOW_PULSE
 		glow.Size = UDim2.fromOffset(pulse, pulse)
 		spin += FX.CreatureSpinSpeed * dt
 		if model then
@@ -570,15 +740,14 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 			for _, part in ipairs(spinParts) do
 				part.Transparency = math.random() * 0.6
 			end
-			viewport.Position = UDim2.new(0.5, math.random(-5, 5), 0.42, math.random(-3, 3))
+			viewport.Position = UDim2.new(0.5, math.random(-5, 5), CREATURE_Y, math.random(-3, 3))
 			nameLabel.Text = if math.random() < 0.75 then scramble(10) else def.Name
 			local staticOn = elapsed < 1 or math.random() < 0.12
 			if static then
 				static.Visible = staticOn
 				if staticOn then
 					for _, cell in ipairs(staticCells) do
-						local v = math.random()
-						cell.BackgroundColor3 = Color3.new(v, v, v)
+						cell.BackgroundColor3 = Theme.Mix(C.Shadow, C.Text, math.random())
 						cell.BackgroundTransparency = 0.35 + math.random() * 0.5
 					end
 				end
@@ -600,8 +769,7 @@ local function runReveal(data: Reveal, gui: ScreenGui, connections: { RBXScriptC
 	-- Animate out.
 	tween(backdrop, 0.2, { BackgroundTransparency = 1 })
 	tween(popScale, 0.2, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-	tween(hint, 0.15, { TextTransparency = 1 })
-	tween(skip, 0.15, { BackgroundTransparency = 1 })
+	fadeOut(skipFades, 0.15)
 	if static then
 		static.Visible = false
 	end
@@ -615,6 +783,18 @@ local function pump()
 	showing = true
 	task.spawn(function()
 		while #queue > 0 do
+			-- The reveal's ScreenGui goes into PlayerGui now, even if the
+			-- reveal has to wait for a carry: CodexController holds its
+			-- polaroid while a "HatchReveal" is there.
+			local gui = UI.new("ScreenGui", {
+				Name = "HatchReveal",
+				ResetOnSpawn = false,
+				IgnoreGuiInset = true,
+				DisplayOrder = LAYERS.Reveal,
+				ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+				Enabled = false,
+				Parent = playerGui,
+			}) :: ScreenGui
 			-- Hold the reveal while the player carries something home (a thief
 			-- or the Brood Mother may be on them); the nest burst already
 			-- played, and the reveal opens once they've dropped it off.
@@ -622,14 +802,6 @@ local function pump()
 				localPlayer:GetAttributeChangedSignal("Carrying"):Wait()
 			end
 			local data = table.remove(queue, 1) :: Reveal
-			local gui = Instance.new("ScreenGui")
-			gui.Name = "HatchReveal"
-			gui.ResetOnSpawn = false
-			gui.IgnoreGuiInset = true
-			gui.DisplayOrder = 30
-			gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-			gui.Enabled = false
-			gui.Parent = playerGui
 			local connections: { RBXScriptConnection } = {}
 			local ok, err = pcall(runReveal, data, gui, connections)
 			if not ok then
@@ -717,36 +889,41 @@ local function onCashCollected(amount: any, position: any)
 	end
 
 	local bigAmount = amount >= FX.CashBigAmount
-	local color = if bigAmount then FX.CashBigColor else FX.CashColor
+	local color = if bigAmount then themeColor(LOOK.CashPopupBigColor, C.EmberBright) else themeColor(LOOK.CashPopupColor, C.MossBright)
+	local size = if bigAmount then LOOK.CashPopupBigSize else LOOK.CashPopupSize
 
 	local attachment = Instance.new("Attachment")
 	attachment.Name = "CashPopup"
 	attachment.Parent = getPopupAnchor()
 	attachment.WorldPosition = position
 
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "Popup"
-	billboard.Size = if bigAmount then UDim2.fromOffset(220, 60) else UDim2.fromOffset(160, 46)
-	billboard.AlwaysOnTop = true
-	billboard.LightInfluence = 0
-	billboard.MaxDistance = FX.CashPopupMaxDistance
-	billboard.Parent = attachment
+	local billboard = UI.new("BillboardGui", {
+		Name = "Popup",
+		Size = UDim2.fromOffset(size.X, size.Y),
+		AlwaysOnTop = true,
+		LightInfluence = 0,
+		MaxDistance = FX.CashPopupMaxDistance,
+		Parent = attachment,
+	})
 
-	local text = Instance.new("TextLabel")
-	text.Size = UDim2.fromScale(1, 1)
-	text.BackgroundTransparency = 1
-	text.Font = Enum.Font.GothamBlack
-	text.TextScaled = true
-	text.TextColor3 = color
-	text.Text = "+$" .. Config.FormatNumber(amount)
-	text.Parent = billboard
-	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 2.5
-	stroke.Color = Color3.fromRGB(20, 40, 20)
-	stroke.Parent = text
-	local scale = Instance.new("UIScale")
-	scale.Scale = 0.3
-	scale.Parent = text
+	local text = UI.Text({
+		Name = "Amount",
+		Role = "Heading",
+		Text = "+$" .. Config.FormatNumber(amount),
+		RichText = false,
+		TextScaled = true,
+		TextColor3 = color,
+		Size = UDim2.fromScale(1, 1),
+		Parent = billboard,
+	})
+	local stroke = UI.Stroke({
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		Color = C.Shadow,
+		Thickness = 2.5,
+		Transparency = 0.1,
+		Parent = text,
+	})
+	local scale = UI.new("UIScale", { Scale = 0.3, Parent = text })
 
 	tween(scale, 0.2, { Scale = 1 }, Enum.EasingStyle.Back)
 	tween(attachment, FX.CashPopupTime, { Position = attachment.Position + Vector3.new(0, FX.CashPopupRise, 0) })
@@ -766,40 +943,42 @@ end
 --------------------------------------------------------------------------
 
 local function rebirthFx(rebirths: number)
+	local stampColor = themeColor(LOOK.RebirthStampColor, C.EmberBright)
 	SoundController.Play("Rebirth")
-	flash(WHITE, 0.9)
-	confetti(fxGui, Color3.fromRGB(255, 214, 90))
+	flash(themeColor(LOOK.RebirthFlashColor, C.Text), 0.9)
+	confetti(celebrationGui, stampColor)
 	shake(FX.ShakeDuration, FX.ShakeStrength * 0.6)
 
 	-- Holder carries the phone scaling; the label inside does the punch
 	-- (one UIScale per object).
-	local holder = Instance.new("Frame")
-	holder.Name = "RebirthStamp"
-	holder.AnchorPoint = Vector2.new(0.5, 0.5)
-	holder.Position = UDim2.fromScale(0.5, 0.38)
-	holder.Size = UDim2.fromOffset(460, 80)
-	holder.BackgroundTransparency = 1
-	holder.ZIndex = 41
-	holder.Parent = fxGui
+	local holder = UI.new("Frame", {
+		Name = "RebirthStamp",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.38),
+		Size = UDim2.fromOffset(REBIRTH_STAMP_SIZE.X, REBIRTH_STAMP_SIZE.Y),
+		BackgroundTransparency = 1,
+		ZIndex = 41,
+		Parent = celebrationGui,
+	}) :: Frame
 	fixedScale(holder)
-	local banner = label(holder, {
+	local banner, edge = displayText(string.format("REBIRTH %d!", rebirths), LOOK.RebirthStampTextSize, {
+		Name = "Banner",
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromScale(1, 1),
-		Text = string.format("REBIRTH %d!", rebirths),
-		TextColor3 = Color3.fromRGB(255, 214, 90),
+		TextColor3 = stampColor,
 		Rotation = -4,
 		ZIndex = 41,
+		Parent = holder,
 	})
-	local punch = Instance.new("UIScale")
-	punch.Scale = 3
-	punch.Parent = banner
+	edge.Thickness = 3
+	banner.TextTransparency = 0
+	edge.Transparency = 0.1
+	local punch = UI.new("UIScale", { Scale = 3, Parent = banner })
 	tween(punch, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
-	task.delay(2, function()
+	task.delay(LOOK.RebirthStampTime, function()
 		tween(banner, 0.4, { TextTransparency = 1 })
-		local stroke = banner:FindFirstChildOfClass("UIStroke")
-		if stroke then
-			tween(stroke, 0.4, { Transparency = 1 })
-		end
+		tween(edge, 0.4, { Transparency = 1 })
 		Debris:AddItem(holder, 0.5)
 	end)
 end
@@ -871,12 +1050,20 @@ end
 function FeedbackController.Start()
 	playerGui = localPlayer:WaitForChild("PlayerGui") :: PlayerGui
 
-	fxGui = Instance.new("ScreenGui")
-	fxGui.Name = "SAC_ScreenFX"
-	fxGui.ResetOnSpawn = false
-	fxGui.IgnoreGuiInset = true
-	fxGui.DisplayOrder = 31
-	fxGui.Parent = playerGui
+	fxGui = UI.new("ScreenGui", {
+		Name = "SAC_ScreenFX",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		DisplayOrder = LAYERS.Flash,
+		Parent = playerGui,
+	}) :: ScreenGui
+	celebrationGui = UI.new("ScreenGui", {
+		Name = "SAC_Celebration",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		DisplayOrder = LAYERS.Celebration,
+		Parent = playerGui,
+	}) :: ScreenGui
 
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local hatchRemote = remotes:WaitForChild("HatchResult") :: RemoteEvent

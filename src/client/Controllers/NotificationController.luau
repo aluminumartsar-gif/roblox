@@ -3,51 +3,61 @@
 	NotificationController
 	StarterPlayerScripts/Client/Controllers/NotificationController
 
-	Toast messages under the HUD bar. Fed by the server's Notify remote and
-	by local code (e.g. the result of a button press).
+	Toast messages at the top centre of the screen, under any banner. Fed by
+	the server's Notify remote and by local code (e.g. the result of a button
+	press).
 
-	Each toast: an icon for its kind (Config.Feedback.ToastIcons), slides
-	down into place and fades in, plays a soft sound (Config.Feedback.
-	ToastSounds; silent if another sound just played, so it never piles on
-	top of a hatch fanfare), and fades out after Config.UI.NotificationDuration.
-	Server-wide announcements (GlobalAnnounce) are bigger and tinted with
-	the rarity's colour.
+	Each toast is a charred field-kit card: a coloured strip down its left
+	edge, a matching border and an icon (Config.Feedback.ToastIcons) show
+	the kind — Info moonlight blue, Success moss green, Warning ember,
+	Error blood red (colours: Config.UI.Toasts.KindColors). It slides down
+	into place and fades in, plays a soft sound (Config.Feedback.ToastSounds;
+	silent if another sound just played, so it never piles on top of a hatch
+	fanfare; errors always sound), and fades out after
+	Config.UI.NotificationDuration. Long messages wrap onto a second line
+	instead of running off a phone screen. At most Config.UI.MaxNotifications
+	show at once; a new one pushes the oldest out.
+	Server-wide announcements (GlobalAnnounce) are bigger cards tinted with
+	the rarity's colour (Theme.RarityColor, so Secret stays readable).
 
 	API (unchanged): NotificationController.Show(text, kind?, color?)
 	  kind: "Info" | "Success" | "Warning" | "Error" | "Announce"
+	  color: overrides the kind's colour (announcements pass the rarity's).
 
 	Top-centre stacking: banners (sightings, the Hunt) and the tutorial
 	panel call ReserveTop(key, bottomPx | nil); toasts sit below the lowest
 	one. ReservedBottom(except?) gives the lowest reserved edge (in screen
 	pixels) ignoring one key, and ReservationsChanged fires on any change,
 	so a panel can place itself under the banners.
+
+	Look: Config.UI.Toasts. Draw order: Config.UI.Layers.Toast.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Signal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("Signal"))
 local Components = script.Parent.Parent:WaitForChild("Components")
-local ScreenScale = require(Components:WaitForChild("ScreenScale"))
-local Icon = require(Components:WaitForChild("Icon"))
+local Theme = require(Components:WaitForChild("Theme"))
+local UI = require(Components:WaitForChild("UI"))
 
 local NotificationController = {}
 
 --- Fires after any ReserveTop call (banners and panels moved or hid).
 NotificationController.ReservationsChanged = Signal.new()
 
-local KIND_COLORS: { [string]: Color3 } = {
-	Info = Color3.fromRGB(40, 44, 58),
-	Success = Color3.fromRGB(38, 110, 70),
-	Warning = Color3.fromRGB(150, 110, 30),
-	Error = Color3.fromRGB(150, 40, 48),
-	Announce = Color3.fromRGB(150, 110, 30),
-}
+local C = Theme.Colors
+local LOOK = Config.UI.Toasts
 
 local container: Frame? = nil
 local sequence = 0
+
+--- A colour from Theme.Colors by name (Config.UI.Toasts names them).
+local function themeColor(name: string?, fallback: Color3): Color3
+	local color = if name then (C :: any)[name] else nil
+	return if typeof(color) == "Color3" then color else fallback
+end
 
 --- SoundController starts after this controller, so fetch it lazily (and
 --- never wait for it).
@@ -60,6 +70,22 @@ local function playSound(kind: string)
 	local ok, controller = pcall(require, module)
 	if ok and typeof(controller) == "table" and typeof(controller.Play) == "function" then
 		controller.Play(name, if kind == "Error" then nil else { IfQuietFor = Config.Feedback.ToastSoundQuietFor })
+	end
+end
+
+-- One property of one toast part that fades: the instance, the property
+-- and its value while the toast is fully shown.
+type Fade = { Target: Instance, Property: string, Shown: number }
+
+local function addFade(fades: { Fade }, target: Instance, property: string, shown: number)
+	table.insert(fades, { Target = target, Property = property, Shown = shown })
+end
+
+local function fadeTo(fades: { Fade }, info: TweenInfo, hidden: boolean)
+	for _, fade in ipairs(fades) do
+		if fade.Target.Parent then
+			UI.Tween(fade.Target, info.Time, { [fade.Property] = if hidden then 1 else fade.Shown }, info.EasingStyle, info.EasingDirection)
+		end
 	end
 end
 
@@ -82,108 +108,139 @@ function NotificationController.Show(text: string, kind: string?, color: Color3?
 		return a.LayoutOrder < b.LayoutOrder
 	end)
 	while #toasts >= Config.UI.MaxNotifications do
-		table.remove(toasts, 1):Destroy()
+		local oldest = table.remove(toasts, 1)
+		if oldest then
+			oldest:Destroy()
+		end
 	end
 
 	sequence += 1
-	local height = if announce then 40 else 34
+	local height = if announce then LOOK.AnnounceHeight else LOOK.Height
+	local kindColors: { [string]: string } = LOOK.KindColors
+	local accent = color or themeColor(kindColors[toastKind], themeColor(kindColors.Info, C.Moon))
+	local fades: { Fade } = {}
 
-	-- Holder keeps the slot in the list; the body inside slides into it.
-	local holder = Instance.new("Frame")
-	holder.Name = "Toast"
-	holder.LayoutOrder = sequence
-	holder.AutomaticSize = Enum.AutomaticSize.X
-	holder.Size = UDim2.fromOffset(0, height)
-	holder.BackgroundTransparency = 1
+	-- Holder keeps the slot in the list; the card inside slides into it.
+	local holder = UI.new("Frame", {
+		Name = "Toast",
+		LayoutOrder = sequence,
+		AutomaticSize = Enum.AutomaticSize.XY,
+		Size = UDim2.fromOffset(0, height),
+		BackgroundTransparency = 1,
+	}) :: Frame
 
-	local background = color or KIND_COLORS[toastKind] or KIND_COLORS.Info
-	local body = Instance.new("Frame")
-	body.Name = "Body"
-	body.AutomaticSize = Enum.AutomaticSize.X
-	body.Size = UDim2.fromOffset(0, height)
-	body.Position = UDim2.fromOffset(0, -14)
-	body.BackgroundColor3 = background
-	body.BackgroundTransparency = 1
-	body.Parent = holder
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = body
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = background:Lerp(Color3.new(1, 1, 1), 0.35)
-	stroke.Thickness = if announce then 2 else 1
-	stroke.Transparency = 1
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Parent = body
-	if announce then
-		-- A little shine across rarity-coloured announcements.
-		local gradient = Instance.new("UIGradient")
-		gradient.Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(200, 200, 200))
-		gradient.Rotation = 90
-		gradient.Parent = body
-	end
-	local padding = Instance.new("UIPadding")
-	padding.PaddingLeft = UDim.new(0, 8)
-	padding.PaddingRight = UDim.new(0, 12)
-	padding.Parent = body
-	local layout = Instance.new("UIListLayout")
-	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0, 6)
-	layout.Parent = body
+	-- The card: charred wood, tinted by the rarity colour for announcements.
+	local top = if announce then Theme.Mix(C.PanelTop, accent, LOOK.AnnounceTint) else C.RaisedTop
+	local bottom = if announce then Theme.Mix(C.Panel, accent, LOOK.AnnounceTint * 0.5) else C.Panel
+	local body = UI.new("Frame", {
+		Name = "Body",
+		AutomaticSize = Enum.AutomaticSize.XY,
+		Size = UDim2.fromOffset(0, height),
+		Position = UDim2.fromOffset(0, -LOOK.SlideFrom),
+		BackgroundColor3 = Color3.new(1, 1, 1), -- white base: the gradient gives the colour
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Parent = holder,
+	}, {
+		UI.Corner(Theme.Tuning.Corner),
+		UI.Gradient(Theme.Sequence(top, bottom), 90),
+	}) :: Frame
+	addFade(fades, body, "BackgroundTransparency", LOOK.CardTransparency)
+
+	local stroke = UI.Stroke({
+		Name = "Edge",
+		Color = if announce then accent else Theme.Mix(C.Edge, accent, 0.45),
+		Thickness = if announce then 2 else 1,
+		Transparency = 1,
+		Parent = body,
+	})
+	addFade(fades, stroke, "Transparency", if announce then 0.1 else 0.25)
+
+	-- The kind's colour down the left edge.
+	local stripWidth = if announce then 4 else 3
+	local strip = UI.new("Frame", {
+		Name = "Strip",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 4, 0.5, 0),
+		Size = UDim2.new(0, stripWidth, 1, -10),
+		BackgroundColor3 = accent,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Parent = body,
+	}, { UI.Corner(2) })
+	addFade(fades, strip, "BackgroundTransparency", 0)
+
+	-- Icon and text, side by side.
+	local content = UI.new("Frame", {
+		Name = "Content",
+		AutomaticSize = Enum.AutomaticSize.XY,
+		Size = UDim2.fromOffset(0, height),
+		BackgroundTransparency = 1,
+		Parent = body,
+	}, {
+		UI.List({
+			FillDirection = Enum.FillDirection.Horizontal,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			Padding = 8,
+		}),
+		UI.Padding({ Left = 4 + stripWidth + 8, Right = 14, Top = 5, Bottom = 5 }),
+	})
 
 	local iconName = Config.Feedback.ToastIcons[toastKind]
-	local icon: ImageLabel? = nil
 	if iconName then
-		local image = Icon.new(iconName, height - 12, body)
-		image.LayoutOrder = 1
-		image.ImageTransparency = 1
-		icon = image
+		local icon = UI.Icon(iconName, if announce then LOOK.AnnounceIconSize else LOOK.IconSize, {
+			LayoutOrder = 1,
+			ImageColor3 = accent,
+			ImageTransparency = 1,
+			Parent = content,
+		})
+		addFade(fades, icon, "ImageTransparency", 0)
 	end
 
-	local label = Instance.new("TextLabel")
-	label.LayoutOrder = 2
-	label.AutomaticSize = Enum.AutomaticSize.X
-	label.Size = UDim2.fromOffset(0, height)
-	label.BackgroundTransparency = 1
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextTransparency = 1
-	label.TextStrokeTransparency = 1
-	label.Font = if announce then Enum.Font.GothamBlack else Enum.Font.GothamBold
-	label.TextSize = if announce then 19 else 17
-	label.Text = text
-	label.Parent = body
+	local textSize = if announce then LOOK.AnnounceTextSize else LOOK.TextSize
+	local label = UI.Text({
+		Name = "Message",
+		Role = "Heading",
+		Weight = if announce then "Bold" else "SemiBold",
+		Text = text,
+		RichText = false, -- show messages exactly as sent
+		TextSize = textSize,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = C.Text,
+		TextTransparency = 1,
+		AutomaticSize = Enum.AutomaticSize.XY,
+		Size = UDim2.fromOffset(0, textSize + 4),
+		LayoutOrder = 2,
+		Parent = content,
+	})
+	-- Wrap instead of running off the screen.
+	UI.new("UISizeConstraint", {
+		MaxSize = Vector2.new(if announce then LOOK.AnnounceMaxWidth else LOOK.MaxWidth, math.huge),
+		Parent = label,
+	})
+	addFade(fades, label, "TextTransparency", 0)
+
 	holder.Parent = frame
 
 	-- Slide down + fade in.
 	local inInfo = TweenInfo.new(Config.Feedback.ToastSlideTime, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	TweenService:Create(body, inInfo, { Position = UDim2.fromOffset(0, 0), BackgroundTransparency = 0.08 }):Play()
-	TweenService:Create(label, inInfo, { TextTransparency = 0, TextStrokeTransparency = 0.7 }):Play()
-	TweenService:Create(stroke, inInfo, { Transparency = 0.3 }):Play()
-	if icon then
-		TweenService:Create(icon, inInfo, { ImageTransparency = 0 }):Play()
-	end
+	UI.Tween(body, inInfo.Time, { Position = UDim2.fromOffset(0, 0) }, inInfo.EasingStyle, inInfo.EasingDirection)
+	fadeTo(fades, inInfo, false)
 	playSound(toastKind)
 
 	task.delay(Config.UI.NotificationDuration, function()
 		if holder.Parent then
-			local outInfo = TweenInfo.new(0.3)
-			local fade = TweenService:Create(body, outInfo, { BackgroundTransparency = 1 })
-			TweenService:Create(label, outInfo, { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
-			TweenService:Create(stroke, outInfo, { Transparency = 1 }):Play()
-			if icon then
-				TweenService:Create(icon, outInfo, { ImageTransparency = 1 }):Play()
-			end
-			fade:Play()
-			fade.Completed:Wait()
-			holder:Destroy()
+			fadeTo(fades, TweenInfo.new(LOOK.FadeOutTime), true)
+			task.delay(LOOK.FadeOutTime, function()
+				holder:Destroy()
+			end)
 		end
 	end)
 end
 
 -- Banners at the top of the screen (sightings, the Hunt) reserve space so
 -- toasts never cover them: key -> the banner's bottom edge in screen pixels.
-local TOAST_GAP = 8
 local reservations: { [string]: number } = {}
 local stackBase: UDim2? = nil
 
@@ -202,7 +259,7 @@ local function placeStack()
 	if lowest then
 		local gui = frame:FindFirstAncestorWhichIsA("LayerCollector")
 		local guiTop = if gui and gui:IsA("ScreenGui") then gui.AbsolutePosition.Y else 0
-		local wanted = lowest + TOAST_GAP - guiTop
+		local wanted = lowest + LOOK.BannerGap - guiTop
 		frame.Position = UDim2.new(base.X.Scale, base.X.Offset, base.Y.Scale, math.max(base.Y.Offset, wanted))
 	else
 		frame.Position = base
@@ -234,26 +291,27 @@ function NotificationController.ReservedBottom(except: string?): number?
 end
 
 function NotificationController.Start()
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "Notifications"
-	gui.ResetOnSpawn = false
-	gui.DisplayOrder = 10
+	local gui = UI.new("ScreenGui", {
+		Name = "Notifications",
+		ResetOnSpawn = false,
+		DisplayOrder = Config.UI.Layers.Toast,
+	}) :: ScreenGui
 
-	local frame = Instance.new("Frame")
-	frame.Name = "Stack"
-	frame.AnchorPoint = Vector2.new(0.5, 0)
-	frame.Position = UDim2.new(0.5, 0, 0, 52)
-	frame.Size = UDim2.new(0.9, 0, 0, 0)
-	frame.AutomaticSize = Enum.AutomaticSize.Y
-	frame.BackgroundTransparency = 1
-	frame.Parent = gui
-	ScreenScale.Apply(frame)
-
-	local layout = Instance.new("UIListLayout")
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0, 6)
-	layout.Parent = frame
+	local frame = UI.new("Frame", {
+		Name = "Stack",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, LOOK.Top),
+		Size = UDim2.new(0.9, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}, {
+		UI.List({
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = LOOK.Gap,
+		}),
+	}) :: Frame
+	UI.Scale(frame)
 
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	container = frame
@@ -274,8 +332,8 @@ function NotificationController.Start()
 		if typeof(text) ~= "string" then
 			return
 		end
-		local rarityDef = typeof(rarity) == "string" and Config.Rarities[rarity]
-		NotificationController.Show(text, "Announce", if rarityDef then rarityDef.Color else nil)
+		local known = typeof(rarity) == "string" and Config.Rarities[rarity] ~= nil
+		NotificationController.Show(text, "Announce", if known then Theme.RarityColor(rarity) else nil)
 	end)
 end
 
