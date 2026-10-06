@@ -38,7 +38,6 @@
 ]]
 
 local CollectionService = game:GetService("CollectionService")
-local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -51,6 +50,7 @@ local Signal = require(Shared:WaitForChild("Util"):WaitForChild("Signal"))
 local Components = script.Parent.Parent:WaitForChild("Components")
 local Theme = require(Components:WaitForChild("Theme"))
 local UI = require(Components:WaitForChild("UI"))
+local HudLayout = require(Components:WaitForChild("HudLayout"))
 local Icon = require(Components:WaitForChild("Icon"))
 local SoundController = require(script.Parent:WaitForChild("SoundController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
@@ -64,7 +64,6 @@ StealController.BannersChanged = Signal.new()
 local localPlayer = Players.LocalPlayer
 local C = Theme.Colors
 local look = Config.UI.Tutorial.StealAlerts
-local layout = Config.UI.Layout
 
 -- NotificationController.ReserveTop key for the banners.
 local RESERVE_KEY = "Steal"
@@ -256,13 +255,6 @@ end
 -- Placement (top centre, under the top bar and any banner above)
 --------------------------------------------------------------------------
 
---- Gui y (px from the very top of the screen) just under Roblox's top bar
---- and the HUD's Base/Eggs buttons, which sit in the top-bar row.
-local function topCentreBase(scale: number): number
-	local insetY = GuiService:GetGuiInset().Y
-	local travelBottom = math.max(layout.TravelTop, layout.TravelTop * scale) + layout.TravelHeight * scale
-	return math.max(insetY, travelBottom) + layout.TopGap * scale
-end
 
 local function place()
 	if not gui then
@@ -280,7 +272,7 @@ local function place()
 	end
 	local scale = stackScale.Scale
 	local originY = origin.AbsolutePosition.Y
-	local top = topCentreBase(scale)
+	local top = HudLayout.TopCentreTop(origin, scale, stack.AbsoluteSize.X)
 	local above = NotificationController.ReservedBottom(belowKey or RESERVE_KEY)
 	if above then
 		top = math.max(top, above - originY + Config.UI.Tutorial.StackGap * scale)

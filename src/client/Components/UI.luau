@@ -407,7 +407,8 @@ local function paint(button: GuiButton)
 	button.BackgroundTransparency = v.Transparency or 0
 	local edge = button:FindFirstChild("Edge") :: UIStroke?
 	if edge then
-		edge.Color = v.Edge
+		-- A repaint (a periodic refresh, enabling) keeps the hover highlight.
+		edge.Color = if enabled and button:GetAttribute("Hover") == true then C.EmberBright else v.Edge
 		edge.Transparency = v.EdgeTransparency or 0
 	end
 	local sheen = button:FindFirstChild("Sheen") :: Frame?
@@ -519,16 +520,9 @@ function UI.Button(props: { [string]: any }): TextButton
 	applyProps(button, p, BUTTON_SKIP)
 	paint(button)
 
-	local edge = button:FindFirstChild("Edge") :: UIStroke
 	hookPress(button, scale, function(hovering)
-		if button:GetAttribute("Enabled") == false then
-			return
-		end
-		if hovering then
-			edge.Color = C.EmberBright
-		else
-			paint(button)
-		end
+		button:SetAttribute("Hover", hovering)
+		paint(button)
 	end)
 
 	if p.OnClick then
@@ -549,7 +543,7 @@ function UI.SetButtonText(button: Instance?, text: string)
 end
 
 function UI.SetButtonVariant(button: Instance?, variant: string)
-	if button and button:IsA("GuiButton") then
+	if button and button:IsA("GuiButton") and button:GetAttribute("Variant") ~= variant then
 		button:SetAttribute("Variant", variant)
 		paint(button)
 	end
@@ -558,7 +552,7 @@ end
 --- Greys a button out (or restores it). Visual only, like the old kit
 --- helper: Activated still fires, so handlers check state themselves.
 function UI.SetButtonEnabled(button: Instance?, enabled: boolean)
-	if button and button:IsA("GuiButton") then
+	if button and button:IsA("GuiButton") and button:GetAttribute("Enabled") ~= enabled then
 		button:SetAttribute("Enabled", enabled)
 		paint(button)
 	end

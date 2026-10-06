@@ -41,6 +41,7 @@ local Signal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Ut
 local Components = script.Parent.Parent:WaitForChild("Components")
 local Theme = require(Components:WaitForChild("Theme"))
 local UI = require(Components:WaitForChild("UI"))
+local HudLayout = require(Components:WaitForChild("HudLayout"))
 
 local NotificationController = {}
 
@@ -256,6 +257,16 @@ local function placeStack()
 			lowest = bottom
 		end
 	end
+	-- On a narrow screen the toasts would cover the camp panel: go below it.
+	local list = frame:FindFirstChildOfClass("UIListLayout")
+	local scale = frame:FindFirstChildOfClass("UIScale")
+	local widest = if list then list.AbsoluteContentSize.X else 0
+	if widest > 0 then
+		local camp = HudLayout.CampClearance(widest, if scale then scale.Scale else 1)
+		if camp and (not lowest or camp > lowest) then
+			lowest = camp
+		end
+	end
 	if lowest then
 		local gui = frame:FindFirstAncestorWhichIsA("LayerCollector")
 		local guiTop = if gui and gui:IsA("ScreenGui") then gui.AbsolutePosition.Y else 0
@@ -317,6 +328,17 @@ function NotificationController.Start()
 	container = frame
 	stackBase = frame.Position
 	placeStack()
+	-- Re-place when a toast changes the stack's width, and when the camp
+	-- panel moves or resizes (relayed to everything that follows
+	-- ReservationsChanged, so banners and the tutorial card re-place too).
+	local list = frame:FindFirstChildOfClass("UIListLayout")
+	if list then
+		list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(placeStack)
+	end
+	HudLayout.Changed:Connect(function()
+		placeStack()
+		NotificationController.ReservationsChanged:Fire()
+	end)
 
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	local notify = remotes:WaitForChild("Notify") :: RemoteEvent

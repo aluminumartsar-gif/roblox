@@ -55,6 +55,7 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Co
 local Components = script.Parent.Parent:WaitForChild("Components")
 local Theme = require(Components:WaitForChild("Theme"))
 local UI = require(Components:WaitForChild("UI"))
+local HudLayout = require(Components:WaitForChild("HudLayout"))
 local Icon = require(Components:WaitForChild("Icon"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
@@ -240,14 +241,15 @@ local function shadowEdge(label: TextLabel)
 end
 
 --- Where the top banners start, in px from the very top of the screen
---- (IgnoreGuiInset): under Roblox's top bar or under the Base/Eggs travel
---- buttons, whichever reaches lower, plus Layout.TopGap. HuntController
---- places its banner the same way.
-local function bannerTop(scale: number): number
-	local layout = Config.UI.Layout
-	local inset = GuiService:GetGuiInset()
-	local travelBottom = (layout.TravelTop + layout.TravelHeight) * scale
-	return math.max(inset.Y, travelBottom) + layout.TopGap * scale
+--- (IgnoreGuiInset): under Roblox's top bar and the Base/Eggs travel
+--- buttons, and below the camp panel when a banner widthPx wide would
+--- cover it (narrow screens; Components/HudLayout).
+local function bannerTop(scale: number, widthPx: number): number
+	local gui = banner and banner:FindFirstAncestorWhichIsA("LayerCollector")
+	if gui then
+		return HudLayout.TopCentreTop(gui, scale, widthPx)
+	end
+	return HudLayout.TopCentreBase(scale)
 end
 
 local function buildBanner(gui: ScreenGui)
@@ -524,8 +526,12 @@ end
 local function placeBanner()
 	local tuning = Config.UI.Banners
 	local scale = bannerScale.Scale
-	local top = bannerTop(scale)
-	if huntActive() then
+	local hunt = huntActive()
+	-- Under the Hunt banner its width decides whether both drop below the
+	-- camp panel, so measure the wider of the two.
+	local width = if hunt then math.max(banner.AbsoluteSize.X, tuning.HuntSize.X * scale) else banner.AbsoluteSize.X
+	local top = bannerTop(scale, width)
+	if hunt then
 		top += (tuning.HuntSize.Y + tuning.Gap) * scale
 	end
 	banner.Position = UDim2.new(0.5, 0, 0, top)

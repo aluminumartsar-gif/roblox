@@ -14,6 +14,9 @@
 	                                    -- screen height (shrinks to fit phones)
 	      Info = "Pages 0/7",           -- optional right-hand header text
 	      Backdrop = true,              -- dim the world behind (default true)
+	      FlexHeight = true,            -- optional: the body scrolls, so on short
+	                                    -- screens keep the normal UI scale and make
+	                                    -- the window shorter instead of smaller
 	  })
 	  window.OnOpen = function() refresh() end
 	  window.Body       -- Frame under the header: put the screen's contents here
@@ -103,9 +106,15 @@ end
 -- Construction
 --------------------------------------------------------------------------
 
-local function fitScale(container: Frame, design: Vector2): UIScale
+--- Scales the window to the screen. Normally the whole window shrinks until
+--- it fits. A FlexHeight window (one whose body scrolls) keeps the screen's
+--- normal UI scale instead, so its text and buttons stay readable on a
+--- phone, and gets shorter to fit; its scrolling body takes up the
+--- difference. Refits when the screen size or Roblox's top bar changes.
+local function fitScale(container: Frame, design: Vector2, flexHeight: boolean): UIScale
 	local scale = UI.new("UIScale", { Name = "Fit", Parent = container }) :: UIScale
 	local connection: RBXScriptConnection? = nil
+	local update: () -> () = function() end
 	local function watch()
 		if connection then
 			connection:Disconnect()
@@ -114,19 +123,30 @@ local function fitScale(container: Frame, design: Vector2): UIScale
 		if not camera then
 			return
 		end
-		local function update()
+		function update()
 			local viewport = camera.ViewportSize
 			local inset = GuiService:GetGuiInset().Y
 			local margin = W.ScreenMargin * 2
-			local byHeight = viewport.Y / scaleTuning.ReferenceHeight
-			local fitY = (viewport.Y - inset - margin) / design.Y
+			local screenScale = math.min(scaleTuning.Max, math.max(scaleTuning.Min, viewport.Y / scaleTuning.ReferenceHeight))
+			local availableY = viewport.Y - inset - margin
 			local fitX = (viewport.X - margin) / design.X
-			scale.Scale = math.max(0.3, math.min(scaleTuning.Max, math.max(scaleTuning.Min, byHeight), fitY, fitX))
+			if flexHeight then
+				local minHeight = math.min(design.Y, W.FlexMinHeight)
+				local s = math.max(0.3, math.min(screenScale, fitX, availableY / minHeight))
+				scale.Scale = s
+				container.Size = UDim2.fromOffset(design.X, math.floor(math.min(design.Y, availableY / s)))
+			else
+				scale.Scale = math.max(0.3, math.min(screenScale, availableY / design.Y, fitX))
+			end
 		end
 		connection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
 		update()
 	end
 	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watch)
+	-- The top bar's height can settle after the first frames of a session.
+	GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(function()
+		update()
+	end)
 	watch()
 	return scale
 end
@@ -167,7 +187,7 @@ function Window.new(props: { [string]: any }): Window
 		container.Position = UDim2.new(0.5, 0, 0.5, math.floor(inset / 2))
 	end
 	centre()
-	fitScale(container, design)
+	fitScale(container, design, props.FlexHeight == true)
 
 	-- Inner frame carries the open/close "pop" so it doesn't fight the fit scale.
 	local pop = UI.new("Frame", {
@@ -258,11 +278,11 @@ function Window.new(props: { [string]: any }): Window
 		Name = "CloseBtn",
 		Variant = "Ghost",
 		Icon = "Close",
-		IconSize = 18,
+		IconSize = W.CloseIconSize,
 		Text = "",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -14, 0.5, 0),
-		Size = UDim2.fromOffset(38, 38),
+		Size = UDim2.fromOffset(W.CloseSize, W.CloseSize),
 		ZIndex = 3,
 		Parent = header,
 	})

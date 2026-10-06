@@ -36,6 +36,7 @@ local Components = script.Parent.Parent:WaitForChild("Components")
 local Theme = require(Components:WaitForChild("Theme"))
 local UI = require(Components:WaitForChild("UI"))
 local Icon = require(Components:WaitForChild("Icon"))
+local HudLayout = require(Components:WaitForChild("HudLayout"))
 
 local PlotController = {}
 
@@ -199,6 +200,23 @@ local function buildPanel(): (TextButton, TextLabel, TextLabel)
 	})
 
 	gui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+	-- Tell the top-centre stack (banners, tutorial card, toasts) where the
+	-- panel is, so on narrow screens it drops below the panel instead of
+	-- covering the Lock button. The width changes when the "Protected"
+	-- label comes and goes.
+	local function publish()
+		if frame.Visible and gui.Enabled then
+			HudLayout.SetCampBounds(frame.AbsolutePosition.X + frame.AbsoluteSize.X,
+				frame.AbsolutePosition.Y + frame.AbsoluteSize.Y)
+		else
+			HudLayout.SetCampBounds(nil, nil)
+		end
+	end
+	frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(publish)
+	frame:GetPropertyChangedSignal("AbsolutePosition"):Connect(publish)
+	frame:GetPropertyChangedSignal("Visible"):Connect(publish)
+	publish()
 	return button, nests, protection
 end
 

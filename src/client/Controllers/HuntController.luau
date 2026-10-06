@@ -33,7 +33,6 @@
 	she catches.
 ]]
 
-local GuiService = game:GetService("GuiService")
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -48,6 +47,7 @@ local ItemVisuals = require(Shared:WaitForChild("ItemVisuals"))
 local Components = script.Parent.Parent:WaitForChild("Components")
 local Theme = require(Components:WaitForChild("Theme"))
 local UI = require(Components:WaitForChild("UI"))
+local HudLayout = require(Components:WaitForChild("HudLayout"))
 local SoundController = require(script.Parent:WaitForChild("SoundController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
@@ -249,14 +249,15 @@ local function fitText(label: TextLabel, maxSize: number)
 end
 
 --- Where the top banners start, in px from the very top of the screen
---- (IgnoreGuiInset): under Roblox's top bar or under the Base/Eggs travel
---- buttons, whichever reaches lower, plus Layout.TopGap. SightingController
---- places its banner the same way.
-local function bannerTop(scale: number): number
-	local layout = Config.UI.Layout
-	local inset = GuiService:GetGuiInset()
-	local travelBottom = (layout.TravelTop + layout.TravelHeight) * scale
-	return math.max(inset.Y, travelBottom) + layout.TopGap * scale
+--- (IgnoreGuiInset): under Roblox's top bar and the Base/Eggs travel
+--- buttons, and below the camp panel when a banner widthPx wide would
+--- cover it (narrow screens; Components/HudLayout).
+local function bannerTop(scale: number, widthPx: number): number
+	local gui = banner and banner:FindFirstAncestorWhichIsA("LayerCollector")
+	if gui then
+		return HudLayout.TopCentreTop(gui, scale, widthPx)
+	end
+	return HudLayout.TopCentreBase(scale)
 end
 
 --- Blood-red screen edges and film grain, faded in by setDread.
@@ -574,7 +575,8 @@ local function update(dt: number)
 	end
 
 	-- Banner
-	banner.Position = UDim2.new(0.5, 0, 0, bannerTop(bannerScale.Scale))
+	local scale = bannerScale.Scale
+	banner.Position = UDim2.new(0.5, 0, 0, bannerTop(scale, Config.UI.Banners.HuntSize.X * scale))
 	banner.Visible = true
 	reserveBanner(true)
 	local carrying = localPlayer:GetAttribute("Carrying") == true

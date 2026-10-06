@@ -1865,6 +1865,11 @@ Config.UI = {
 			BackdropTransparency = 0.5,  -- 1 = no dimming
 			HeaderHeight = 58,           -- px at reference size
 			ScreenMargin = 14,           -- px kept clear around a window
+			CloseSize = 44,              -- px close button (a comfortable thumb target)
+			CloseIconSize = 20,
+			-- FlexHeight windows (scrolling bodies) never get shorter than this
+			-- (px at their UI scale) before they start shrinking instead.
+			FlexMinHeight = 300,
 		},
 	},
 

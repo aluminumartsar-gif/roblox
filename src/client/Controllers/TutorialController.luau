@@ -50,7 +50,6 @@
 ]]
 
 local CollectionService = game:GetService("CollectionService")
-local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -63,6 +62,7 @@ local BeltPath = require(Shared:WaitForChild("BeltPath"))
 local Components = script.Parent.Parent:WaitForChild("Components")
 local Theme = require(Components:WaitForChild("Theme"))
 local UI = require(Components:WaitForChild("UI"))
+local HudLayout = require(Components:WaitForChild("HudLayout"))
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 local SoundController = require(script.Parent:WaitForChild("SoundController"))
@@ -73,7 +73,6 @@ local TutorialController = {}
 local localPlayer = Players.LocalPlayer
 local tuning = Config.Tutorial
 local look = Config.UI.Tutorial.Panel
-local layout = Config.UI.Layout
 local C = Theme.Colors
 
 -- Rich-text colour for button/prompt names in the instructions.
@@ -488,13 +487,6 @@ type Panel = {
 	skip: TextButton,
 }
 
---- Gui y (px from the very top of the screen) just under Roblox's top bar
---- and the HUD's Base/Eggs buttons, which sit in the top-bar row.
-local function topCentreBase(scale: number): number
-	local insetY = GuiService:GetGuiInset().Y
-	local travelBottom = math.max(layout.TravelTop, layout.TravelTop * scale) + layout.TravelHeight * scale
-	return math.max(insetY, travelBottom) + layout.TopGap * scale
-end
 
 --- Number of action steps (not cards) among STEPS[1..index].
 local function actionNumber(index: number): number
@@ -874,7 +866,7 @@ function TutorialController.Run()
 		local scale = panel.scale.Scale
 		local originY = panel.origin.AbsolutePosition.Y
 		local gap = Config.UI.Tutorial.StackGap * scale
-		local top = topCentreBase(scale)
+		local top = HudLayout.TopCentreTop(panel.origin, scale, panel.frame.AbsoluteSize.X)
 		local above = NotificationController.ReservedBottom(RESERVE_KEY)
 		if above then
 			top = math.max(top, above - originY + gap)
