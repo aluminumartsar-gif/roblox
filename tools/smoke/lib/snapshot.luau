@@ -349,7 +349,6 @@ local POPUPS = {
 	{ name = "dailyrewards", controller = "DailyRewardsController" },
 	{ name = "spinwheel", controller = "SpinWheelController" },
 	{ name = "playtimegifts", controller = "PlaytimeGiftsController" },
-	{ name = "offlineearnings", controller = "OfflineEarningsController" },
 	{ name = "settings", controller = "SettingsController" },
 }
 
@@ -618,8 +617,24 @@ function Snapshot.run(realm, client, dir: string)
 	World.pushRetention()
 	advance(3)
 
-	closeAll()
+	-- The offline-cash popup opens by itself on join (and keeps coming back
+	-- until the cash is claimed): capture it, then claim it so the other
+	-- checkpoints show one thing each.
 	settle(1.5)
+	if anyWindowOpen() then
+		dump("offline")
+	end
+	World.retention.pendingOffline = 0
+	World.pushRetention()
+	-- Daily Rewards then pops up once on join (when claimable): close it so
+	-- the HUD shot is just the HUD (it has its own checkpoint below).
+	for _ = 1, 3 do
+		closeAll()
+		settle(2)
+		if not anyWindowOpen() then
+			break
+		end
+	end
 	local hud = clientModule("Controllers", "HudController")
 	dump("hud", if hud then nil else "HudController is not loaded: only the other controllers' UI is on screen")
 	checkpointPopups()
