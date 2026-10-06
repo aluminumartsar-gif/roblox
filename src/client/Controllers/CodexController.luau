@@ -583,7 +583,7 @@ local function buildCard(def: any, index: number, parent: Instance): Card
 	local size = tuning.CardSize
 	local margin = tuning.CardPhotoMargin
 	local photoSize = size.X - margin * 2
-	local exhibitHeight = 12
+	local exhibitHeight = 15
 	local captionTop = margin + photoSize + 2
 	local captionHeight = math.max(12, size.Y - captionTop - exhibitHeight - margin - 2)
 
@@ -612,8 +612,8 @@ local function buildCard(def: any, index: number, parent: Instance): Card
 		Text = def.Rarity,
 		Color = Theme.RarityColor(def.Rarity),
 		Filled = true,
-		TextSize = 12,
-		Height = 18,
+		TextSize = 15,
+		Height = 22,
 		Position = UDim2.fromOffset(margin + 4, margin + 4),
 		ZIndex = 2,
 		Parent = paper,
@@ -623,8 +623,8 @@ local function buildCard(def: any, index: number, parent: Instance): Card
 		Text = "New",
 		Color = C.Ember,
 		Filled = true,
-		TextSize = 12,
-		Height = 18,
+		TextSize = 15,
+		Height = 22,
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.fromOffset(margin + photoSize - 4, margin + photoSize - 4),
 		ZIndex = 2,
@@ -647,7 +647,7 @@ local function buildCard(def: any, index: number, parent: Instance): Card
 		Name = "Exhibit",
 		Role = "Mono",
 		Text = exhibitText(def.Id),
-		TextSize = 11,
+		TextSize = 14,
 		TextColor3 = C.Ink,
 		TextTransparency = 0.45,
 		AnchorPoint = Vector2.new(0, 1),
@@ -910,7 +910,7 @@ local function buildScreen()
 			Role = "Heading",
 			Weight = "SemiBold",
 			Text = "0/0",
-			TextSize = 15,
+			TextSize = 17,
 			TextColor3 = C.TextDim,
 			TextXAlignment = Enum.TextXAlignment.Right,
 			AnchorPoint = Vector2.new(1, 0.5),
