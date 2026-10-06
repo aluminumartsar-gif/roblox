@@ -2020,7 +2020,56 @@ Config.UI = {
 	},
 
 	-- Codex screen, field camera viewfinder, new-entry polaroid (CodexController).
+	-- Sizes are px at the reference screen height; the window and overlays
+	-- shrink to fit phones. (Feature tunables — photo lighting, cards per
+	-- row, timings, blurbs — stay in Config.Codex.)
 	Codex = {
+		-- The Codex window. Its width follows from the cards: a filter
+		-- column, then Config.Codex.CardsPerRow cards of CardSize.
+		WindowHeight = 500,
+		TabSize = Vector2.new(156, 44),        -- one rarity filter tab (left column)
+		TabGap = 5,
+		ColumnGap = 12,                        -- between the filter tabs and the cards
+		TopRowHeight = 40,                     -- the DISCOVERED bar and the search box
+		SearchWidth = 240,
+		CardSize = Vector2.new(112, 152),      -- one evidence-photo card
+		CardGap = 10,
+		CardPhotoMargin = 6,                   -- paper showing round a card's photo
+		UnknownPaperDim = 0.35,                -- undiscovered cards' paper is this much darker (0..1)
+		ExhibitFormat = "EXHIBIT %02d",        -- case number under each photo (%d = Config order)
+		EmptyText = "No cryptids match that search.",
+		-- A cryptid's file (tap a card): big polaroid + journal page.
+		FilePolaroidSize = Vector2.new(236, 292),
+		BackButtonSize = Vector2.new(130, 44),
+		-- The Secret's photo flickers through these tints (Lit = discovered).
+		GlitchLit = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 70, 70), Color3.fromRGB(150, 150, 160) },
+		GlitchDark = { Color3.fromRGB(0, 0, 0), Color3.fromRGB(45, 0, 0), Color3.fromRGB(28, 28, 32) },
+
+		-- Celebrations (layer Config.UI.Layers.Celebration).
+		PolaroidSize = Vector2.new(220, 270),  -- the "NEW CODEX ENTRY" polaroid
+		PolaroidY = 0.62,                      -- its centre, as a fraction of the screen height
+		                                       -- (low enough to clear the page banner on a phone)
+		PolaroidInTime = 0.55,                 -- s, slide in (out: SlideOutTime)
+		PageBannerSize = Vector2.new(560, 56), -- "<Rarity> page complete!" banner
+		PageBannerTop = 60,                    -- px from the top of the screen
+		PageBannerInTime = 0.45,               -- s
+		PageBannerDelay = 0.6,                 -- s after its polaroid starts
+		SlideOutTime = 0.35,                   -- s
+		RevealWaitMax = 10,                    -- s; longest wait for a hatch reveal to finish first
+
+		-- Field Camera viewfinder (layer World, under the HUD) and shutter
+		-- flash (layer Flash, over everything).
+		Viewfinder = {
+			EdgeShade = 0.45,                    -- darkened screen edges (1 = none)
+			EdgeDepth = Vector2.new(0.12, 0.18), -- how far they reach in (fraction of width / height)
+			FrameInset = Vector2.new(0.07, 0.1), -- corner brackets, fraction of the screen from each edge
+			BracketSize = 48,
+			BracketThickness = 5,
+			InfoOffset = 30,                     -- px from the screen centre down to the target name
+			HighlightFill = 0.85,                -- fill transparency of the aimed-at cryptid
+		},
+		FlashColor = Color3.fromRGB(255, 255, 255),
+		FlashStart = 0.05,                     -- flash transparency at the shutter (fades to 1)
 	},
 
 	-- Daily Rewards, Spin Wheel, Playtime Gifts, Offline Earnings and Settings screens.
