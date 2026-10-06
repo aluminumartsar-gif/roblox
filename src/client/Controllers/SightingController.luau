@@ -7,21 +7,31 @@
 	(SightingService) decides everything and tells us through the
 	SightingBanner remote (phase, info).
 
-	  banner    top-centre, just under the kit's Base/Eggs buttons: rarity
-	            colour, what it is, where, and the countdown. Then who has the
-	            capture ("stop them!"), whether it's loose, and how it ended.
-	            While it shows, the toast stack is nudged down below it.
-	  markers   a floating label (always on top, with distance) over the
-	            sighting so people can find it, and over a capture on its way
-	            home. The sighting marker sits on a local, invisible anchor at
-	            the position the server sent, so it works even while the
-	            model is streamed out (StreamingEnabled).
+	  banner    top centre, just under Roblox's top bar (and the Base/Eggs
+	            buttons), on Config.UI.Layers.Sighting; while the Hunt is on
+	            it drops under the Hunt banner so neither hides the other.
+	            A charred-wood strip edged and lit in the rarity colour: an
+	            icon for what's happening, what it is, where (the server's
+	            rough direction hint) and a countdown chip (turns red near
+	            the end). Then who has the capture ("stop them!"), whether
+	            it's loose, and how it ended (a short flash: brought home,
+	            got away, she took it). While it shows, the toast stack is
+	            nudged down below it (NotificationController.ReserveTop
+	            "Sighting").
+	  markers   a floating label (always on top: the name in the rarity
+	            colour, the distance under it) over the sighting so people
+	            can find it, and over a capture on its way home. The
+	            sighting marker sits on a local, invisible anchor at the
+	            position the server sent, so it works even while the model
+	            is streamed out (StreamingEnabled).
 	  VHS       inside Config.Sightings.VhsRadius of the sighting the screen
-	            turns to found footage: ColorCorrection (tint, less colour,
-	            more contrast), scanlines, a little grain, a tracking band, a
-	            red "REC" with a timecode, and a slight FOV wobble — all faded
-	            by distance and removed cleanly when you leave or it ends.
-	            Cheap: a dozen frames, one ColorCorrection, no images.
+	            turns to found footage (Config.UI.Layers.Vhs, under the HUD):
+	            ColorCorrection (tint, less colour, more contrast),
+	            scanlines, a little grain, a tracking band, a blinking red
+	            "REC" with a timecode in the Mono font, and a slight FOV
+	            wobble — all faded by distance and removed cleanly when you
+	            leave or it ends. Cheap: a dozen frames, one ColorCorrection,
+	            no images.
 	  bob       the wild model bobs gently on this client only (the server
 	            keeps it still: prompts are checked against its position).
 	  prompt    when the server says our hold was broken ("Interrupted"),
@@ -29,9 +39,12 @@
 	  sounds    SightingHorn on start, SightingAmbience near it,
 	            CaptureSuccess when you catch it (SoundController; skipped
 	            quietly if it isn't there).
+
+	Sizes, icons and timings: Config.UI.Banners.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
+local GuiService = game:GetService("GuiService")
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -40,29 +53,28 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local Components = script.Parent.Parent:WaitForChild("Components")
-local ScreenScale = require(Components:WaitForChild("ScreenScale"))
+local Theme = require(Components:WaitForChild("Theme"))
+local UI = require(Components:WaitForChild("UI"))
 local Icon = require(Components:WaitForChild("Icon"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
 local SightingController = {}
 
 local localPlayer = Players.LocalPlayer
+local C = Theme.Colors
 
--- Layout (not designer tunables). The kit's top buttons fill the top
--- 11.5% of the screen; the banner starts just below them.
-local BANNER_TOP = 0.12
-local BANNER_SIZE = Vector2.new(440, 60)
--- Pixels to shift down during a Hunt: HuntController's banner (62px tall,
--- same top) plus a gap.
-local BELOW_HUNT_BANNER = 70
-local FLASH_SECONDS = 5
+-- Behaviour constants (not designer tunables).
 local PROMPT_RESET_DELAY = 0.15
 local UI_REFRESH = 0.2
 local GRAIN_REFRESH = 1 / 15
 local SCANLINE_BLOCKS = 8
 local VHS_FADE_SPEED = 3       -- how fast the effect fades in/out (per second)
 local MARKER_HEIGHT = 9        -- studs above the ground for the sighting marker
+local MARKER_LIFT = 4          -- studs the floating label sits above its anchor
 local BAND_SECONDS = 4         -- the tracking band crosses the screen this often
+local REC_BLINK_ON = 0.6       -- of each second the REC dot shows
+local REC_SHADOW = 0.4         -- REC text shadow opacity at full strength
+local NEUTRAL_TINT = Color3.new(1, 1, 1) -- ColorCorrection tint that changes nothing
 
 type Info = { [string]: any }
 
@@ -71,19 +83,29 @@ local current: Info? = nil   -- the wild sighting ("Started")
 -- Usually one, but a carrier has no timer, so a new sighting can be
 -- caught while an older capture is still out.
 local captures: { [any]: Info } = {}
-local flash: { Title: string, Text: string, Rarity: string?, Until: number }? = nil
+local flash: { Title: string, Text: string, Rarity: string?, Icon: string, Until: number }? = nil
 
 local SoundController: any = nil
 
 -- UI
 local banner: Frame
+local bannerScale: UIScale
 local bannerStroke: UIStroke
+local bannerWash: UIGradient
+local bannerIcon: ImageLabel
+local bannerColumn: Frame
 local bannerTitle: TextLabel
 local bannerText: TextLabel
+local timerChip: Frame
+local timerLabel: TextLabel
+local shownColor: Color3? = nil
+local shownIcon: string? = nil
 local sightingMarker: BillboardGui
-local sightingMarkerText: TextLabel
+local sightingMarkerName: TextLabel
+local sightingMarkerDistance: TextLabel
 local captureMarker: BillboardGui
-local captureMarkerText: TextLabel
+local captureMarkerName: TextLabel
+local captureMarkerDistance: TextLabel
 local sightingAnchor: Part
 local dropAnchor: Part
 
@@ -92,6 +114,8 @@ local vhsGui: ScreenGui
 local scanBlocks: { Frame } = {}
 local band: Frame
 local grain: { Frame } = {}
+local recCorner: Frame
+local recScale: UIScale
 local recLabel: TextLabel
 local timeLabel: TextLabel
 local vignette: { Frame } = {}
@@ -113,12 +137,13 @@ local function formatClock(seconds: number): string
 	return string.format("%d:%02d", seconds // 60, seconds % 60)
 end
 
+--- Rarity colour readable on the dark UI (Secret's near-black is swapped
+--- for SecretText); bone white when the server sent no rarity.
 local function rarityColor(rarity: any): Color3
-	local def = typeof(rarity) == "string" and Config.Rarities[rarity]
-	if not def or def.NeverRenderClearly then
-		return Color3.fromRGB(235, 235, 240)
+	if typeof(rarity) == "string" then
+		return Theme.RarityColor(rarity)
 	end
-	return def.Color
+	return C.Text
 end
 
 local function play(name: string)
@@ -188,52 +213,133 @@ end
 -- Building the UI
 --------------------------------------------------------------------------
 
-local function textLabel(parent: Instance, name: string, font: Enum.Font): TextLabel
-	local label = Instance.new("TextLabel")
-	label.Name = name
-	label.BackgroundTransparency = 1
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.Font = font
+local function newScreenGui(name: string, displayOrder: number): ScreenGui
+	return UI.new("ScreenGui", {
+		Name = name,
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		DisplayOrder = displayOrder,
+	})
+end
+
+--- Shrinks a label's text to fit its box, never larger than maxSize.
+local function fitText(label: TextLabel, maxSize: number)
 	label.TextScaled = true
-	label.TextStrokeTransparency = 0.6
-	label.Parent = parent
-	return label
+	UI.new("UITextSizeConstraint", { MaxTextSize = maxSize, Parent = label })
+end
+
+--- A dark outline so text reads over the 3D world.
+local function shadowEdge(label: TextLabel)
+	UI.Stroke({
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		Color = C.Shadow,
+		Thickness = 1.5,
+		Transparency = 0.2,
+		Parent = label,
+	})
+end
+
+--- Where the top banners start, in px from the very top of the screen
+--- (IgnoreGuiInset): under Roblox's top bar or under the Base/Eggs travel
+--- buttons, whichever reaches lower, plus Layout.TopGap. HuntController
+--- places its banner the same way.
+local function bannerTop(scale: number): number
+	local layout = Config.UI.Layout
+	local inset = GuiService:GetGuiInset()
+	local travelBottom = (layout.TravelTop + layout.TravelHeight) * scale
+	return math.max(inset.Y, travelBottom) + layout.TopGap * scale
 end
 
 local function buildBanner(gui: ScreenGui)
-	banner = Instance.new("Frame")
-	banner.Name = "SightingBanner"
-	banner.AnchorPoint = Vector2.new(0.5, 0)
-	banner.Position = UDim2.new(0.5, 0, BANNER_TOP, 0)
-	banner.Size = UDim2.fromOffset(BANNER_SIZE.X, BANNER_SIZE.Y)
-	banner.BackgroundColor3 = Color3.fromRGB(16, 18, 26)
-	banner.BackgroundTransparency = 0.12
-	banner.Visible = false
-	banner.Parent = gui
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 12)
-	corner.Parent = banner
-	bannerStroke = Instance.new("UIStroke")
-	bannerStroke.Thickness = 2.5
-	bannerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	bannerStroke.Parent = banner
-	local padding = Instance.new("UIPadding")
-	padding.PaddingLeft = UDim.new(0, 12)
-	padding.PaddingRight = UDim.new(0, 14)
-	padding.PaddingTop = UDim.new(0, 6)
-	padding.PaddingBottom = UDim.new(0, 6)
-	padding.Parent = banner
+	local tuning = Config.UI.Banners
+	local size = tuning.SightingSize
+	banner = UI.Panel({
+		Name = "SightingBanner",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
+		Size = UDim2.fromOffset(size.X, size.Y),
+		Visible = false,
+		Parent = gui,
+	})
+	bannerWash = banner:FindFirstChildOfClass("UIGradient") :: UIGradient
+	bannerStroke = banner:FindFirstChildOfClass("UIStroke") :: UIStroke
+	UI.Padding({ Left = tuning.PaddingX, Right = tuning.PaddingX, Top = tuning.PaddingY, Bottom = tuning.PaddingY }).Parent = banner
 
-	bannerTitle = textLabel(banner, "Title", Enum.Font.GothamBlack)
-	bannerTitle.Size = UDim2.new(1, 0, 0.55, 0)
-	bannerTitle.TextXAlignment = Enum.TextXAlignment.Left
-	bannerText = textLabel(banner, "Detail", Enum.Font.GothamBold)
-	bannerText.Position = UDim2.new(0, 0, 0.57, 0)
-	bannerText.Size = UDim2.new(1, 0, 0.43, 0)
-	bannerText.TextXAlignment = Enum.TextXAlignment.Left
-	bannerText.TextColor3 = Color3.fromRGB(225, 228, 236)
-	Icon.addLeft(banner, "Eye", 34, 2)
-	ScreenScale.Apply(banner)
+	bannerIcon = UI.Icon(tuning.SightingIcons.Wild, tuning.IconSize, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromScale(0, 0.5),
+		Parent = banner,
+	})
+	shownIcon = tuning.SightingIcons.Wild
+
+	local textLeft = tuning.IconSize + tuning.IconGap
+	bannerColumn = UI.new("Frame", {
+		Name = "Text",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(textLeft, 0),
+		Size = UDim2.new(1, -textLeft, 1, 0),
+		Parent = banner,
+	}, {
+		UI.List({ Padding = 0, VerticalAlignment = Enum.VerticalAlignment.Center }),
+	})
+	bannerTitle = UI.Text({
+		Name = "Title",
+		Role = "Heading",
+		Weight = "Bold",
+		RichText = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, 0, 0, tuning.SightingTitleSize + 6),
+		LayoutOrder = 1,
+		Parent = bannerColumn,
+	})
+	fitText(bannerTitle, tuning.SightingTitleSize)
+	bannerText = UI.Text({
+		Name = "Detail",
+		Role = "Body",
+		Weight = "Medium",
+		RichText = false,
+		TextColor3 = C.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, 0, 0, tuning.SightingTextSize + 4),
+		LayoutOrder = 2,
+		Parent = bannerColumn,
+	})
+	fitText(bannerText, tuning.SightingTextSize)
+
+	-- Countdown chip on the right (only while something is counting down).
+	timerChip = UI.Inset({
+		Name = "Timer",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.fromScale(1, 0.5),
+		Size = UDim2.fromOffset(tuning.TimerSize.X, tuning.TimerSize.Y),
+		Visible = false,
+		Parent = banner,
+	})
+	UI.List({
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = 4,
+		Parent = timerChip,
+	})
+	UI.Icon(tuning.TimerIcon, tuning.TimerTextSize, {
+		LayoutOrder = 1,
+		ImageColor3 = C.TextDim,
+		Parent = timerChip,
+	})
+	timerLabel = UI.Text({
+		Name = "Time",
+		Role = "Heading",
+		Weight = "Bold",
+		RichText = false,
+		TextSize = tuning.TimerTextSize,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromScale(0, 1),
+		LayoutOrder = 2,
+		Parent = timerChip,
+	})
+
+	bannerScale = UI.Scale(banner)
 end
 
 local function newAnchor(name: string): Part
@@ -249,43 +355,79 @@ local function newAnchor(name: string): Part
 	return part
 end
 
-local function newMarker(name: string): (BillboardGui, TextLabel)
-	local marker = Instance.new("BillboardGui")
-	marker.Name = name
-	marker.ResetOnSpawn = false
-	marker.AlwaysOnTop = true
-	marker.LightInfluence = 0
-	marker.Size = UDim2.fromOffset(190, 46)
-	marker.StudsOffsetWorldSpace = Vector3.new(0, 4, 0)
-	marker.MaxDistance = math.huge
-	marker.Enabled = false
-	local label = textLabel(marker, "Text", Enum.Font.GothamBlack)
-	label.Size = UDim2.fromScale(1, 1)
-	label.TextStrokeTransparency = 0.2
+--- A floating label: the name on top, the distance under it.
+local function newMarker(name: string): (BillboardGui, TextLabel, TextLabel)
+	local tuning = Config.UI.Banners
+	local marker = UI.new("BillboardGui", {
+		Name = name,
+		ResetOnSpawn = false,
+		AlwaysOnTop = true,
+		LightInfluence = 0,
+		Size = UDim2.fromOffset(tuning.MarkerSize.X, tuning.MarkerSize.Y),
+		StudsOffsetWorldSpace = Vector3.new(0, MARKER_LIFT, 0),
+		MaxDistance = math.huge,
+		Enabled = false,
+	}) :: BillboardGui
+	local title = UI.Text({
+		Name = "Text",
+		Role = "Heading",
+		Weight = "Bold",
+		RichText = false,
+		Size = UDim2.fromScale(1, 0.58),
+		Parent = marker,
+	})
+	fitText(title, tuning.MarkerNameSize)
+	shadowEdge(title)
+	local distance = UI.Text({
+		Name = "Distance",
+		Role = "Mono",
+		Weight = "Bold",
+		RichText = false,
+		TextColor3 = C.Text,
+		Position = UDim2.fromScale(0, 0.58),
+		Size = UDim2.fromScale(1, 0.42),
+		Parent = marker,
+	})
+	fitText(distance, tuning.MarkerDistanceSize)
+	shadowEdge(distance)
 	marker.Parent = localPlayer:WaitForChild("PlayerGui")
-	return marker, label
+	return marker, title, distance
 end
 
 --- Full-screen frame with a vertical UIGradient on its transparency.
 local function gradientFrame(parent: Instance, name: string, keypoints: { NumberSequenceKeypoint }): Frame
-	local frame = Instance.new("Frame")
-	frame.Name = name
-	frame.BorderSizePixel = 0
-	frame.BackgroundColor3 = Color3.new(0, 0, 0)
-	frame.Parent = parent
-	local gradient = Instance.new("UIGradient")
-	gradient.Rotation = 90
-	gradient.Transparency = NumberSequence.new(keypoints)
-	gradient.Parent = frame
-	return frame
+	return UI.new("Frame", {
+		Name = name,
+		BorderSizePixel = 0,
+		BackgroundColor3 = C.Shadow,
+		Parent = parent,
+	}, {
+		UI.new("UIGradient", {
+			Rotation = 90,
+			Transparency = NumberSequence.new(keypoints),
+		}),
+	})
+end
+
+--- One line of the REC corner (Mono font, right-aligned, faded with the effect).
+local function recText(parent: Instance, name: string, color: Color3): TextLabel
+	local label = UI.Text({
+		Name = name,
+		Role = "Mono",
+		Weight = "Bold",
+		RichText = false,
+		TextColor3 = color,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 1,
+		TextScaled = true,
+		Parent = parent,
+	})
+	return label
 end
 
 local function buildVhs(playerGui: Instance)
-	vhsGui = Instance.new("ScreenGui")
-	vhsGui.Name = "SightingVHS"
-	vhsGui.ResetOnSpawn = false
-	vhsGui.IgnoreGuiInset = true
-	vhsGui.DisplayOrder = -1 -- under the HUD
+	vhsGui = newScreenGui("SightingVHS", Config.UI.Layers.Vhs) -- under the HUD
 	vhsGui.Enabled = false
 
 	-- Scanlines: each block is 10 soft dark lines (a gradient can hold 20
@@ -319,38 +461,38 @@ local function buildVhs(playerGui: Instance)
 	band = gradientFrame(vhsGui, "TrackingBand", {
 		NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.85), NumberSequenceKeypoint.new(1, 1),
 	})
-	band.BackgroundColor3 = Color3.new(1, 1, 1)
+	band.BackgroundColor3 = C.Text
 	band.Size = UDim2.fromScale(1, 0.07)
 
-	-- Grain specks.
+	-- Grain specks: light and dark.
 	for i = 1, s.VhsGrainDots do
-		local dot = Instance.new("Frame")
-		dot.Name = "Grain"
-		dot.BorderSizePixel = 0
-		dot.BackgroundColor3 = if i % 2 == 0 then Color3.new(1, 1, 1) else Color3.new(0, 0, 0)
-		dot.Size = UDim2.fromOffset(2, 2)
-		dot.Parent = vhsGui
+		local dot = UI.new("Frame", {
+			Name = "Grain",
+			BorderSizePixel = 0,
+			BackgroundColor3 = if i % 2 == 0 then C.Text else C.Shadow,
+			Size = UDim2.fromOffset(2, 2),
+			Parent = vhsGui,
+		}) :: Frame
 		table.insert(grain, dot)
 	end
 
-	-- "● REC" and a timecode, top right (inside the safe area).
-	local corner = Instance.new("Frame")
-	corner.Name = "Rec"
-	corner.BackgroundTransparency = 1
-	corner.AnchorPoint = Vector2.new(1, 0)
-	corner.Position = UDim2.new(1, -20, 0, 52)
-	corner.Size = UDim2.fromOffset(150, 52)
-	corner.Parent = vhsGui
-	recLabel = textLabel(corner, "Rec", Enum.Font.Code)
+	-- "● REC" and a timecode, top right, under the top bar (placed by
+	-- updateVhs, since the top bar's height is only known at runtime).
+	local recSize = Config.UI.Banners.RecSize
+	recCorner = UI.new("Frame", {
+		Name = "Rec",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0),
+		Size = UDim2.fromOffset(recSize.X, recSize.Y),
+		Parent = vhsGui,
+	})
+	recLabel = recText(recCorner, "Rec", C.BloodBright)
 	recLabel.Size = UDim2.new(1, 0, 0.55, 0)
-	recLabel.TextXAlignment = Enum.TextXAlignment.Right
-	recLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
 	recLabel.Text = "● REC"
-	timeLabel = textLabel(corner, "Time", Enum.Font.Code)
+	timeLabel = recText(recCorner, "Time", C.Text)
 	timeLabel.Position = UDim2.fromScale(0, 0.58)
 	timeLabel.Size = UDim2.new(1, 0, 0.42, 0)
-	timeLabel.TextXAlignment = Enum.TextXAlignment.Right
-	ScreenScale.Apply(corner)
+	recScale = UI.Scale(recCorner)
 
 	vhsGui.Parent = playerGui
 
@@ -371,15 +513,6 @@ local function placeToasts(bannerVisible: boolean)
 		if bannerVisible then banner.AbsolutePosition.Y + banner.AbsoluteSize.Y else nil)
 end
 
-local function showBanner(title: string, text: string, rarity: any)
-	local color = rarityColor(rarity)
-	bannerTitle.Text = title
-	bannerTitle.TextColor3 = color
-	bannerText.Text = text
-	bannerStroke.Color = color
-	banner.Visible = true
-end
-
 --- True while the Hunt is on (HuntController's banner owns the top spot).
 local function huntActive(): boolean
 	local huntState = ReplicatedStorage:FindFirstChild("HuntState")
@@ -387,30 +520,78 @@ local function huntActive(): boolean
 	return phase ~= nil and phase ~= "Idle"
 end
 
+--- Top centre under the top bar; under the Hunt banner while she's out.
+local function placeBanner()
+	local tuning = Config.UI.Banners
+	local scale = bannerScale.Scale
+	local top = bannerTop(scale)
+	if huntActive() then
+		top += (tuning.HuntSize.Y + tuning.Gap) * scale
+	end
+	banner.Position = UDim2.new(0.5, 0, 0, top)
+end
+
+--- Shows the countdown chip with `seconds` left, or hides it (nil); the
+--- text column takes the room when it's hidden.
+local function setTimer(seconds: number?)
+	local tuning = Config.UI.Banners
+	local textLeft = tuning.IconSize + tuning.IconGap
+	if seconds then
+		timerLabel.Text = formatClock(seconds)
+		timerLabel.TextColor3 = if seconds <= tuning.TimerUrgentBelow then C.BloodBright else C.Text
+		timerChip.Visible = true
+		bannerColumn.Size = UDim2.new(1, -(textLeft + tuning.TimerSize.X + tuning.IconGap), 1, 0)
+	else
+		timerChip.Visible = false
+		bannerColumn.Size = UDim2.new(1, -textLeft, 1, 0)
+	end
+end
+
+local function showBanner(title: string, text: string, rarity: any, iconName: string, seconds: number?)
+	local color = rarityColor(rarity)
+	bannerTitle.Text = title
+	bannerTitle.TextColor3 = color
+	bannerText.Text = text
+	if color ~= shownColor then
+		shownColor = color
+		bannerStroke.Color = color
+		bannerIcon.ImageColor3 = color
+		-- A faint wash of the rarity colour at the top of the wood.
+		bannerWash.Color = Theme.Sequence(Theme.Mix(C.PanelTop, color, Config.UI.Banners.RarityWash), C.Panel)
+	end
+	if iconName ~= shownIcon then
+		shownIcon = iconName
+		Icon.set(bannerIcon, iconName)
+	end
+	setTimer(seconds)
+	banner.Visible = true
+end
+
 local function renderBanner()
 	local now = serverNow()
+	local icons = Config.UI.Banners.SightingIcons
 	-- Sit just under the Hunt banner while she's out, so neither hides the other.
-	banner.Position = UDim2.new(0.5, 0, BANNER_TOP, if huntActive() then BELOW_HUNT_BANNER else 0)
+	placeBanner()
 	local mine = myCapture()
 	local sighting = current
 	local cap = otherCapture()
 
 	if mine then
 		showBanner(string.format("YOU CAUGHT THE %s!", string.upper(tostring(mine.Label))),
-			"Get it to your camp's pad! Everyone can see you.", mine.Rarity)
+			"Get it to your camp's pad! Everyone can see you.", mine.Rarity, icons.Mine, nil)
 	elseif sighting then
 		local remaining = (tonumber(sighting.ExpiresAt) or now) - now
 		showBanner(string.format("SIGHTING: %s", string.upper(tostring(sighting.Label))),
-			string.format("%s  ·  %s left", tostring(sighting.Hint), formatClock(remaining)), sighting.Rarity)
+			tostring(sighting.Hint), sighting.Rarity, icons.Wild, remaining)
 	elseif cap and cap.Phase == "Dropped" then
 		local remaining = (tonumber(cap.ExpiresAt) or now) - now
 		showBanner(string.format("THE %s IS LOOSE!", string.upper(tostring(cap.Label))),
-			string.format("Grab it before it runs off  ·  %s", formatClock(remaining)), cap.Rarity)
+			"Grab it before it runs off", cap.Rarity, icons.Loose, remaining)
 	elseif cap then
 		showBanner(string.format("%s HAS THE %s", string.upper(tostring(cap.By)), string.upper(tostring(cap.Label))),
-			"Stop them before they get home!", cap.Rarity)
+			"Stop them before they get home!", cap.Rarity, icons.Carried, nil)
 	elseif flash and os.clock() < flash.Until then
-		showBanner(flash.Title, flash.Text, flash.Rarity)
+		showBanner(flash.Title, flash.Text, flash.Rarity, flash.Icon, nil)
 	else
 		flash = nil
 		banner.Visible = false
@@ -446,8 +627,9 @@ local function renderMarkers()
 		local position = sighting.Position :: Vector3
 		sightingAnchor.CFrame = CFrame.new(position + Vector3.new(0, MARKER_HEIGHT, 0))
 		local text, distance = distanceText(position)
-		sightingMarkerText.Text = string.format("%s\n%s", tostring(sighting.Label), text)
-		sightingMarkerText.TextColor3 = rarityColor(sighting.Rarity)
+		sightingMarkerName.Text = tostring(sighting.Label)
+		sightingMarkerName.TextColor3 = rarityColor(sighting.Rarity)
+		sightingMarkerDistance.Text = text
 		sightingMarker.Adornee = sightingAnchor
 		sightingMarker.Enabled = distance > hideWithin
 	else
@@ -471,11 +653,12 @@ local function renderMarkers()
 	end
 	local text, distance = distanceText(adornee.Position)
 	if cap.Phase == "Dropped" then
-		captureMarkerText.Text = string.format("%s (loose!)\n%s", tostring(cap.Label), text)
+		captureMarkerName.Text = string.format("%s (loose!)", tostring(cap.Label))
 	else
-		captureMarkerText.Text = string.format("%s has it!\n%s", tostring(cap.By), text)
+		captureMarkerName.Text = string.format("%s has it!", tostring(cap.By))
 	end
-	captureMarkerText.TextColor3 = rarityColor(cap.Rarity)
+	captureMarkerName.TextColor3 = rarityColor(cap.Rarity)
+	captureMarkerDistance.Text = text
 	captureMarker.Adornee = adornee
 	captureMarker.Enabled = distance > hideWithin
 end
@@ -496,6 +679,14 @@ local function setFovOffset(offset: number)
 	-- Apply only the change, so anything else adjusting FOV keeps working.
 	camera.FieldOfView += offset - fovOffset
 	fovOffset = offset
+end
+
+--- The REC corner sits top right, under Roblox's top bar.
+local function placeRec()
+	local layout = Config.UI.Layout
+	local scale = recScale.Scale
+	local inset = GuiService:GetGuiInset()
+	recCorner.Position = UDim2.new(1, -layout.EdgeMargin * scale, 0, inset.Y + layout.TopGap * scale)
 end
 
 local grainClock = 0
@@ -526,7 +717,7 @@ local function updateVhs(dt: number, distance: number?)
 
 	vhsGui.Enabled = true
 	colorCorrection.Enabled = true
-	colorCorrection.TintColor = Color3.new(1, 1, 1):Lerp(s.VhsTint, k)
+	colorCorrection.TintColor = NEUTRAL_TINT:Lerp(s.VhsTint, k)
 	colorCorrection.Saturation = s.VhsSaturation * k
 	colorCorrection.Contrast = s.VhsContrast * k
 	colorCorrection.Brightness = s.VhsBrightness * k
@@ -552,10 +743,13 @@ local function updateVhs(dt: number, distance: number?)
 		end
 	end
 
-	local blinkOn = (t % 1) < 0.6
+	placeRec()
+	local blinkOn = (t % 1) < REC_BLINK_ON
 	recLabel.Text = if blinkOn then "● REC" else "   REC"
 	recLabel.TextTransparency = 1 - k
 	timeLabel.TextTransparency = 1 - k
+	recLabel.TextStrokeTransparency = 1 - k * REC_SHADOW
+	timeLabel.TextStrokeTransparency = 1 - k * REC_SHADOW
 	local sighting = current
 	local elapsed = if sighting then serverNow() - (tonumber(sighting.StartedAt) or serverNow()) else 0
 	elapsed = math.max(0, math.floor(elapsed))
@@ -636,16 +830,18 @@ local function resetPrompts()
 	end
 end
 
-local function setFlash(title: string, text: string, rarity: any)
+local function setFlash(title: string, text: string, rarity: any, iconName: string)
 	flash = {
 		Title = title,
 		Text = text,
 		Rarity = if typeof(rarity) == "string" then rarity else nil,
-		Until = os.clock() + FLASH_SECONDS,
+		Icon = iconName,
+		Until = os.clock() + Config.UI.Banners.FlashSeconds,
 	}
 end
 
 local function onBanner(phase: string, info: Info)
+	local icons = Config.UI.Banners.SightingIcons
 	if phase == "Started" then
 		current = info
 		lastAmbience = 0
@@ -680,7 +876,7 @@ local function onBanner(phase: string, info: Info)
 		local who = if info.ByUserId == localPlayer.UserId then "You" else tostring(info.By)
 		setFlash(string.format("%s BROUGHT IT HOME", string.upper(who)),
 			string.format("The %s now lives at %s camp.", tostring(info.Label),
-				if who == "You" then "your" else (tostring(info.By) .. "'s")), info.Rarity)
+				if who == "You" then "your" else (tostring(info.By) .. "'s")), info.Rarity, icons.Claimed)
 	elseif phase == "Escaped" then
 		local matched = false
 		if info.SightingId ~= nil and current and current.SightingId == info.SightingId then
@@ -693,9 +889,9 @@ local function onBanner(phase: string, info: Info)
 		end
 		if matched then
 			if info.TakenBack == true then
-				setFlash("SHE TOOK IT", string.format("%s took the %s.", Config.Hunt.Name, tostring(info.Label)), info.Rarity)
+				setFlash("SHE TOOK IT", string.format("%s took the %s.", Config.Hunt.Name, tostring(info.Label)), info.Rarity, icons.TakenBack)
 			else
-				setFlash("IT GOT AWAY", string.format("The %s slipped back into the woods.", tostring(info.Label)), info.Rarity)
+				setFlash("IT GOT AWAY", string.format("The %s slipped back into the woods.", tostring(info.Label)), info.Rarity, icons.Escaped)
 			end
 		end
 	elseif phase == "Interrupted" then
@@ -722,18 +918,14 @@ function SightingController.Start()
 	end
 
 	local playerGui = localPlayer:WaitForChild("PlayerGui")
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "SightingUI"
-	gui.ResetOnSpawn = false
-	gui.IgnoreGuiInset = true
-	gui.DisplayOrder = 7
+	local gui = newScreenGui("SightingUI", Config.UI.Layers.Sighting)
 	buildBanner(gui)
 	gui.Parent = playerGui
 
 	sightingAnchor = newAnchor("SAC_SightingAnchor")
 	dropAnchor = newAnchor("SAC_SightingDropAnchor")
-	sightingMarker, sightingMarkerText = newMarker("SightingMarker")
-	captureMarker, captureMarkerText = newMarker("CaptureMarker")
+	sightingMarker, sightingMarkerName, sightingMarkerDistance = newMarker("SightingMarker")
+	captureMarker, captureMarkerName, captureMarkerDistance = newMarker("CaptureMarker")
 	buildVhs(playerGui)
 
 	local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("SightingBanner") :: RemoteEvent

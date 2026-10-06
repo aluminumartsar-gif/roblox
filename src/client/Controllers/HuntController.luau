@@ -13,17 +13,27 @@
 	    and sinks back into the ground when it ends.
 	  * Warning: lights dim, fog thickens, a wail, and a banner counting
 	    down to when she emerges.
-	  * Dread, by distance: a heartbeat that speeds up as she gets closer, a
-	    dark red vignette, film grain, and camera shake when she's very close.
+	  * Dread, by distance: a heartbeat that speeds up as she gets closer,
+	    blood-red screen edges and film grain (ScreenGui "HuntDread" on
+	    Config.UI.Layers.HuntDread), and camera shake when she's very close.
 	  * Caught: a jumpscare for the victim (her face fills the screen with a
-	    scream); everyone nearby hears it.
-	  * A banner with the time left and advice that depends on you: carrying
-	    an egg ("she can smell it — get it home"), or not.
+	    scream, on its own ScreenGui at Config.UI.Layers.Jumpscare, above
+	    every other UI); everyone nearby hears it.
+	  * The banner (ScreenGui "HuntBanner" on Config.UI.Layers.Sighting): top
+	    centre, just under Roblox's top bar (and the Base/Eggs buttons) —
+	    charred wood washed blood red, a skull, her headline in the Display
+	    font ("SHE'S COMING FOR YOU" pulses its edge), and a line with the
+	    time left and advice that depends on you: carrying an egg ("she can
+	    smell it — get it home"), or not. While it shows, the toast stack
+	    stays below it (NotificationController.ReserveTop "Hunt") and the
+	    sighting banner drops under it (SightingController). Sizes and look:
+	    Config.UI.Banners.
 
 	All of this is presentation. The server decides where she is and who
 	she catches.
 ]]
 
+local GuiService = game:GetService("GuiService")
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -36,16 +46,19 @@ local Config = require(Shared:WaitForChild("Config"))
 local ItemVisuals = require(Shared:WaitForChild("ItemVisuals"))
 
 local Components = script.Parent.Parent:WaitForChild("Components")
-local ScreenScale = require(Components:WaitForChild("ScreenScale"))
+local Theme = require(Components:WaitForChild("Theme"))
+local UI = require(Components:WaitForChild("UI"))
 local SoundController = require(script.Parent:WaitForChild("SoundController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
 local HuntController = {}
 
 local localPlayer = Players.LocalPlayer
+local C = Theme.Colors
 
 local RISE_TIME = 2.2
 local SINK_SPEED = 3.5 -- studs per second while leaving
+local SPECK_SIZE = 2 -- px, one fleck of film grain
 
 local state: Configuration? = nil
 local model: Model? = nil
@@ -57,8 +70,9 @@ local shownYaw = 0
 local riseStart = 0
 local sinkOffset = 0
 
-local gui: ScreenGui
 local banner: Frame
+local bannerScale: UIScale
+local bannerEdge: UIStroke
 local bannerTitle: TextLabel
 local bannerSub: TextLabel
 local vignette: { Frame } = {}
@@ -96,9 +110,10 @@ local function buildFallback(): Model
 	local h = Config.Hunt.ModelHeight
 	local m = Instance.new("Model")
 	m.Name = "BroodMother"
-	local dark = Color3.fromRGB(20, 17, 18)
-	local bark = Color3.fromRGB(38, 30, 27)
-	local bone = Color3.fromRGB(214, 206, 188)
+	local colors = Config.Hunt.FallbackColors
+	local dark = colors.Body
+	local bark = colors.Rags
+	local bone = colors.Bone
 
 	local body = block(m, "Body", Vector3.new(h * 0.22, h * 0.42, h * 0.16), CFrame.new(0, h * 0.58, 0) * CFrame.Angles(math.rad(-14), 0, 0), dark, Enum.Material.Slate)
 	-- Ragged cloak: a few hanging strips.
@@ -174,7 +189,7 @@ local function buildModel(): (Model, PointLight?)
 	feet.Position = primary.CFrame:PointToObjectSpace(m:GetPivot().Position)
 	feet.Parent = primary
 	local mist = Instance.new("ParticleEmitter")
-	mist.Color = ColorSequence.new(Color3.fromRGB(30, 26, 30))
+	mist.Color = ColorSequence.new(Config.Hunt.MistColor)
 	mist.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.55), NumberSequenceKeypoint.new(1, 1) })
 	mist.Size = NumberSequence.new(4, 9)
 	mist.Lifetime = NumberRange.new(2, 3.5)
@@ -215,101 +230,173 @@ local function hideModel()
 end
 
 --------------------------------------------------------------------------
--- Screen effects
+-- Screen: dread overlay and banner
 --------------------------------------------------------------------------
 
-local function label(parent: Instance, size: number, font: Enum.Font): TextLabel
-	local l = Instance.new("TextLabel")
-	l.BackgroundTransparency = 1
-	l.Size = UDim2.new(1, 0, 0, size)
-	l.Font = font
-	l.TextSize = size
-	l.TextColor3 = Color3.new(1, 1, 1)
-	l.TextStrokeTransparency = 0.4
-	l.Parent = parent
-	return l
+local function newScreenGui(name: string, displayOrder: number): ScreenGui
+	return UI.new("ScreenGui", {
+		Name = name,
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		DisplayOrder = displayOrder,
+	})
 end
 
-local function buildGui()
-	gui = Instance.new("ScreenGui")
-	gui.Name = "Hunt"
-	gui.ResetOnSpawn = false
-	gui.IgnoreGuiInset = true
-	gui.DisplayOrder = 5
+--- Shrinks a label's text to fit its box, never larger than maxSize.
+local function fitText(label: TextLabel, maxSize: number)
+	label.TextScaled = true
+	UI.new("UITextSizeConstraint", { MaxTextSize = maxSize, Parent = label })
+end
+
+--- Where the top banners start, in px from the very top of the screen
+--- (IgnoreGuiInset): under Roblox's top bar or under the Base/Eggs travel
+--- buttons, whichever reaches lower, plus Layout.TopGap. SightingController
+--- places its banner the same way.
+local function bannerTop(scale: number): number
+	local layout = Config.UI.Layout
+	local inset = GuiService:GetGuiInset()
+	local travelBottom = (layout.TravelTop + layout.TravelHeight) * scale
+	return math.max(inset.Y, travelBottom) + layout.TopGap * scale
+end
+
+--- Blood-red screen edges and film grain, faded in by setDread.
+local function buildDread(playerGui: Instance)
+	local tuning = Config.UI.Banners
+	local gui = newScreenGui("HuntDread", Config.UI.Layers.HuntDread)
 
 	-- Vignette: four edge frames fading inward.
+	local depth = tuning.DreadEdgeDepth
 	local edges = {
-		{ AnchorPoint = Vector2.new(0, 0), Position = UDim2.fromScale(0, 0), Size = UDim2.fromScale(1, 0.32), Rotation = 90 },
-		{ AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0.32), Rotation = -90 },
-		{ AnchorPoint = Vector2.new(0, 0), Position = UDim2.fromScale(0, 0), Size = UDim2.fromScale(0.28, 1), Rotation = 0 },
-		{ AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.fromScale(0.28, 1), Rotation = 180 },
+		{ AnchorPoint = Vector2.new(0, 0), Position = UDim2.fromScale(0, 0), Size = UDim2.fromScale(1, depth.Y), Rotation = 90 },
+		{ AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, depth.Y), Rotation = -90 },
+		{ AnchorPoint = Vector2.new(0, 0), Position = UDim2.fromScale(0, 0), Size = UDim2.fromScale(depth.X, 1), Rotation = 0 },
+		{ AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.fromScale(depth.X, 1), Rotation = 180 },
 	}
 	for _, e in ipairs(edges) do
-		local f = Instance.new("Frame")
-		f.AnchorPoint = e.AnchorPoint
-		f.Position = e.Position
-		f.Size = e.Size
-		f.BackgroundColor3 = Color3.fromRGB(70, 0, 0)
-		f.BorderSizePixel = 0
-		f.BackgroundTransparency = 1
-		f.Parent = gui
-		local g = Instance.new("UIGradient")
-		g.Rotation = e.Rotation
-		g.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
-		g.Parent = f
-		table.insert(vignette, f)
+		local edge = UI.new("Frame", {
+			Name = "Vignette",
+			AnchorPoint = e.AnchorPoint,
+			Position = e.Position,
+			Size = e.Size,
+			BackgroundColor3 = C.BloodDeep,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Parent = gui,
+		}, {
+			UI.new("UIGradient", {
+				Rotation = e.Rotation,
+				Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) }),
+			}),
+		})
+		table.insert(vignette, edge)
 	end
 
 	-- Film grain: a handful of flickering specks, re-scattered every frame.
-	grain = Instance.new("Frame")
-	grain.Name = "Grain"
-	grain.BackgroundTransparency = 1
-	grain.Size = UDim2.fromScale(1, 1)
-	grain.Visible = false
-	grain.Parent = gui
-	for _ = 1, 40 do
-		local speck = Instance.new("Frame")
-		speck.BorderSizePixel = 0
-		speck.BackgroundColor3 = Color3.new(1, 1, 1)
-		speck.Size = UDim2.fromOffset(2, 2)
-		speck.Parent = grain
+	grain = UI.new("Frame", {
+		Name = "Grain",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Visible = false,
+		Parent = gui,
+	})
+	for _ = 1, tuning.DreadGrainSpecks do
+		UI.new("Frame", {
+			Name = "Speck",
+			BorderSizePixel = 0,
+			BackgroundColor3 = C.Text,
+			Size = UDim2.fromOffset(SPECK_SIZE, SPECK_SIZE),
+			Parent = grain,
+		})
 	end
 
-	-- Banner, just below the kit's Base/Eggs buttons (they fill the top
-	-- 11.5% of the screen) — the same spot as the sighting banner.
-	banner = Instance.new("Frame")
-	banner.Name = "Banner"
-	banner.AnchorPoint = Vector2.new(0.5, 0)
-	banner.Position = UDim2.new(0.5, 0, 0.12, 0)
-	banner.Size = UDim2.fromOffset(460, 62)
-	banner.BackgroundColor3 = Color3.fromRGB(16, 6, 8)
-	banner.BackgroundTransparency = 0.15
-	banner.Visible = false
-	banner.Parent = gui
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = banner
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Config.Hunt.Color
-	stroke.Thickness = 2
-	stroke.Parent = banner
-	local list = Instance.new("UIListLayout")
-	list.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	list.VerticalAlignment = Enum.VerticalAlignment.Center
-	list.Padding = UDim.new(0, 2)
-	list.Parent = banner
-	bannerTitle = label(banner, 24, Enum.Font.GothamBlack)
-	bannerTitle.TextColor3 = Config.Hunt.Color
-	bannerSub = label(banner, 16, Enum.Font.GothamBold)
-	ScreenScale.Apply(banner)
+	gui.Parent = playerGui
+end
 
-	gui.Parent = localPlayer:WaitForChild("PlayerGui")
+--- The banner: top centre under the top bar, same spot as the sighting
+--- banner (which moves under this one while it shows).
+local function buildBanner(playerGui: Instance)
+	local tuning = Config.UI.Banners
+	local gui = newScreenGui("HuntBanner", Config.UI.Layers.Sighting)
+	local size = tuning.HuntSize
+
+	banner = UI.Panel({
+		Name = "Banner",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
+		Size = UDim2.fromOffset(size.X, size.Y),
+		Visible = false,
+		Parent = gui,
+	})
+	-- Charred wood washed blood red from the top, with a blood edge.
+	local wash = banner:FindFirstChildOfClass("UIGradient")
+	if wash then
+		wash.Color = Theme.Sequence(C.BloodDeep, C.Panel)
+	end
+	bannerEdge = banner:FindFirstChildOfClass("UIStroke") :: UIStroke
+	bannerEdge.Color = C.Blood
+	UI.Padding({ Left = tuning.PaddingX, Right = tuning.PaddingX, Top = tuning.PaddingY, Bottom = tuning.PaddingY }).Parent = banner
+
+	UI.Icon(tuning.HuntIcon, tuning.IconSize, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromScale(0, 0.5),
+		ImageColor3 = C.Blood,
+		Parent = banner,
+	})
+
+	local textLeft = tuning.IconSize + tuning.IconGap
+	local column = UI.new("Frame", {
+		Name = "Text",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(textLeft, 0),
+		Size = UDim2.new(1, -textLeft, 1, 0),
+		Parent = banner,
+	}, {
+		UI.List({ Padding = 0, VerticalAlignment = Enum.VerticalAlignment.Center }),
+	})
+
+	-- Headline: the Display font at a fixed size (it's only legible large),
+	-- with a dark edge so the red reads on the red wash.
+	bannerTitle = UI.Title("", tuning.HuntTitleSize, {
+		Name = "Title",
+		RichText = false,
+		TextColor3 = C.BloodBright,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		LayoutOrder = 1,
+		Parent = column,
+	})
+	local titleEdge = bannerTitle:FindFirstChildOfClass("UIStroke")
+	if titleEdge then
+		titleEdge.Color = C.Shadow
+	end
+
+	bannerSub = UI.Text({
+		Name = "Detail",
+		Role = "Heading",
+		Weight = "SemiBold",
+		RichText = false,
+		TextColor3 = C.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, 0, 0, tuning.HuntTextSize + 4),
+		LayoutOrder = 2,
+		Parent = column,
+	})
+	fitText(bannerSub, tuning.HuntTextSize)
+
+	bannerScale = UI.Scale(banner)
+	gui.Parent = playerGui
+end
+
+local function buildGui()
+	local playerGui = localPlayer:WaitForChild("PlayerGui")
+	buildDread(playerGui)
+	buildBanner(playerGui)
 end
 
 local function setDread(amount: number)
 	-- amount 0..1
+	local strength = Config.UI.Banners.DreadStrength
 	for _, f in ipairs(vignette) do
-		f.BackgroundTransparency = 1 - amount * 0.75
+		f.BackgroundTransparency = 1 - amount * strength
 	end
 	grain.Visible = amount > 0.15
 	if grain.Visible then
@@ -364,30 +451,31 @@ local function jumpscare()
 	SoundController.Play("Jumpscare")
 	-- Its own ScreenGui above every other UI (toasts, banners, popups), so
 	-- her face really fills the screen. Gone when the scare fades.
-	local scareGui = Instance.new("ScreenGui")
-	scareGui.Name = "HuntJumpscare"
-	scareGui.ResetOnSpawn = false
-	scareGui.IgnoreGuiInset = true
-	scareGui.DisplayOrder = Config.Hunt.JumpscareDisplayOrder
+	local scareGui = newScreenGui("HuntJumpscare", Config.UI.Layers.Jumpscare)
 	scareGui.Parent = localPlayer:WaitForChild("PlayerGui")
-	local overlay = Instance.new("Frame")
-	overlay.Size = UDim2.fromScale(1, 1)
-	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0
-	overlay.ZIndex = 50
-	overlay.Parent = scareGui
+	local overlay = UI.new("Frame", {
+		Name = "Overlay",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = C.Shadow,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		ZIndex = 50,
+		Parent = scareGui,
+	}) :: Frame
 
 	-- Her face, filling the screen.
-	local viewport = Instance.new("ViewportFrame")
-	viewport.AnchorPoint = Vector2.new(0.5, 0.5)
-	viewport.Position = UDim2.fromScale(0.5, 0.5)
-	viewport.Size = UDim2.fromScale(0.6, 0.6)
-	viewport.BackgroundTransparency = 1
-	viewport.Ambient = Color3.fromRGB(150, 140, 140)
-	viewport.LightColor = Config.Hunt.Color
-	viewport.LightDirection = Vector3.new(0, -0.3, 1)
-	viewport.ZIndex = 51
-	viewport.Parent = overlay
+	local viewport = UI.new("ViewportFrame", {
+		Name = "Face",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.6, 0.6),
+		BackgroundTransparency = 1,
+		Ambient = Config.UI.Banners.JumpscareAmbient,
+		LightColor = Config.Hunt.Color,
+		LightDirection = Vector3.new(0, -0.3, 1),
+		ZIndex = 51,
+		Parent = overlay,
+	}) :: ViewportFrame
 	local face = buildModel()
 	face:PivotTo(CFrame.new())
 	face.Parent = viewport
@@ -399,12 +487,15 @@ local function jumpscare()
 	camera.Parent = viewport
 	viewport.CurrentCamera = camera
 
-	local flash = Instance.new("Frame")
-	flash.Size = UDim2.fromScale(1, 1)
-	flash.BackgroundColor3 = Config.Hunt.Color
-	flash.BackgroundTransparency = 0.3
-	flash.ZIndex = 52
-	flash.Parent = overlay
+	local flash = UI.new("Frame", {
+		Name = "Flash",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Config.Hunt.Color,
+		BackgroundTransparency = 0.3,
+		BorderSizePixel = 0,
+		ZIndex = 52,
+		Parent = overlay,
+	}) :: Frame
 
 	TweenService:Create(viewport, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromScale(1.6, 1.6) }):Play()
 	TweenService:Create(flash, TweenInfo.new(0.5), { BackgroundTransparency = 1 }):Play()
@@ -451,6 +542,20 @@ local function reserveBanner(visible: boolean)
 	end
 end
 
+--- Pulses the banner's edge while she's coming for you; steady otherwise.
+local function pulseEdge(targeted: boolean)
+	local tuning = Config.UI.Banners
+	local base = Theme.Tuning.Stroke
+	if targeted then
+		local wave = 0.5 + 0.5 * math.sin(os.clock() * tuning.HuntPulseSpeed * math.pi * 2)
+		bannerEdge.Thickness = base + tuning.HuntPulseThickness * wave
+		bannerEdge.Color = C.Blood:Lerp(C.BloodBright, wave)
+	else
+		bannerEdge.Thickness = base
+		bannerEdge.Color = C.Blood
+	end
+end
+
 local function update(dt: number)
 	local s = state
 	if not s then
@@ -469,14 +574,17 @@ local function update(dt: number)
 	end
 
 	-- Banner
+	banner.Position = UDim2.new(0.5, 0, 0, bannerTop(bannerScale.Scale))
 	banner.Visible = true
 	reserveBanner(true)
 	local carrying = localPlayer:GetAttribute("Carrying") == true
+	local targeted = false
 	if phase == "Warning" then
 		bannerTitle.Text = "Something stirs in the woods..."
 		bannerSub.Text = string.format("%s wakes in %s — get your eggs home!", Config.Hunt.Name, formatClock((s:GetAttribute("StartsAt") or now) - now))
 	elseif phase == "Hunting" then
 		local mine = s:GetAttribute("TargetUserId") == localPlayer.UserId
+		targeted = mine
 		bannerTitle.Text = if mine then "SHE'S COMING FOR YOU" else string.upper(Config.Hunt.Name) .. " IS HUNTING"
 		local left = formatClock((s:GetAttribute("EndsAt") or now) - now)
 		bannerSub.Text = if carrying
@@ -486,6 +594,7 @@ local function update(dt: number)
 		bannerTitle.Text = "She's going back into the woods..."
 		bannerSub.Text = ""
 	end
+	pulseEdge(targeted)
 
 	-- Her model
 	if phase == "Warning" then

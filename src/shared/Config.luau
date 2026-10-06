@@ -1301,9 +1301,7 @@ Config.Hunt = {
 	-- The reason StealService.Reclaim gets when she takes something back
 	-- (SightingService reads it to word a captured cryptid's loss).
 	ReclaimReason = "brood mother",
-	-- Her jumpscare screen sits above every other UI (toasts 10, StealUI 8,
-	-- Codex celebration 15, feedback fx 30/31).
-	JumpscareDisplayOrder = 40,
+	-- (Her jumpscare screen's layer is Config.UI.Layers.Jumpscare.)
 
 	-- Getting caught
 	StunDuration = 2.5,
@@ -1314,8 +1312,16 @@ Config.Hunt = {
 	ShakeRadius = 35,          -- camera shake inside this distance
 	DimLights = 0.6,           -- Lighting brightness multiplier while she hunts
 	FogDensityBonus = 0.18,    -- thicker fog while she hunts
-	Color = Color3.fromRGB(255, 70, 60), -- her eye / banner colour
+	Color = Color3.fromRGB(255, 70, 60), -- her eye, eye light and jumpscare flash (banner look: Config.UI.Banners)
 	ModelHeight = 16,          -- fallback model size (the mesh is Config.Art.Props.BroodMother)
+	-- The part-built fallback model (used when the mesh is missing) and the
+	-- cold mist at her feet (client-only looks).
+	FallbackColors = {
+		Body = Color3.fromRGB(20, 17, 18),   -- body, limbs, the crack in her skull
+		Rags = Color3.fromRGB(38, 30, 27),   -- hanging cloak strips
+		Bone = Color3.fromRGB(214, 206, 188), -- skull and fingers
+	},
+	MistColor = Color3.fromRGB(30, 26, 30),
 
 	-- Don't start a hunt while a wild sighting is running (and vice versa
 	-- the sighting scheduler waits); retry after this long.
@@ -2225,7 +2231,56 @@ Config.UI = {
 	},
 
 	-- Sighting and Hunt banners, markers and overlays (SightingController, HuntController).
+	-- Both banners sit top centre, Layout.TopGap under Roblox's top bar (or
+	-- under the Base/Eggs buttons if those reach lower); while the Hunt is
+	-- on, the sighting banner drops under hers. Px at the reference size
+	-- (they scale with the screen). At a 749x368 phone (scale 0.7) both
+	-- together end ~165 px down and are 350 px wide.
 	Banners = {
+		HuntSize = Vector2.new(500, 72),
+		SightingSize = Vector2.new(460, 64),
+		Gap = 8,                  -- px between the Hunt banner and the sighting banner under it (clears both edges, pulse included)
+		PaddingX = 14,            -- px inside a banner's left/right edges
+		PaddingY = 6,             -- px inside its top/bottom edges
+		IconSize = 34,
+		IconGap = 10,             -- px between the icon, the text and the countdown chip
+		HuntIcon = "Skull",
+		HuntTitleSize = 30,       -- Display font: keep it 28 or more
+		HuntTextSize = 16,
+		HuntPulseThickness = 2,   -- extra edge thickness at the top of each pulse ("SHE'S COMING FOR YOU")
+		HuntPulseSpeed = 1.6,     -- pulses per second
+		SightingTitleSize = 22,   -- largest; long names shrink to fit
+		SightingTextSize = 16,
+		RarityWash = 0.18,        -- how much rarity colour tints the top of the sighting banner (0..1)
+		TimerSize = Vector2.new(76, 30), -- the countdown chip on the sighting banner
+		TimerTextSize = 18,
+		TimerIcon = "Hourglass",
+		TimerUrgentBelow = 10,    -- seconds left when the countdown turns blood red
+		FlashSeconds = 5,         -- "brought it home" / "got away" / "she took it" stay up this long
+		-- The sighting banner's icon for each state (names from Config.Icons).
+		SightingIcons = {
+			Wild = "Eye",         -- SIGHTING: ... (where, and time left)
+			Mine = "Home",        -- YOU CAUGHT THE ...! (get it home)
+			Carried = "Target",   -- <player> HAS THE ... (stop them)
+			Loose = "Paw",        -- THE ... IS LOOSE!
+			Claimed = "Home",     -- ... BROUGHT IT HOME
+			Escaped = "Tree",     -- IT GOT AWAY
+			TakenBack = "Skull",  -- SHE TOOK IT
+		},
+		-- Floating world label over a sighting / a capture on its way home
+		-- (px; the same size on screen at any distance).
+		MarkerSize = Vector2.new(200, 50),
+		MarkerNameSize = 20,
+		MarkerDistanceSize = 15,
+		-- VHS found-footage overlay: "REC" and the timecode, top right
+		-- (Layout.EdgeMargin from the edge, Layout.TopGap under the top bar).
+		RecSize = Vector2.new(150, 52),
+		-- Hunt dread: blood-red screen edges and film grain, by distance.
+		DreadEdgeDepth = Vector2.new(0.28, 0.32), -- how far in the side (X) and top/bottom (Y) edges reach, fraction of the screen
+		DreadStrength = 0.75,     -- edge opacity at full dread
+		DreadGrainSpecks = 40,
+		-- Her face in the jumpscare: the viewport's ambient light.
+		JumpscareAmbient = Color3.fromRGB(150, 140, 140),
 	},
 
 	-- Nest labels, belt egg labels and in-world signs (NestVisualsController, EggBeltController, server signs).
