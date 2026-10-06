@@ -3,19 +3,22 @@
 	RobuxShopController
 	StarterPlayerScripts/Client/Controllers/RobuxShopController
 
-	The Robux Shop, built on the STUD kit's Store screen. The kit's sections
-	are found by what they contain (not their order), then filled from
-	Config:
+	The Robux Store: a "campfire field kit" window (Components/Window) opened
+	from the HUD's Store tile and the "+" next to the cash. One scrolling
+	list of sections, in the order Config.UI.Shops.Store.Sections gives:
 
-	  Featured (3 coloured cards)  -> Luck Potion, Hatch Boost, Instant Hatch
-	  Gamepasses                   -> the 5 game passes
-	  Currency                     -> the 3 cash packs
-	  Starter Pack banner          -> 3-Egg Bundle
-	  "Server Luck" card           -> Emergency Lock (section renamed)
+	  Boosts        -> Luck Potion, Hatch Boost, Instant Hatch   (cards)
+	  Game Passes   -> the 5 game passes                         (cards)
+	  Cash          -> the 3 cash packs                          (cards)
+	  Starter Pack  -> 3-Egg Bundle                              (wide banner)
+	  Defense       -> Emergency Lock                            (wide banner)
 
-	Prices come from Roblox once an item's id is set ("SOON" until then);
-	owned passes show OWNED. Buying sends only ("Pass" | "Product", key) to
-	the server, which checks everything and opens the Roblox prompt itself.
+	Every item shows its icon, name, a highlight line (minutes for a potion,
+	"+$25K" for a cash pack...), its description and a blue Robux button
+	with the price Roblox reports once the item's id is set. Until then the
+	item shows a SOON tag; a pass you already own shows OWNED. Buying sends
+	only ("Pass" | "Product", key) to the server, which checks everything
+	and opens the Roblox prompt itself.
 
 	Also: the VIP chat tag, and Open / Buy / PriceText for other UI (the
 	HUD's quick-buy offers use them).
@@ -28,28 +31,23 @@ local TextChatService = game:GetService("TextChatService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
-local Kit = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Kit"))
+local Components = script.Parent.Parent:WaitForChild("Components")
+local Theme = require(Components:WaitForChild("Theme"))
+local UI = require(Components:WaitForChild("UI"))
+local Window = require(Components:WaitForChild("Window"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
 local RobuxShopController = {}
 
 local localPlayer = Players.LocalPlayer
+local C = Theme.Colors
+local tuning = Config.UI.Shops.Store
 
-local FEATURED = { "LuckPotion", "HatchBoost", "InstantHatch" }
-local CURRENCY = { "CashSmall", "CashMedium", "CashLarge" }
--- Which kit pass card each pass uses (the 5th is a copy of the Green card).
-local PASS_CARDS = {
-	DoubleCash = "Gamepass [Green]",
-	ExtraNests = "Gamepass [Purple]",
-	Vip = "Gamepass [Orange]",
-	AutoCollect = "Gamepass [Red]",
-	ExtendedLock = "Gamepass [Green]", -- cloned
-}
-
-type Entry = { kind: string, key: string, button: Instance }
+-- One buy slot per item: the Robux button, or the OWNED / SOON tag in its place.
+type Entry = { kind: string, key: string, button: TextButton, tag: Frame }
 local entries: { Entry } = {}
 local prices: { [string]: number } = {}
-local popup: Kit.Popup
+local window: Window.Window
 local busy = false
 
 local function itemFor(kind: string, key: string): any
@@ -58,7 +56,8 @@ end
 
 local function fetchPrice(kind: string, key: string)
 	local item = itemFor(kind, key)
-	if item.Id == 0 or prices[kind .. ":" .. key] then
+	local priceKey = kind .. ":" .. key
+	if item.Id == 0 or prices[priceKey] then
 		return
 	end
 	task.spawn(function()
@@ -67,17 +66,31 @@ local function fetchPrice(kind: string, key: string)
 				if kind == "Pass" then Enum.InfoType.GamePass else Enum.InfoType.Product)
 		end)
 		if ok and info and info.PriceInRobux then
-			prices[kind .. ":" .. key] = info.PriceInRobux
+			prices[priceKey] = info.PriceInRobux
+		elseif not ok then
+			warn(string.format("[SAC/Store] GetProductInfo failed for %s %s (id %s): %s",
+				kind, key, tostring(item.Id), tostring(info)))
 		end
 	end)
 end
 
---- What a buy button should say for this item right now.
-function RobuxShopController.PriceText(kind: string, key: string): string
+--- "Owned" (a pass you have), "Soon" (no id set yet) or "Price".
+local function itemState(kind: string, key: string): string
 	local item = itemFor(kind, key)
 	if kind == "Pass" and localPlayer:GetAttribute("Pass_" .. key) then
-		return "OWNED"
+		return "Owned"
 	elseif item.Id == 0 then
+		return "Soon"
+	end
+	return "Price"
+end
+
+--- What a buy button should say for this item right now.
+function RobuxShopController.PriceText(kind: string, key: string): string
+	local state = itemState(kind, key)
+	if state == "Owned" then
+		return "OWNED"
+	elseif state == "Soon" then
 		return "SOON"
 	end
 	local price = prices[kind .. ":" .. key]
@@ -102,280 +115,330 @@ function RobuxShopController.Buy(kind: string, key: string)
 end
 
 function RobuxShopController.Open()
-	popup:Open()
+	window:Open()
 end
 
 local function refresh()
 	for _, entry in ipairs(entries) do
-		Kit.SetButtonText(entry.button, RobuxShopController.PriceText(entry.kind, entry.key))
-	end
-end
-
-local function register(kind: string, key: string, button: Instance?)
-	if not button or not button:IsA("GuiButton") then
-		return
-	end
-	table.insert(entries, { kind = kind, key = key, button = button })
-	button.Activated:Connect(function()
-		RobuxShopController.Buy(kind, key)
-	end)
-	fetchPrice(kind, key)
-end
-
-local function setIcon(image: Instance?, iconName: string?)
-	if image and iconName and Config.Icons[iconName] and (image:IsA("ImageLabel") or image:IsA("ImageButton")) then
-		image.Image = Config.Icons[iconName]
-	end
-end
-
---------------------------------------------------------------------------
--- Filling each kit section
---------------------------------------------------------------------------
-
-local function fillFeatured(content: Instance)
-	local cards = Kit.ChildrenNamed(content, "EggFrame")
-	table.sort(cards, function(a, b)
-		return a.LayoutOrder < b.LayoutOrder
-	end)
-	for i, card in ipairs(cards) do
-		local key = FEATURED[i]
-		if not key then
-			Kit.Hide(card)
-			continue
-		end
-		local product = Config.DevProducts[key]
-		local names = Kit.ChildrenNamed(card, "ItemName")
-		Kit.SetText(names[1], product.DisplayName)
-		for j = 2, #names do
-			Kit.Hide(names[j])
-		end
-		local amounts = Kit.ChildrenNamed(card, "Amount")
-		local label = if product.Kind == "Buff" then string.format("%d minutes", product.Duration // 60) else "Your best egg"
-		Kit.SetText(amounts[1], label)
-		for j = 2, #amounts do
-			Kit.Hide(amounts[j])
-		end
-		local buys = Kit.ChildrenNamed(card, "Buy")
-		for j = 2, #buys do
-			Kit.Hide(buys[j])
-		end
-		register("Product", key, buys[1])
-		local clipping = card:FindFirstChild("ClippingItems")
-		setIcon(clipping and clipping:FindFirstChild("Item"), product.Icon)
-		-- The kit's scrolling preview strip shows its own sample items.
-		Kit.Hide(card:FindFirstChild("Container"))
-	end
-end
-
--- The kit's card sections are fixed-height boxes laid out for two rows of
--- cards, with card heights as a fraction of the box. If our cards wrap to
--- more rows, make the box taller and the cards proportionally shorter
--- (so each card keeps its on-screen size) instead of letting them spill.
-local KIT_SECTION_ROWS = 2
-
-local function fitRows(content: Instance)
-	local layout = content:FindFirstChildOfClass("UIListLayout")
-	local aspect = content:FindFirstChildOfClass("UIAspectRatioConstraint")
-	if not layout or not aspect then
-		return
-	end
-	local cards: { GuiObject } = {}
-	for _, child in ipairs(content:GetChildren()) do
-		if child:IsA("GuiObject") and child.Visible then
-			table.insert(cards, child)
-		end
-	end
-	local index: { [GuiObject]: number } = {}
-	for i, card in ipairs(cards) do
-		index[card] = i
-	end
-	table.sort(cards, function(a, b)
-		if a.LayoutOrder ~= b.LayoutOrder then
-			return a.LayoutOrder < b.LayoutOrder
-		end
-		return index[a] < index[b]
-	end)
-	local gap = layout.Padding.Scale
-	local rows, x = 0, 0
-	for _, card in ipairs(cards) do
-		local width = card.Size.X.Scale
-		if rows == 0 or x + gap + width > 1.001 then
-			rows += 1
-			x = width
+		local state = itemState(entry.kind, entry.key)
+		entry.button.Visible = state == "Price"
+		entry.tag.Visible = state ~= "Price"
+		if state == "Owned" then
+			UI.SetPill(entry.tag, "OWNED", C.Moss)
+		elseif state == "Soon" then
+			UI.SetPill(entry.tag, "SOON", C.TextDim)
 		else
-			x += gap + width
+			-- The button already carries the Robux icon, so drop PriceText's "R$".
+			local text = string.gsub(RobuxShopController.PriceText(entry.kind, entry.key), "^R%$", "")
+			UI.SetButtonText(entry.button, text)
 		end
-	end
-	if rows <= KIT_SECTION_ROWS then
-		return
-	end
-	local grow = rows / KIT_SECTION_ROWS
-	aspect.AspectRatio /= grow
-	for _, card in ipairs(cards) do
-		card.Size = UDim2.new(card.Size.X.Scale, card.Size.X.Offset, card.Size.Y.Scale / grow, card.Size.Y.Offset)
 	end
 end
 
-local function fillPasses(content: Instance)
-	-- Make the extra card first, while the Green template is untouched.
-	local green = content:FindFirstChild("Gamepass [Green]")
-	local extra = green and green:Clone()
-	if extra then
-		extra.Name = "Gamepass [Extra]"
-		extra.LayoutOrder = 99
-		extra.Parent = content
-	end
-	local iconTemplate = green and green:FindFirstChild("ClippingItems") and green.ClippingItems:FindFirstChild("Icon")
+--------------------------------------------------------------------------
+-- Building the screen
+--------------------------------------------------------------------------
 
-	local used: { [Instance]: boolean } = {}
-	for _, key in ipairs(Config.GamePassOrder) do
-		local pass = Config.GamePasses[key]
-		local card = if key == "ExtendedLock" then extra else content:FindFirstChild(PASS_CARDS[key])
-		if card then
-			used[card] = true
-			local names = Kit.ChildrenNamed(card, "ItemName")
-			Kit.SetText(names[1], pass.DisplayName)
-			Kit.SetText(names[2], pass.Description)
-			for j = 3, #names do
-				Kit.Hide(names[j])
-			end
-			if names[2] then
-				names[2].TextWrapped = true
-			end
-			Kit.Hide(card:FindFirstChild("GiftBtn"))
-			local clipping = card:FindFirstChild("ClippingItems")
-			if clipping and not clipping:FindFirstChild("Icon") and iconTemplate then
-				iconTemplate:Clone().Parent = clipping -- the Red card ships without one
-			end
-			card.Visible = true -- the kit ships the Red card hidden
-			setIcon(clipping and clipping:FindFirstChild("Icon"), pass.Icon)
-			register("Pass", key, card:FindFirstChild("Buy"))
-		end
+--- Icon and highlight colour for an item.
+local function accentFor(kind: string, item: any): Color3
+	if kind == "Pass" then
+		return C.EmberBright
+	elseif item.Kind == "Cash" then
+		return C.Moss
+	elseif item.Kind == "Buff" then
+		return C.Moon
 	end
-	for _, child in ipairs(content:GetChildren()) do
-		if child:IsA("GuiObject") and not used[child] then
-			child.Visible = false
-		end
-	end
-	fitRows(content)
+	return C.Ember
 end
 
-local function fillCurrency(content: Instance)
-	local cards = {}
-	for _, child in ipairs(content:GetChildren()) do
-		if child:IsA("GuiObject") then
-			table.insert(cards, child)
-		end
+--- The short line under an item's name, or nil.
+local function highlightFor(kind: string, item: any): string?
+	if kind == "Pass" then
+		return nil
+	elseif item.Kind == "Buff" then
+		return string.format("%d minutes", item.Duration // 60)
+	elseif item.Kind == "Cash" then
+		return "+$" .. Config.FormatNumber(item.Amount)
+	elseif item.Effect == "InstantHatch" then
+		return "Your best egg"
+	elseif item.Effect == "ExtendLock" then
+		return string.format("Lock your camp NOW for %d min", Config.Plot.EmergencyLockBonus // 60)
+	elseif item.Effect == "GrantEggs" then
+		local egg = Config.Eggs[item.EggId]
+		return string.format("%d x %s", item.Count, if egg then egg.Name else "Egg")
 	end
-	-- Order by the amount printed on the kit's sample card ("+$100k" <
-	-- "+$500k" < "+$1M" ...), so the cheapest pack takes the first card.
-	local function amountOf(card: Instance): number
-		local label = card:FindFirstChild("ItemName")
-		local text = if label and label:IsA("TextLabel") then label.Text else ""
-		local number, suffix = text:match("([%d%.]+)%s*([kKmMbB]?)")
-		local value = tonumber(number) or math.huge
-		local scale = ({ k = 1e3, K = 1e3, m = 1e6, M = 1e6, b = 1e9, B = 1e9 })[suffix or ""] or 1
-		return value * scale
-	end
-	table.sort(cards, function(a, b)
-		return amountOf(a) < amountOf(b)
-	end)
-	for i, card in ipairs(cards) do
-		local key = CURRENCY[i]
-		if not key then
-			card.Visible = false
-			continue
-		end
-		local product = Config.DevProducts[key]
-		Kit.SetText(card:FindFirstChild("ItemName"), "+$" .. Config.FormatNumber(product.Amount))
-		Kit.Hide(card:FindFirstChild("GiftBtn"))
-		register("Product", key, card:FindFirstChild("Buy"))
-	end
+	return nil
 end
 
-local function fillStarterPack(content: Instance)
-	local card = content:FindFirstChild("StarterPack")
-	if not card then
-		return
+--- The Robux button for an item, with its OWNED / SOON tag in the same spot.
+local function buySlot(kind: string, key: string, props: { [string]: any }): Frame
+	local slot = UI.new("Frame", {
+		Name = "BuySlot",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(tuning.PriceButton.X, tuning.PriceButton.Y),
+	}) :: Frame
+	local button = UI.Button({
+		Name = "Buy",
+		Variant = "Moon",
+		Icon = "Robux",
+		Text = "...",
+		TextSize = tuning.PriceTextSize,
+		Size = UDim2.fromScale(1, 1),
+		OnClick = function()
+			RobuxShopController.Buy(kind, key)
+		end,
+		Parent = slot,
+	})
+	local tag = UI.Pill({
+		Name = "Tag",
+		Text = "SOON",
+		Color = C.TextDim,
+		TextSize = 16,
+		Height = math.floor(tuning.PriceButton.Y * 0.75),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Visible = false,
+		Parent = slot,
+	})
+	for name, value in pairs(props) do
+		(slot :: any)[name] = value
 	end
-	local product = Config.DevProducts.EggBundle
-	Kit.SetText(card:FindFirstChild("ItemName"), product.DisplayName .. "!")
-	Kit.Hide(card:FindFirstChild("GiftBtn"))
-	local clipping = card:FindFirstChild("ClippingItems")
-	if clipping then
-		for _, child in ipairs(clipping:GetChildren()) do
-			if child.Name == "Icon" then
-				setIcon(child, "Egg")
-				-- Each tile carries a sample caption ("+100k", "VIP", ...); the
-				-- second label on the last tile is the "OP!" sticker, kept.
-				Kit.SetText(child:FindFirstChildWhichIsA("TextLabel"), "Egg")
-			end
-		end
-	end
-	register("Product", "EggBundle", card:FindFirstChild("Buy"))
+	table.insert(entries, { kind = kind, key = key, button = button, tag = tag })
+	fetchPrice(kind, key)
+	return slot
 end
 
-local function fillDefense(content: Instance)
-	local card = content:FindFirstChild("LuckFrame")
-	if not card then
-		return
+local function iconTile(iconName: string, size: number, accent: Color3, props: { [string]: any }): Frame
+	local tile = UI.Inset({ Name = "IconTile", Size = UDim2.fromOffset(size, size) })
+	UI.Icon(iconName, math.floor(size * 0.65), {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		ImageColor3 = accent,
+		Parent = tile,
+	})
+	for name, value in pairs(props) do
+		(tile :: any)[name] = value
 	end
-	for _, label in ipairs(card:GetChildren()) do
-		if label.Name == "ItemName" and label:IsA("TextLabel") then
-			if label.Text == "Server Luck" then
-				label.Text = Config.DevProducts.EmergencyLock.DisplayName
-			elseif label.Text:find("minutes") then
-				label.Text = string.format("Lock your camp NOW for %d min", Config.Plot.EmergencyLockBonus // 60)
-			else
-				label.Visible = false -- the "1X > 2X" labels
-			end
-		end
+	return tile
+end
+
+--- A grid card: icon, name, highlight, description, buy button at the bottom.
+local function itemCard(kind: string, key: string, order: number, parent: Instance)
+	local item = itemFor(kind, key)
+	local accent = accentFor(kind, item)
+	local card = UI.Card({ Name = key, Accent = accent, LayoutOrder = order, Parent = parent })
+
+	local priceHeight = tuning.PriceButton.Y
+	local content = UI.new("Frame", {
+		Name = "Content",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, -(priceHeight + 12)),
+		Parent = card,
+	}, {
+		UI.Padding({ Top = 12, Left = 10, Right = 10 }),
+		UI.List({ HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = 4 }),
+	})
+	iconTile(item.Icon, 52, accent, { LayoutOrder = 1, Parent = content })
+	UI.Text({
+		Name = "ItemName",
+		Role = "Heading",
+		Text = item.DisplayName,
+		TextSize = 20,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Size = UDim2.new(1, 0, 0, 24),
+		LayoutOrder = 2,
+		Parent = content,
+	})
+	local highlight = highlightFor(kind, item)
+	if highlight then
+		UI.Text({
+			Name = "Highlight",
+			Role = "Heading",
+			Weight = "SemiBold",
+			Text = highlight,
+			TextSize = 16,
+			TextColor3 = accent,
+			Size = UDim2.new(1, 0, 0, 20),
+			LayoutOrder = 3,
+			Parent = content,
+		})
 	end
-	Kit.Hide(card:FindFirstChild("GiftBtn"))
-	local clipping = card:FindFirstChild("ClippingItems")
-	setIcon(clipping and clipping:FindFirstChild("Icon"), "Lock")
-	register("Product", "EmergencyLock", card:FindFirstChild("Buy"))
+	UI.Text({
+		Name = "Description",
+		Role = "Body",
+		Text = item.Description,
+		TextSize = 14,
+		TextColor3 = C.TextDim,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Size = UDim2.new(1, 0, 0, 54),
+		LayoutOrder = 4,
+		Parent = content,
+	})
+
+	buySlot(kind, key, {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -10),
+		Parent = card,
+	})
+end
+
+--- A wide one-item row: icon on the left, text in the middle, buy on the right.
+local function itemBanner(kind: string, key: string, order: number, parent: Instance)
+	local item = itemFor(kind, key)
+	local accent = accentFor(kind, item)
+	local card = UI.Card({
+		Name = key,
+		Accent = accent,
+		Size = UDim2.new(1, 0, 0, tuning.BannerHeight),
+		LayoutOrder = order,
+		Parent = parent,
+	})
+	local tileSize = 64
+	local left = 14 + tileSize + 14
+	iconTile(item.Icon, tileSize, accent, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14, 0.5, 0),
+		Parent = card,
+	})
+	local text = UI.new("Frame", {
+		Name = "Text",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, left, 0.5, 0),
+		Size = UDim2.new(1, -(left + tuning.PriceButton.X + 28), 0, 72),
+		Parent = card,
+	}, {
+		UI.List({ Padding = 2, VerticalAlignment = Enum.VerticalAlignment.Center }),
+	})
+	UI.Text({
+		Name = "ItemName",
+		Role = "Heading",
+		Text = item.DisplayName,
+		TextSize = 22,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, 0, 0, 26),
+		LayoutOrder = 1,
+		Parent = text,
+	})
+	local highlight = highlightFor(kind, item)
+	if highlight then
+		UI.Text({
+			Name = "Highlight",
+			Role = "Heading",
+			Weight = "SemiBold",
+			Text = highlight,
+			TextSize = 16,
+			TextColor3 = accent,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, 0, 0, 20),
+			LayoutOrder = 2,
+			Parent = text,
+		})
+	end
+	UI.Text({
+		Name = "Description",
+		Role = "Body",
+		Text = item.Description,
+		TextSize = 14,
+		TextColor3 = C.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Size = UDim2.new(1, 0, 0, 20),
+		LayoutOrder = 3,
+		Parent = text,
+	})
+
+	buySlot(kind, key, {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		Parent = card,
+	})
+end
+
+local function sectionHeader(title: string, iconName: string, order: number, parent: Instance)
+	local header = UI.new("Frame", {
+		Name = "Header_" .. title,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 32),
+		LayoutOrder = order,
+		Parent = parent,
+	})
+	UI.Icon(iconName, 22, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 2, 0.5, -1),
+		ImageColor3 = C.Ember,
+		Parent = header,
+	})
+	UI.Text({
+		Name = "Title",
+		Role = "Heading",
+		Text = string.upper(title),
+		TextSize = 20,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromOffset(32, 0),
+		Size = UDim2.new(1, -32, 1, -2),
+		Parent = header,
+	})
+	UI.Divider({
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Parent = header,
+	})
 end
 
 local function build()
-	local gui = Kit.Mount("Shop")
-	popup = Kit.Popup(gui)
-	popup.OnOpen = refresh
+	window = Window.new({
+		Name = "Store",
+		Title = "Store",
+		Icon = "Shop",
+		Size = tuning.Size,
+	})
+	window.OnOpen = refresh
 
-	local list = Kit.Deep(gui, "ScrollingFrame") :: ScrollingFrame
-	Kit.FitCanvas(list)
-	for _, child in ipairs(list:GetChildren()) do
-		if child.Name == "Divider" then
-			local title = child:FindFirstChild("Title")
-			if title and title.Text == "Featured" then
-				title.Text = "Boosts"
-			elseif title and title.Text == "Server Luck" then
-				title.Text = "Defense"
-			end
-		elseif child.Name == "Content" then
-			if child:FindFirstChild("EggFrame") then
-				fillFeatured(child)
-			elseif child:FindFirstChild("Gamepass [Orange]") then
-				fillPasses(child)
-			elseif child:FindFirstChild("StarterPack") then
-				fillStarterPack(child)
-			elseif child:FindFirstChild("LuckFrame") then
-				fillDefense(child)
+	-- The canvas grows with what's in it (AutomaticCanvasSize).
+	local list = UI.ScrollList({ Name = "List", Gap = 10, Parent = window.Body })
+	for i, section in ipairs(tuning.Sections) do
+		sectionHeader(section.Title, section.Icon, i * 2 - 1, list)
+		local items = UI.new("Frame", {
+			Name = "Items_" .. section.Title,
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = i * 2,
+			Parent = list,
+		})
+		if section.Style == "Banner" then
+			UI.List({ Padding = tuning.CardGap }).Parent = items
+		else
+			UI.Grid({
+				CellSize = UDim2.fromOffset(tuning.CardSize.X, tuning.CardSize.Y),
+				CellPadding = UDim2.fromOffset(tuning.CardGap, tuning.CardGap),
+				Parent = items,
+			})
+		end
+		for order, key in ipairs(section.Keys) do
+			if itemFor(section.Kind, key) == nil then
+				warn("[SAC/Store] Unknown " .. section.Kind .. " '" .. key .. "' in Config.UI.Shops.Store.Sections")
+			elseif section.Style == "Banner" then
+				itemBanner(section.Kind, key, order, items)
 			else
-				fillCurrency(child)
+				itemCard(section.Kind, key, order, items)
 			end
 		end
 	end
+	refresh()
 end
 
 --- VIP chat tag, shown on every client for any player who owns VIP.
 local function setupVipTag()
+	local prefix = string.format("<font color='#%s'>%s</font> ", tuning.VipChatColor:ToHex(), tuning.VipChatTag)
 	TextChatService.OnIncomingMessage = function(message: TextChatMessage)
 		local properties = Instance.new("TextChatMessageProperties")
 		local source = message.TextSource
 		local speaker = source and Players:GetPlayerByUserId(source.UserId)
 		if speaker and speaker:GetAttribute("Pass_Vip") then
-			properties.PrefixText = "<font color='#FFC83C'>[VIP]</font> " .. message.PrefixText
+			properties.PrefixText = prefix .. message.PrefixText
 		end
 		return properties
 	end
@@ -387,8 +450,8 @@ function RobuxShopController.Start()
 	-- Prices arrive and passes get bought while the shop may be open.
 	task.spawn(function()
 		while true do
-			task.wait(0.5)
-			if popup:IsOpen() then
+			task.wait(tuning.RefreshInterval)
+			if window:IsOpen() then
 				refresh()
 			end
 		end

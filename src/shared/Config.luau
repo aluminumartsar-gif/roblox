@@ -1953,7 +1953,70 @@ Config.UI = {
 	},
 
 	-- Store, Upgrades and Rebirth screens (RobuxShopController, UpgradeShopController, RebirthController).
+	-- Sizes are px at the reference screen height; windows shrink to fit phones.
 	Shops = {
+		Store = {
+			Size = Vector2.new(780, 480),        -- window design size
+			CardSize = Vector2.new(172, 236),    -- one item card (four fit in a row)
+			CardGap = 10,
+			BannerHeight = 96,                   -- wide one-item rows (Starter Pack, Defense)
+			PriceButton = Vector2.new(140, 40),  -- Robux buy button (or its OWNED / SOON tag)
+			PriceTextSize = 19,
+			RefreshInterval = 0.5,               -- s; prices and owned passes re-read while open
+			-- Sections, top to bottom. Kind: "Pass" (Config.GamePasses) or
+			-- "Product" (Config.DevProducts). Style: "Cards" (a grid of cards)
+			-- or "Banner" (one wide row per item).
+			Sections = {
+				{ Title = "Boosts", Icon = "Potion", Kind = "Product", Style = "Cards",
+					Keys = { "LuckPotion", "HatchBoost", "InstantHatch" } },
+				{ Title = "Game Passes", Icon = "Gamepass", Kind = "Pass", Style = "Cards",
+					Keys = Config.GamePassOrder },
+				{ Title = "Cash", Icon = "Cash", Kind = "Product", Style = "Cards",
+					Keys = { "CashSmall", "CashMedium", "CashLarge" } },
+				{ Title = "Starter Pack", Icon = "GiftBox", Kind = "Product", Style = "Banner",
+					Keys = { "EggBundle" } },
+				{ Title = "Defense", Icon = "Shield", Kind = "Product", Style = "Banner",
+					Keys = { "EmergencyLock" } },
+			},
+			-- Chat tag in front of a VIP pass owner's name, on every client.
+			VipChatTag = "[VIP]",
+			VipChatColor = Color3.fromRGB(255, 200, 60),
+		},
+		Upgrades = {
+			Size = Vector2.new(660, 470),        -- window design size
+			RowHeight = 68,
+			RowGap = 8,
+			BuyButton = Vector2.new(150, 44),
+			PunchScale = 1.25,                   -- a row's icon pops to this when a level is bought
+			PunchTime = 0.3,                     -- s
+		},
+		Rebirth = {
+			Size = Vector2.new(720, 500),        -- window design size
+			BarTime = 0.35,                      -- s; the cash bar slides to its new fill
+			ColumnHeight = 190,                  -- the lose / keep / gain columns
+			ButtonSize = Vector2.new(260, 50),
+			ConfirmSize = Vector2.new(460, 236), -- the "are you sure?" box over the screen
+			ConfirmDim = 0.3,                    -- transparency of the dimming behind it
+			ConfirmPopTime = 0.18,               -- s
+			ConfirmTitle = "Rebirth?",
+			ColumnTitles = { Lose = "You lose", Keep = "You keep", Gain = "You gain" },
+			-- "You lose" lines, one per entry of Config.Rebirth.Resets.
+			-- Cash's %s is Config.Rebirth.StartingCash.
+			Lose = {
+				Cash = { Text = "Cash (restart at $%s)", Icon = "Cash" },
+				Nests = { Text = "Eggs and cryptids", Icon = "Egg" },
+				Upgrades = { Text = "Upgrades", Icon = "Upgrade" },
+			},
+			-- "You keep" lines (see Config.Rebirth: what a rebirth doesn't reset).
+			Keep = {
+				{ Text = "Codex entries", Icon = "Book" },
+				{ Text = "Game passes", Icon = "Gamepass" },
+				{ Text = "Active potions", Icon = "Potion" },
+				{ Text = "Rebirth bonuses", Icon = "Rebirth" },
+			},
+			-- "You gain" line for the egg the next rebirth unlocks (%s = egg name).
+			UnlockText = "Unlocks the %s",
+		},
 	},
 
 	-- Codex screen, field camera viewfinder, new-entry polaroid (CodexController).

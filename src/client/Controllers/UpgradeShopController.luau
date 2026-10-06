@@ -3,10 +3,18 @@
 	UpgradeShopController
 	StarterPlayerScripts/Client/Controllers/UpgradeShopController
 
-	The Upgrade Shop, on the STUD kit's Item Upgrades popup, opened from the
-	Upgrades cabin counter. One row per track in Config.UpgradeOrder:
-	icon + level, current value -> next value, and the price (or MAX).
-	The server re-checks every purchase.
+	The Upgrade Shop: a "campfire field kit" window (Components/Window)
+	opened by the "Browse" prompt on the Upgrades cabin counter. Walking
+	away from the counter closes it.
+
+	One row per track in Config.UpgradeOrder: the upgrade's icon, its name
+	and level ("Lv 3"), current value -> next value (or MAX), and a green
+	cash button with the price — greyed out while you can't afford it, MAX
+	when the track is full. The icon pops when a level is bought.
+
+	Buying sends only the upgrade id (BuyUpgrade); the server re-checks
+	everything (real id, not maxed, at the counter, can afford) and its
+	answer is shown as a toast.
 ]]
 
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -15,23 +23,30 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
-local Kit = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Kit"))
+local Components = script.Parent.Parent:WaitForChild("Components")
+local Theme = require(Components:WaitForChild("Theme"))
+local UI = require(Components:WaitForChild("UI"))
+local Window = require(Components:WaitForChild("Window"))
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
 local UpgradeShopController = {}
 
 local localPlayer = Players.LocalPlayer
+local C = Theme.Colors
+local tuning = Config.UI.Shops.Upgrades
 
 type Row = {
 	upgradeId: string,
-	level: TextLabel?,
-	current: TextLabel?,
-	nextValue: TextLabel?,
-	buy: GuiButton,
+	level: TextLabel,
+	current: TextLabel,
+	nextValue: TextLabel,
+	buy: TextButton,
+	pop: UIScale,
+	shownLevel: number?,
 }
 local rows: { Row } = {}
-local popup: Kit.Popup
+local window: Window.Window
 local busy = false
 
 local function formatValue(upgradeId: string, value: number): string
@@ -52,17 +67,26 @@ local function refresh()
 	for _, row in ipairs(rows) do
 		local level = tonumber(levels[row.upgradeId]) or 1
 		local cost = Config.GetUpgradeNextCost(row.upgradeId, level)
-		Kit.SetText(row.level, "Lv" .. level)
-		Kit.SetText(row.current, formatValue(row.upgradeId, Config.GetUpgradeValue(row.upgradeId, level)))
+		row.level.Text = "Lv " .. level
+		row.current.Text = formatValue(row.upgradeId, Config.GetUpgradeValue(row.upgradeId, level))
 		if cost then
-			Kit.SetText(row.nextValue, formatValue(row.upgradeId, Config.GetUpgradeValue(row.upgradeId, level + 1)))
-			Kit.SetButtonText(row.buy, "$" .. Config.FormatNumber(cost))
-			Kit.SetButtonEnabled(row.buy, cash >= cost)
+			row.nextValue.Text = formatValue(row.upgradeId, Config.GetUpgradeValue(row.upgradeId, level + 1))
+			row.nextValue.TextColor3 = C.Moss
+			UI.SetButtonText(row.buy, "$" .. Config.FormatNumber(cost))
+			UI.SetButtonEnabled(row.buy, cash >= cost)
 		else
-			Kit.SetText(row.nextValue, "MAX")
-			Kit.SetButtonText(row.buy, "MAX")
-			Kit.SetButtonEnabled(row.buy, false)
+			row.nextValue.Text = "MAX"
+			row.nextValue.TextColor3 = C.EmberBright
+			UI.SetButtonText(row.buy, "MAX")
+			UI.SetButtonEnabled(row.buy, false)
 		end
+		-- A level went up while the shop is showing: pop the icon.
+		local shown = row.shownLevel
+		if shown and level > shown and window:IsOpen() then
+			row.pop.Scale = tuning.PunchScale
+			UI.Tween(row.pop, tuning.PunchTime, { Scale = 1 }, Enum.EasingStyle.Back)
+		end
+		row.shownLevel = level
 	end
 end
 
@@ -83,71 +107,130 @@ local function buy(upgradeId: string)
 	end
 end
 
-local function build()
-	local gui = Kit.Mount("ItemUpgradesPopup")
-	popup = Kit.Popup(gui)
-	popup.OnOpen = refresh
+local function buildRow(upgradeId: string, order: number, parent: Instance)
+	local upgrade = Config.Upgrades[upgradeId]
+	local height = tuning.RowHeight
+	local card = UI.Card({
+		Name = "Upgrade_" .. upgradeId,
+		Size = UDim2.new(1, 0, 0, height),
+		LayoutOrder = order,
+		Parent = parent,
+	})
 
-	local navBar = Kit.Deep(gui.Container, "NavBar")
-	Kit.SetText(navBar:FindFirstChild("Title"), "UPGRADES")
-	local navIcon = navBar:FindFirstChild("Icon")
-	if navIcon and navIcon:IsA("ImageLabel") then
-		navIcon.Image = Config.Icons.Upgrade
-	end
+	-- Icon tile (anchored at its centre so the pop grows evenly).
+	local tileSize = height - 18
+	local tile = UI.Inset({
+		Name = "IconTile",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, 10 + math.floor(tileSize / 2), 0.5, 0),
+		Size = UDim2.fromOffset(tileSize, tileSize),
+		Parent = card,
+	})
+	local pop = UI.new("UIScale", { Name = "Pop", Parent = tile }) :: UIScale
+	UI.Icon(upgrade.Icon, math.floor(tileSize * 0.64), {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		ImageColor3 = C.EmberBright,
+		Parent = tile,
+	})
 
-	local list = Kit.Deep(gui.Container, "ScrollingFrame")
-	Kit.FitCanvas(list)
-	local template: Instance? = nil
-	for _, item in ipairs(list:GetChildren()) do
-		if item.Name == "Item" then
-			template = template or item:Clone()
-			item:Destroy()
-		end
-	end
-	assert(template, "Kit Item Upgrades popup has no rows")
+	-- Name and level.
+	local left = 10 + tileSize + 12
+	UI.Text({
+		Name = "UpgradeName",
+		Role = "Heading",
+		Text = upgrade.DisplayName,
+		TextSize = 21,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, left, 0.5, -24),
+		Size = UDim2.fromOffset(170, 26),
+		Parent = card,
+	})
+	local level = UI.Text({
+		Name = "Level",
+		Role = "Heading",
+		Weight = "SemiBold",
+		Text = "Lv 1",
+		TextSize = 16,
+		TextColor3 = C.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.new(0, left, 0.5, 2),
+		Size = UDim2.fromOffset(170, 20),
+		Parent = card,
+	})
 
-	for order, upgradeId in ipairs(Config.UpgradeOrder) do
-		local upgrade = Config.Upgrades[upgradeId]
-		local row = (template :: Instance):Clone() :: Frame
-		row.Name = "Upgrade_" .. upgradeId
-		row.LayoutOrder = order
-
-		local background = row:FindFirstChild("Background") :: Instance
-		Kit.SetText(background:FindFirstChildWhichIsA("TextLabel"), upgrade.DisplayName)
-
-		-- Inside the background: the icon tile (has an Icon) and the
-		-- "next value" box (doesn't). The "current value" box sits outside.
-		local tile, nextBox
-		for _, child in ipairs(background:GetChildren()) do
-			if child.Name == "Item" then
-				if child:FindFirstChild("Icon") then
-					tile = child
-				else
-					nextBox = child
-				end
-			end
-		end
-		local currentBox = row:FindFirstChild("Item")
-
-		local tileIcon = tile and tile:FindFirstChild("Icon")
-		if tileIcon and tileIcon:IsA("ImageLabel") and upgrade.Icon then
-			tileIcon.Image = Config.Icons[upgrade.Icon]
-		end
-
-		Kit.Hide(background:FindFirstChild("BuyRobux"))
-		local buyButton = background:FindFirstChild("BuyCash") :: GuiButton
-		buyButton.Activated:Connect(function()
-			buy(upgradeId)
-		end)
-
-		row.Parent = list
-		table.insert(rows, {
-			upgradeId = upgradeId,
-			level = tile and tile:FindFirstChildWhichIsA("TextLabel"),
-			current = currentBox and currentBox:FindFirstChildWhichIsA("TextLabel"),
-			nextValue = nextBox and nextBox:FindFirstChildWhichIsA("TextLabel"),
-			buy = buyButton,
+	-- Current value -> next value.
+	local buySize = tuning.BuyButton
+	local values = UI.new("Frame", {
+		Name = "Values",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, left + 180, 0.5, 0),
+		Size = UDim2.new(1, -(left + 180 + buySize.X + 24), 0, 30),
+		Parent = card,
+	}, {
+		UI.List({
+			FillDirection = Enum.FillDirection.Horizontal,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			Padding = 6,
+		}),
+	})
+	local function valueLabel(name: string, order: number, color: Color3): TextLabel
+		return UI.Text({
+			Name = name,
+			Role = "Heading",
+			Text = "",
+			TextSize = 20,
+			TextColor3 = color,
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromScale(0, 1),
+			LayoutOrder = order,
+			Parent = values,
 		})
+	end
+	local current = valueLabel("Current", 1, C.Text)
+	UI.Icon("ChevronRight", 18, { LayoutOrder = 2, ImageColor3 = C.TextDim, Parent = values })
+	local nextValue = valueLabel("Next", 3, C.Moss)
+
+	-- Buy button. Greyed out is only a look: a tap still asks the server,
+	-- which answers with the reason (not enough cash, already maxed).
+	local button = UI.Button({
+		Name = "Buy",
+		Variant = "Cash",
+		Text = "$0",
+		TextSize = 20,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.fromOffset(buySize.X, buySize.Y),
+		OnClick = function()
+			buy(upgradeId)
+		end,
+		Parent = card,
+	})
+
+	table.insert(rows, {
+		upgradeId = upgradeId,
+		level = level,
+		current = current,
+		nextValue = nextValue,
+		buy = button,
+		pop = pop,
+		shownLevel = nil,
+	})
+end
+
+local function build()
+	window = Window.new({
+		Name = "Upgrades",
+		Title = "Upgrades",
+		Icon = "Upgrade",
+		Size = tuning.Size,
+	})
+	window.OnOpen = refresh
+
+	local list = UI.ScrollList({ Name = "List", Gap = tuning.RowGap, Parent = window.Body })
+	for order, upgradeId in ipairs(Config.UpgradeOrder) do
+		buildRow(upgradeId, order, list)
 	end
 end
 
@@ -160,12 +243,12 @@ function UpgradeShopController.Start()
 		end
 		local counter = prompt.Parent
 		if counter and counter:IsA("BasePart") then
-			popup:Open(counter)
+			window:Open(counter)
 		end
 	end)
 
 	ProfileController.Changed:Connect(function()
-		if popup:IsOpen() then
+		if window:IsOpen() then
 			refresh()
 		end
 	end)
