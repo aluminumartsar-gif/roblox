@@ -361,7 +361,7 @@ local function buildWheel(area: Frame): GuiObject
 		local icon = UI.Icon("Star", math.floor(radius * 0.24), {
 			Name = "Icon",
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 0, 0, math.floor(radius * 0.26)),
+			Position = UDim2.new(0.5, 0, 0, math.floor(radius * 0.18)),
 			ImageColor3 = textColor,
 			Visible = false,
 			ZIndex = count + 4,
@@ -377,8 +377,10 @@ local function buildWheel(area: Frame): GuiObject
 			TextWrapped = true,
 			TextColor3 = textColor,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 0, 0, math.floor(radius * 0.5)),
-			Size = UDim2.fromOffset(math.floor(radius * 0.46), math.floor(radius * 0.22)),
+			-- Further out, where the wedge is wider: room for two lines at a
+			-- size that stays readable on a phone.
+			Position = UDim2.new(0.5, 0, 0, math.floor(radius * 0.42)),
+			Size = UDim2.fromOffset(math.floor(radius * 0.52), math.floor(radius * 0.30)),
 			ZIndex = count + 4,
 			Parent = holder,
 		})
