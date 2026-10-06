@@ -2054,7 +2054,6 @@ Config.UI = {
 		                                       -- (low enough to clear the page banner on a phone)
 		PolaroidInTime = 0.55,                 -- s, slide in (out: SlideOutTime)
 		PageBannerSize = Vector2.new(560, 56), -- "<Rarity> page complete!" banner
-		PageBannerTop = 60,                    -- px from the top of the screen
 		PageBannerInTime = 0.45,               -- s
 		PageBannerDelay = 0.6,                 -- s after its polaroid starts
 		SlideOutTime = 0.35,                   -- s

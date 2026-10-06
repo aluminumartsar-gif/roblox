@@ -1090,9 +1090,12 @@ local function showPageBanner(rarity: string)
 		}),
 	})
 	banner.Parent = parent
-	UI.Scale(banner)
+	local bannerScale = UI.Scale(banner)
+	-- Top centre like the other banners: under the top bar and Base/Eggs,
+	-- and under the camp panel on narrow screens.
+	local top = HudLayout.TopCentreTop(parent, bannerScale.Scale, size.X * bannerScale.Scale)
 
-	UI.Tween(banner, tuning.PageBannerInTime, { Position = UDim2.new(0.5, 0, 0, tuning.PageBannerTop) },
+	UI.Tween(banner, tuning.PageBannerInTime, { Position = UDim2.new(0.5, 0, 0, top) },
 		Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	task.delay(codexConfig.PageBannerTime, function()
 		local out = UI.Tween(banner, tuning.SlideOutTime, { Position = hidden }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
