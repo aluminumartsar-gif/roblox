@@ -393,6 +393,7 @@ local function build()
 		Title = "Store",
 		Icon = "Shop",
 		Size = tuning.Size,
+		FlexHeight = true, -- the list scrolls: on a phone keep the text size, shorten the window
 	})
 	window.OnOpen = refresh
 

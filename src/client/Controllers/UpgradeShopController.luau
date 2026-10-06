@@ -225,6 +225,7 @@ local function build()
 		Title = "Upgrades",
 		Icon = "Upgrade",
 		Size = tuning.Size,
+		FlexHeight = true, -- the list scrolls: on a phone keep the text size, shorten the window
 	})
 	window.OnOpen = refresh
 
