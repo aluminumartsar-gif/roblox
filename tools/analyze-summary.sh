@@ -6,7 +6,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 bash tools/analyze.sh "$@" 2>&1 \
-  | grep -E '^[cC]:' \
+  | grep -E '^([a-zA-Z]:|/)' \
   | tr '\\' '/' \
   | sed -E 's|^.*/src/|src/|; s| \[game[^]]*\]||' \
   | sort -u

@@ -25,3 +25,8 @@ sourcemap.json
 
 # Smoke harness cache (Lune binary, Roblox API dump, run output)
 /tools/.lune/
+
+# Preview renderer caches and output (fonts, generated fixtures, renders)
+/tools/preview/.font-cache/
+/tools/preview/out/
+/tools/preview/fixtures/*.json
