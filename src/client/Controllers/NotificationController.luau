@@ -267,13 +267,35 @@ local function placeStack()
 			lowest = camp
 		end
 	end
+	local gui = frame:FindFirstAncestorWhichIsA("LayerCollector")
 	if lowest then
-		local gui = frame:FindFirstAncestorWhichIsA("LayerCollector")
 		local guiTop = if gui and gui:IsA("ScreenGui") then gui.AbsolutePosition.Y else 0
 		local wanted = lowest + LOOK.BannerGap - guiTop
 		frame.Position = UDim2.new(base.X.Scale, base.X.Offset, base.Y.Scale, math.max(base.Y.Offset, wanted))
 	else
 		frame.Position = base
+	end
+
+	-- Never run down over the HUD's cash and buff timers (or off the
+	-- screen): drop the oldest toasts until the newest ones fit.
+	if gui and gui:IsA("ScreenGui") then
+		local limit = gui.AbsoluteSize.Y - HudLayout.BottomReserve() - LOOK.BannerGap
+		local toasts: { Frame } = {}
+		for _, child in ipairs(frame:GetChildren()) do
+			if child:IsA("Frame") and child.Name == "Toast" then
+				table.insert(toasts, child)
+			end
+		end
+		table.sort(toasts, function(a, b)
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+		local bottom = frame.Position.Y.Offset + frame.AbsoluteSize.Y
+		local gap = if list then list.Padding.Offset * (if scale then scale.Scale else 1) else 0
+		while #toasts > 1 and bottom > limit do
+			local oldest = table.remove(toasts, 1) :: Frame
+			bottom -= oldest.AbsoluteSize.Y + gap
+			oldest:Destroy()
+		end
 	end
 end
 

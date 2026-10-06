@@ -48,6 +48,7 @@ local Components = script.Parent.Parent:WaitForChild("Components")
 local Theme = require(Components:WaitForChild("Theme"))
 local UI = require(Components:WaitForChild("UI"))
 local Icon = require(Components:WaitForChild("Icon"))
+local HudLayout = require(Components:WaitForChild("HudLayout"))
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 local RobuxShopController = require(script.Parent:WaitForChild("RobuxShopController"))
@@ -188,6 +189,12 @@ local function chip(parent: Instance, name: string, order: number, iconName: str
 		end
 	end
 	return pill
+end
+
+--- The price strip already shows the Robux glyph, so drop PriceText's own
+--- "R$" ("R$49" -> "49"; "OWNED" / "SOON" unchanged).
+local function stripRobux(text: string): string
+	return (string.gsub(text, "^R%$%s*", ""))
 end
 
 --- A quick-buy offer: a HUD tile with the item's icon and name, and a
@@ -451,6 +458,17 @@ function HudController.Start()
 	}, {
 		UI.List({ HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = tuning.ChipGap }),
 	})
+	-- Tell the middle of the screen (toasts, the tutorial card, the camera
+	-- readout) how far up from the bottom edge this cluster reaches.
+	local function publishBottom()
+		local reach = gui.AbsolutePosition.Y + gui.AbsoluteSize.Y - bottom.AbsolutePosition.Y
+		HudLayout.SetBottomReserve(math.ceil(reach))
+	end
+	bottom:GetPropertyChangedSignal("AbsolutePosition"):Connect(publishBottom)
+	bottom:GetPropertyChangedSignal("AbsoluteSize"):Connect(publishBottom)
+	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(publishBottom)
+	task.defer(publishBottom)
+
 	local extras = UI.new("Frame", {
 		Name = "Extras",
 		Size = UDim2.fromOffset(0, tuning.ChipHeight),
@@ -614,8 +632,8 @@ function HudController.Start()
 		end
 		refreshExtras()
 		UI.SetBadge(rebirthTile, RebirthController.CanRebirth())
-		potionPrice.Text = RobuxShopController.PriceText("Product", "LuckPotion")
-		bundlePrice.Text = RobuxShopController.PriceText("Product", "EggBundle")
+		potionPrice.Text = stripRobux(RobuxShopController.PriceText("Product", "LuckPotion"))
+		bundlePrice.Text = stripRobux(RobuxShopController.PriceText("Product", "EggBundle"))
 	end
 
 	ProfileController.Changed:Connect(function(snapshot)

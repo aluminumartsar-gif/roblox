@@ -26,10 +26,16 @@
 	      TopCentreBase, or lower when the box must clear the camp panel.
 	      `origin` is any GuiBase2d whose AbsolutePosition is the gui's
 	      (0, 0) (the ScreenGui itself, or a full-screen frame in it).
+	  HudLayout.SetBottomReserve(px?) / HudLayout.BottomReserve() -> number
+	      HudController: how far up from the bottom edge of the screen its
+	      bottom-centre cluster (buff chips, cash, hotbar) reaches, in px.
+	      Things in the middle of the screen (toasts, the tutorial card, the
+	      camera viewfinder's readout) stay above it. Measured from the
+	      bottom, so it means the same in every ScreenGui.
 	  HudLayout.Changed
-	      Fires when the camp bounds change. NotificationController relays
-	      it as ReservationsChanged, so everything that already re-places on
-	      that signal follows the camp panel too.
+	      Fires when the camp bounds or the bottom reserve change.
+	      NotificationController relays it as ReservationsChanged, so
+	      everything that already re-places on that signal follows too.
 
 	Tunables: Config.UI.Layout (TravelTop, TravelHeight, TopGap, EdgeMargin).
 ]]
@@ -50,6 +56,7 @@ HudLayout.Changed = Signal.new()
 
 local campRight: number? = nil
 local campBottom: number? = nil
+local bottomReserve = 0
 
 function HudLayout.SetCampBounds(right: number?, bottom: number?)
 	if right == campRight and bottom == campBottom then
@@ -58,6 +65,19 @@ function HudLayout.SetCampBounds(right: number?, bottom: number?)
 	campRight = right
 	campBottom = bottom
 	HudLayout.Changed:Fire()
+end
+
+function HudLayout.SetBottomReserve(px: number?)
+	local value = math.max(0, px or 0)
+	if value == bottomReserve then
+		return
+	end
+	bottomReserve = value
+	HudLayout.Changed:Fire()
+end
+
+function HudLayout.BottomReserve(): number
+	return bottomReserve
 end
 
 function HudLayout.CampClearance(widthPx: number, scale: number): number?

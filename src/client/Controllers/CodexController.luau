@@ -66,6 +66,7 @@ local ItemVisuals = require(Shared:WaitForChild("ItemVisuals"))
 local Components = script.Parent.Parent:WaitForChild("Components")
 local Theme = require(Components:WaitForChild("Theme"))
 local UI = require(Components:WaitForChild("UI"))
+local HudLayout = require(Components:WaitForChild("HudLayout"))
 local Window = require(Components:WaitForChild("Window"))
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
@@ -1620,7 +1621,8 @@ local function buildViewfinder()
 	})
 	outline(stamp, 1.5)
 
-	-- What you're aiming at, just under the reticle.
+	-- What you're aiming at, just under the reticle (or just above it when
+	-- the HUD's cash and buff timers would cover it, on short screens).
 	local info = UI.new("Frame", {
 		Name = "Target",
 		BackgroundTransparency = 1,
@@ -1629,7 +1631,26 @@ local function buildViewfinder()
 		Size = UDim2.fromOffset(460, 84),
 		Parent = screen,
 	}) :: Frame
-	UI.Scale(info)
+	local infoScale = UI.Scale(info)
+	local function placeInfo()
+		local camera = workspace.CurrentCamera
+		if not camera then
+			return
+		end
+		local height = camera.ViewportSize.Y
+		local infoBottom = height / 2 + vf.InfoOffset + info.Size.Y.Offset * infoScale.Scale
+		local limit = height - HudLayout.BottomReserve() - vf.InfoOffset * infoScale.Scale
+		if infoBottom > limit then
+			info.AnchorPoint = Vector2.new(0.5, 1)
+			info.Position = UDim2.new(0.5, 0, 0.5, -vf.InfoOffset)
+		else
+			info.AnchorPoint = Vector2.new(0.5, 0)
+			info.Position = UDim2.new(0.5, 0, 0.5, vf.InfoOffset)
+		end
+	end
+	HudLayout.Changed:Connect(placeInfo)
+	infoScale:GetPropertyChangedSignal("Scale"):Connect(placeInfo)
+	placeInfo()
 	local targetName = UI.Text({
 		Name = "TargetName",
 		Role = "Heading",

@@ -1943,8 +1943,8 @@ Config.UI = {
 		TravelVariant = "Secondary",
 		-- Quick-buy offers (right middle): a tile with a Robux price strip
 		OfferSize = 64,              -- tile width (and the height above the price strip)
-		OfferPriceHeight = 22,
-		OfferPriceTextSize = 13,
+		OfferPriceHeight = 24,
+		OfferPriceTextSize = 15,
 		-- Camp panel (top left; height is Layout.CampHeight)
 		CampTextSize = 16,
 		CampIconSize = 20,

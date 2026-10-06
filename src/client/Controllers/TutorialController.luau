@@ -880,7 +880,10 @@ function TutorialController.Run()
 
 		local camera = Workspace.CurrentCamera
 		if camera and naturalHeight > 0 then
-			local available = camera.ViewportSize.Y - top - look.ScreenMargin * scale
+			-- Action steps (no button) stay above the HUD's cash and buff
+			-- timers; cards with a button may use the whole screen height.
+			local floor = if panel.button.Visible then 0 else HudLayout.BottomReserve()
+			local available = camera.ViewportSize.Y - floor - top - look.ScreenMargin * scale
 			local wanted = math.clamp(available / naturalHeight, look.MinFit, 1)
 			if math.abs(wanted - panel.fit.Scale) > FIT_STEP then
 				panel.fit.Scale = wanted

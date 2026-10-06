@@ -584,7 +584,8 @@ function UI.SetButtonIcon(button: Instance?, iconName: string?)
 end
 
 --- Square HUD tile: an icon with a caption under it.
---- props: Icon, Label, Size (px, default 60), OnClick, plus any property.
+--- props: Icon, Label, Size (px, default 60), CaptionSize (largest caption
+--- text, default about a quarter of Size), OnClick, plus any property.
 function UI.IconButton(props: { [string]: any }): TextButton
 	local p = props
 	local size = p.Size or 60
@@ -607,18 +608,24 @@ function UI.IconButton(props: { [string]: any }): TextButton
 		Position = UDim2.new(0.5, 0, 0, math.floor(size * 0.12)),
 		Parent = tile,
 	})
+	-- Caption: as big as fits (up to CaptionSize), so a long word like
+	-- SETTINGS shrinks a little instead of spilling out of the tile, and
+	-- short ones stay readable on a phone.
+	local captionSize = p.CaptionSize or math.max(14, math.floor(size * 0.26))
 	local caption = UI.Text({
 		Name = "Caption",
 		Role = "Heading",
 		Weight = "Bold",
 		Text = string.upper(p.Label or ""),
-		TextSize = math.max(12, math.floor(size * 0.22)),
+		TextSize = captionSize,
+		TextScaled = true,
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -3),
-		Size = UDim2.new(1, -4, 0, math.floor(size * 0.24)),
+		Size = UDim2.new(1, -4, 0, math.floor(captionSize * 1.1)),
 		TextColor3 = C.TextDim,
 		Parent = tile,
 	})
+	UI.new("UITextSizeConstraint", { MaxTextSize = captionSize, MinTextSize = 8, Parent = caption })
 
 	hookPress(tile, scale, function(hovering)
 		edge.Color = if hovering then C.Ember else C.Edge
@@ -626,7 +633,7 @@ function UI.IconButton(props: { [string]: any }): TextButton
 		caption.TextColor3 = if hovering then C.Text else C.TextDim
 	end)
 
-	applyProps(tile, p, { Icon = true, Label = true, Size = true, OnClick = true })
+	applyProps(tile, p, { Icon = true, Label = true, Size = true, OnClick = true, CaptionSize = true })
 	if p.OnClick then
 		tile.Activated:Connect(p.OnClick)
 	end
