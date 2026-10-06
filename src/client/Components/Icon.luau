@@ -8,6 +8,10 @@
 	  Icon.new("Cash", 28, parent)                         -- 28x28
 	  Icon.new("Lock", 22, button, { Position = ... })     -- extra properties
 
+	Every icon is a white glyph tinted by ImageColor3. The default tint is
+	the theme's main text colour (Config.UI.Theme.Colors.Text); pass
+	{ ImageColor3 = ... } to colour one differently.
+
 	Unknown names produce an empty (transparent) label and a warning, so a
 	typo never breaks a screen.
 ]]
@@ -27,6 +31,7 @@ function Icon.new(name: string, size: number, parent: Instance?, props: { [strin
 	label.Name = "Icon"
 	label.BackgroundTransparency = 1
 	label.Image = image or ""
+	label.ImageColor3 = Config.UI.Theme.Colors.Text
 	label.ScaleType = Enum.ScaleType.Fit
 	label.Size = UDim2.fromOffset(size, size)
 	if props then
@@ -36,6 +41,15 @@ function Icon.new(name: string, size: number, parent: Instance?, props: { [strin
 	end
 	label.Parent = parent
 	return label
+end
+
+--- Points an existing icon label at a different named icon.
+function Icon.set(label: ImageLabel, name: string)
+	local image = Config.Icons[name]
+	if not image then
+		warn("[SAC/Icon] Unknown icon '" .. tostring(name) .. "'")
+	end
+	label.Image = image or ""
 end
 
 --- Puts an icon at the left edge of a text element (button, label) and

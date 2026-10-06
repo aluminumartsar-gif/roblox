@@ -1700,57 +1700,214 @@ Config.Atmosphere = {
 -- =========================================================================
 
 Config.Icons = {
-	-- Uploaded for this game (Step 6)
-	Robux = "rbxassetid://111461010960091",
-	Home = "rbxassetid://123278209206320",
-	Lock = "rbxassetid://79542927644203",
-	Upgrade = "rbxassetid://101319211084955",
-	Gamepass = "rbxassetid://97711607224924",
-	Egg = "rbxassetid://96459853179308",
-	Fire = "rbxassetid://79862891039155",
-	BaseballBat = "rbxassetid://113980187844791",
-	Shield = "rbxassetid://115529544163308",
-	Grab = "rbxassetid://97364533673870",
-	Warning = "rbxassetid://112550258471968",
-	Bell = "rbxassetid://78916320743820",
-	Camera = "rbxassetid://89819558395404",
-	Crown = "rbxassetid://129810016065953",
-	Magnet = "rbxassetid://95284966114108",
-	Potion = "rbxassetid://121906053120526",
-	Bonfire = "rbxassetid://93731199519470",
-	Hourglass = "rbxassetid://122764375935062",
-	Speed = "rbxassetid://135674501611736",
-	CoinStack = "rbxassetid://128861081204402",
-	GiftBox = "rbxassetid://77760913775552",
-	LightningBolt = "rbxassetid://98253934440745",
-	Trophy = "rbxassetid://108181704297182",
-	Eye = "rbxassetid://122929953240700",
-	Star = "rbxassetid://122945360107517",
-	CheckMark = "rbxassetid://94964356674369",
-	Safe = "rbxassetid://138634362320979",
-	Plus = "rbxassetid://119968095935919",
-	-- Already on the owner's account from an earlier project
-	Cash = "rbxassetid://135269735731878",
-	Gem = "rbxassetid://126829028564083",
-	Luck = "rbxassetid://109347213399784",
-	Rebirth = "rbxassetid://104402029372536",
-	Shop = "rbxassetid://139879870675401",
-	Settings = "rbxassetid://130100236267631",
-	Book = "rbxassetid://111630944127601",
-	Close = "rbxassetid://106243116040944",
-	Backpack = "rbxassetid://82861236907905",
+	-- Every icon is the pack's single-colour "Flat White" glyph, uploaded
+	-- for the UI revamp. Code tints them (ImageColor3, default
+	-- Config.UI.Theme.Colors.Text), so one image serves every colour and
+	-- the whole game reads as one icon family.
+	-- Currency and shop
+	Robux = "rbxassetid://105833566519916",
+	Cash = "rbxassetid://74487654589473",
+	CoinStack = "rbxassetid://89488322828081",
+	Wallet = "rbxassetid://122084609624833",
+	PiggyBank = "rbxassetid://94730188442712",
+	Gem = "rbxassetid://132602711563683",
+	Shop = "rbxassetid://121919807993307",
+	Gamepass = "rbxassetid://88821044083569",
+	Ticket = "rbxassetid://98280081311906",
+	-- Things in the world
+	Egg = "rbxassetid://104111505743123",
+	Fire = "rbxassetid://96165261773109",
+	Bonfire = "rbxassetid://117119819651307",
+	Lantern = "rbxassetid://115693142556570",
+	Torch = "rbxassetid://99444790707610",
+	BaseballBat = "rbxassetid://76437298919842",
+	Camera = "rbxassetid://91633563261882",
+	Potion = "rbxassetid://95585247404287",
+	Safe = "rbxassetid://84773992852717",
+	Chest = "rbxassetid://88417341667361",
+	Key = "rbxassetid://101601685000133",
+	Bone = "rbxassetid://94171236666182",
+	Tree = "rbxassetid://89306497624502",
+	Moon = "rbxassetid://125640024053910",
+	-- Spooky
+	Skull = "rbxassetid://127706985638475",
+	Ghost = "rbxassetid://78605697616893",
+	Tombstone = "rbxassetid://94807296092056",
+	Web = "rbxassetid://135361596687128",
+	Paw = "rbxassetid://104423411021181",
+	Eye = "rbxassetid://114757828937691",
+	-- Actions and status
+	Home = "rbxassetid://121464750150043",
+	Lock = "rbxassetid://117625849792120",
+	Shield = "rbxassetid://102853307149668",
+	Grab = "rbxassetid://103486150645704",
+	Hand = "rbxassetid://132575405960609",
+	Run = "rbxassetid://78020291085130",
+	Speed = "rbxassetid://116309529406677",
+	Upgrade = "rbxassetid://74202754920428",
+	Rebirth = "rbxassetid://75566655495691",
+	Luck = "rbxassetid://122891234817249",
+	LightningBolt = "rbxassetid://93316172124003",
+	Magnet = "rbxassetid://105353555481457",
+	Hourglass = "rbxassetid://104116147530627",
+	Clock = "rbxassetid://122990770061099",
+	Target = "rbxassetid://140192867211928",
+	Spectate = "rbxassetid://110919155709371",
+	LocationPin = "rbxassetid://121409723828128",
+	Compass = "rbxassetid://108710563709141",
+	Map = "rbxassetid://101034592347157",
+	-- Screens
+	Book = "rbxassetid://130522880941475",
+	Scroll = "rbxassetid://93121157366520",
+	Clipboard = "rbxassetid://73298629620657",
+	MagnifyingGlass = "rbxassetid://127870921105625",
+	GiftBox = "rbxassetid://81839231619581",
+	DailyRewards = "rbxassetid://139213378452996",
+	Calendar = "rbxassetid://84817061220085",
+	Spinner = "rbxassetid://88479908591871",
+	AddFriend = "rbxassetid://76971070541516",
+	Friends = "rbxassetid://113676153853915",
+	Settings = "rbxassetid://110025327203303",
+	Backpack = "rbxassetid://98201508358244",
+	Trophy = "rbxassetid://124870733195816",
+	Crown = "rbxassetid://85838272268758",
+	Star = "rbxassetid://138465762155657",
+	Sparkle = "rbxassetid://123682485307732",
+	Stats = "rbxassetid://71516755624708",
+	-- Interface
+	Close = "rbxassetid://120990793869637",
+	Plus = "rbxassetid://75417703403662",
+	CheckMark = "rbxassetid://135952755059560",
+	Warning = "rbxassetid://133141074647003",
+	Exclamation = "rbxassetid://102488163524850",
+	Info = "rbxassetid://110873944160022",
+	QuestionMark = "rbxassetid://129304276201508",
+	Bell = "rbxassetid://130245520903844",
+	ChevronLeft = "rbxassetid://96329382662670",
+	ChevronRight = "rbxassetid://78452096323597",
+	Sound = "rbxassetid://101569494313519",
+	SoundOff = "rbxassetid://75579401097516",
+	Music = "rbxassetid://86573771345782",
+	MusicOff = "rbxassetid://85949669918652",
 }
 
 Config.UI = {
 	NotificationDuration = 4,
 	MaxNotifications = 4,
 	BannerDuration = 8,
-	-- Our pixel-sized UI (plot panel, buff chips, toasts, steal banners)
-	-- scales with screen height so it fits phones like the kit does:
+	-- Pixel-sized UI scales with screen height so it fits phones:
 	-- scale = screen height / ReferenceHeight, kept between Min and Max.
+	-- Windows also shrink further if they still wouldn't fit.
 	ScreenScale = { ReferenceHeight = 650, Min = 0.7, Max = 1.2 },
 	-- Cash abbreviation suffixes.
 	NumberSuffixes = { "", "K", "M", "B", "T", "Qa", "Qi" },
+
+	-- THEME: "campfire field kit". Charred-wood panels, bone text, ember
+	-- orange for the main action, cold moonlight blue for info, blood red
+	-- for danger, moss green for cash. Every screen reads its colours and
+	-- fonts from here (through Components/Theme), so restyling the whole
+	-- game is a matter of editing this table.
+	Theme = {
+		Colors = {
+			Backdrop = Color3.fromRGB(5, 5, 8),         -- dims the world behind a window
+			Panel = Color3.fromRGB(21, 18, 16),         -- window body
+			PanelTop = Color3.fromRGB(36, 30, 25),      -- top of the window gradient
+			Raised = Color3.fromRGB(39, 33, 28),        -- cards and rows
+			RaisedTop = Color3.fromRGB(52, 44, 36),
+			Inset = Color3.fromRGB(12, 10, 9),          -- sunken wells, bar tracks, inputs
+			Edge = Color3.fromRGB(84, 67, 50),          -- weathered-wood borders
+			EdgeBright = Color3.fromRGB(150, 120, 84),  -- hovered borders
+			Text = Color3.fromRGB(238, 228, 206),       -- bone: main text and icons
+			TextDim = Color3.fromRGB(170, 158, 138),    -- ash: secondary text
+			TextFaint = Color3.fromRGB(108, 99, 88),    -- smoke: disabled / hints
+			TextOnAccent = Color3.fromRGB(30, 19, 10),  -- text on ember/moss/moon buttons
+			Ember = Color3.fromRGB(240, 136, 48),       -- primary accent (campfire)
+			EmberBright = Color3.fromRGB(255, 194, 104),
+			EmberDeep = Color3.fromRGB(160, 60, 22),
+			Moon = Color3.fromRGB(150, 186, 226),       -- info accent (moonlight)
+			MoonBright = Color3.fromRGB(206, 226, 248),
+			MoonDeep = Color3.fromRGB(56, 84, 122),
+			Blood = Color3.fromRGB(198, 44, 36),        -- danger / steal / the Hunt
+			BloodBright = Color3.fromRGB(255, 98, 82),
+			BloodDeep = Color3.fromRGB(92, 14, 12),
+			Moss = Color3.fromRGB(122, 200, 92),        -- cash / success
+			MossBright = Color3.fromRGB(184, 238, 142),
+			MossDeep = Color3.fromRGB(42, 96, 36),
+			Paper = Color3.fromRGB(226, 212, 182),      -- field-journal paper (Codex, notes)
+			PaperDark = Color3.fromRGB(184, 166, 130),
+			Ink = Color3.fromRGB(42, 33, 26),           -- text on paper
+			Shadow = Color3.fromRGB(0, 0, 0),
+			-- The Secret rarity's own colour is near-black, which vanishes on
+			-- dark panels; UI text and tags use this instead.
+			SecretText = Color3.fromRGB(214, 210, 232),
+		},
+		-- Roblox font family names (Font.fromName). Display is a horror
+		-- face for big titles only (28px and up); Heading for buttons,
+		-- labels and numbers; Notes is a typewriter for field-note flavour.
+		Fonts = {
+			Display = "Creepster",
+			Heading = "Oswald",
+			Body = "Oswald",
+			Notes = "SpecialElite",
+			Mono = "Inconsolata",
+		},
+		Corner = 6,            -- px, panels and buttons
+		CornerSmall = 4,       -- px, cards, pills, bars
+		Stroke = 2,            -- px, panel borders
+		ButtonPressScale = 0.94,
+		HoverTime = 0.12,      -- seconds, hover/press tweens
+		Window = {
+			OpenTime = 0.22,             -- seconds
+			CloseTime = 0.14,
+			OpenFromScale = 0.92,        -- windows grow from this to full size
+			BackdropTransparency = 0.5,  -- 1 = no dimming
+			HeaderHeight = 58,           -- px at reference size
+			ScreenMargin = 14,           -- px kept clear around a window
+		},
+	},
+
+	-- Where the HUD clusters sit (px at the reference height; the HUD
+	-- scales with the screen). Shared by the HUD, the hotbar, the tutorial
+	-- panel and the toasts so they never overlap:
+	--   top centre   Base / Eggs travel buttons (in the top-bar row)
+	--   top left     camp panel (protection, nests, lock), under the top bar
+	--   left middle  side buttons (Store, Codex, Gifts, Spin, Rebirth, Invite, Settings)
+	--   right middle Daily + quick-buy offers
+	--   bottom centre buff chips, cash, then the tool hotbar at the very bottom
+	-- The bottom corners stay clear for the phone thumbstick and jump button.
+	Layout = {
+		EdgeMargin = 12,        -- px from the screen's left/right edges to HUD clusters
+		TopGap = 8,             -- px between Roblox's top bar and the camp panel
+		TravelTop = 10,         -- px from the very top of the screen to the Base/Eggs buttons
+		TravelHeight = 46,
+		SideButtonSize = 60,    -- px HUD tiles
+		SideButtonGap = 8,
+		HotbarBottom = 10,      -- px from the bottom edge to the hotbar slots
+		HotbarSlot = 56,
+		CashBottom = 78,        -- px from the bottom edge to the bottom of the cash block (clears the hotbar)
+	},
+
+	-- Which screen draws over which (ScreenGui.DisplayOrder). Higher is on top.
+	Layers = {
+		Vhs = -1,          -- sighting found-footage overlay, under everything
+		World = 0,         -- full-screen tints (Hunt vignette sits on its own layer below)
+		Hud = 1,
+		Tutorial = 2,
+		Window = 5,        -- popup screens (one open at a time)
+		HuntDread = 5,
+		Sighting = 7,
+		Steal = 8,
+		Toast = 10,
+		Celebration = 15,
+		Reveal = 30,
+		Flash = 31,
+		Jumpscare = 40,
+	},
+
+	-- Custom-drawn ProximityPrompts and tool hotbar in the theme. Set false
+	-- to fall back to Roblox's default look instantly.
+	CustomPrompts = true,
+	CustomHotbar = true,
 }
 
 -- =========================================================================
