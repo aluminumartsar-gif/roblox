@@ -847,7 +847,8 @@ local dailyRewards: { RetentionReward } = {
 	} },
 }
 
--- The prize wheel draws one segment per prize, clockwise from the top.
+-- One wheel segment per prize, clockwise from the top
+-- (Config.UI.Retention.Spin.Segments colours them).
 local spinPrizes: { RetentionReward } = {
 	{ Weight = 30, Items = { { Kind = "Cash", Base = 300, Minutes = 2 } } },
 	{ Weight = 16, Items = { { Kind = "Egg", EggId = "mountain", Count = 1 } } },
@@ -892,7 +893,7 @@ Config.Retention = {
 		-- day after your last claim to keep the streak; miss a day and it
 		-- starts again at day 1. After day 7 it goes round again.
 		DayLength = 86400,
-		Rewards = dailyRewards,     -- 7, one per day of the streak
+		Rewards = dailyRewards,     -- 7 days (the Daily window is sized for 7 cards)
 		AutoOpenDelay = 3,          -- seconds after joining before the screen pops up
 		ClaimCooldown = 1,
 	},
@@ -2101,7 +2102,9 @@ Config.UI = {
 			-- degrees apart (smaller = smoother edges, more instances).
 			FanStep = 2.5,
 			-- Segment colours, clockwise from prize 1 (Theme colour names);
-			-- Text is the colour of the prize label on that segment.
+			-- Text is the colour of the prize label on that segment. Keep at
+			-- least as many entries as Config.Retention.Spin.Prizes, or the
+			-- colours repeat round the wheel.
 			Segments = {
 				{ Fill = "Ember", Text = "TextOnAccent" },
 				{ Fill = "MoonDeep", Text = "Text" },
