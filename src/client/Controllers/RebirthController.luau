@@ -19,6 +19,7 @@
 	A preview only; RebirthService re-checks everything on the server.
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
@@ -111,16 +112,23 @@ local function refresh()
 
 	setLine(gainLines[1], string.format("+%d%% Luck", s.nextRebirth * Config.Luck.PerRebirthPercent))
 	setLine(gainLines[2], string.format("+%d%% Cash", math.floor(s.nextRebirth * Config.Rebirth.IncomeBonusPerRebirth * 100 + 0.5)))
-	-- The glow PlotService gives your nests after this rebirth.
+	-- The glow PlotService gives your nests after this rebirth (VIP nests
+	-- stay gold, as on the server).
 	local glowColors = Config.Rebirth.NestGlowColors
-	setLine(gainLines[3], "New Glow", glowColors[(s.nextRebirth % #glowColors) + 1])
+	local glow = if Players.LocalPlayer:GetAttribute("Pass_Vip")
+		then Config.VipNestGlow
+		else glowColors[(s.nextRebirth % #glowColors) + 1]
+	setLine(gainLines[3], "New Glow", glow)
 	local unlock: string? = nil
 	local unlockColor: Color3? = nil
 	for _, eggId in ipairs(Config.EggOrder) do
 		local egg = Config.Eggs[eggId]
 		if egg.RequiredRebirths == s.nextRebirth then
 			unlock = string.format(tuning.UnlockText, egg.Name)
-			unlockColor = egg.Color
+			-- Very dark eggs (Void) would vanish on the card: lighten them.
+			local c = egg.Color
+			local luminance = 0.299 * c.R + 0.587 * c.G + 0.114 * c.B
+			unlockColor = if luminance < tuning.MinUnlockLuminance then Theme.Mix(c, C.Text, 0.45) else c
 		end
 	end
 	setLine(gainLines[4], unlock, unlockColor)

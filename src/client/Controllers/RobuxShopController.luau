@@ -121,14 +121,20 @@ end
 local function refresh()
 	for _, entry in ipairs(entries) do
 		local state = itemState(entry.kind, entry.key)
-		entry.button.Visible = state == "Price"
-		entry.tag.Visible = state ~= "Price"
+		entry.button.Visible = state ~= "Owned"
+		entry.tag.Visible = state == "Owned"
 		if state == "Owned" then
 			UI.SetPill(entry.tag, "OWNED", C.Moss)
 		elseif state == "Soon" then
-			UI.SetPill(entry.tag, "SOON", C.TextDim)
+			-- Greyed out but still tappable: Buy asks the server, which
+			-- answers "<Name> is coming soon!" (as the old store did).
+			UI.SetButtonIcon(entry.button, nil)
+			UI.SetButtonText(entry.button, "SOON")
+			UI.SetButtonEnabled(entry.button, false)
 		else
-			-- The button already carries the Robux icon, so drop PriceText's "R$".
+			-- The button carries the Robux icon, so drop PriceText's "R$".
+			UI.SetButtonIcon(entry.button, "Robux")
+			UI.SetButtonEnabled(entry.button, true)
 			local text = string.gsub(RobuxShopController.PriceText(entry.kind, entry.key), "^R%$", "")
 			UI.SetButtonText(entry.button, text)
 		end

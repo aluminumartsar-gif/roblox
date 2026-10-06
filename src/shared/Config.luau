@@ -1993,8 +1993,9 @@ Config.UI = {
 			PunchTime = 0.3,                     -- s
 		},
 		Rebirth = {
-			Size = Vector2.new(720, 500),        -- window design size
+			Size = Vector2.new(720, 444),        -- window design size (fits its content exactly)
 			BarTime = 0.35,                      -- s; the cash bar slides to its new fill
+			MinUnlockLuminance = 0.35,           -- darker egg colours are lightened for the unlock icon
 			ColumnHeight = 190,                  -- the lose / keep / gain columns
 			ButtonSize = Vector2.new(260, 50),
 			ConfirmSize = Vector2.new(460, 236), -- the "are you sure?" box over the screen

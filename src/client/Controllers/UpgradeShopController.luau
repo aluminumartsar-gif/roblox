@@ -229,7 +229,8 @@ local function build()
 	})
 	window.OnOpen = refresh
 
-	local list = UI.ScrollList({ Name = "List", Gap = tuning.RowGap, Parent = window.Body })
+	-- Padding 4: five rows fill the body exactly, with no stray scrollbar.
+	local list = UI.ScrollList({ Name = "List", Gap = tuning.RowGap, Padding = 4, Parent = window.Body })
 	for order, upgradeId in ipairs(Config.UpgradeOrder) do
 		buildRow(upgradeId, order, list)
 	end
