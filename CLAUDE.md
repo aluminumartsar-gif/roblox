@@ -274,6 +274,15 @@ LocalScript, plain `.luau` = ModuleScript.
   `NotificationController.ReserveTop(key, bottomPx | nil)`; a panel that sits
   under others uses `ReservedBottom(exceptKey)` and re-places on
   `ReservationsChanged` (StealController also fires `BannersChanged`).
+- `Components/HudLayout` keeps the stack clear of the HUD: PlotController
+  publishes the camp panel's bounds and HudController how far its cash /
+  buff cluster reaches up (`BottomReserve`). Anything placed top centre uses
+  `HudLayout.TopCentreTop(gui, scale, widthPx)` (it drops below the camp
+  panel on phones and 4:3 screens instead of covering LOCK CAMP); things in
+  the middle of the screen stay above `BottomReserve`. Banners drop to
+  `Layers.BannerUnderWindow` while a window is open.
+- Windows whose body scrolls pass `FlexHeight = true`: on a short screen
+  they keep the normal UI scale and get shorter instead of shrinking.
 - HUD buttons other screens own: `HudController.Bind(name, fn, caption?,
   icon?)` for "IndexBtn" (Codex), "GiftBtn", "SpinBtn", "DailyBtn"; then
   `SetAlert(name, on)` / `SetCaption(name, text)`. Tiles stay hidden until

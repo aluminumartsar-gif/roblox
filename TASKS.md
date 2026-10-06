@@ -421,8 +421,14 @@ the purchased STUD kit onto our own components, in one theme.
 - [x] Cloud-session tooling: `tools/smoke` (headless client run that checks
       every class/property/enum against Roblox's API dump — 0 failures on
       PC and phone profiles), `tools/preview` (approximate screenshots)
-- [ ] Review findings fixed (behaviour parity against the old screens, phone
-      fit, contracts between files)
+- [x] Review: 13 reviewers (each screen against the old version, layout and
+      phone fit, contracts between files, runtime robustness, server
+      safety), every finding checked by a second reviewer — 46 confirmed,
+      all fixed. Main ones: the top of the screen keeps clear of LOCK CAMP
+      on phones/tablets; toasts, tutorial and camera readout stay above the
+      cash; Store/Upgrades keep phone-size text (scrolling windows); Store
+      "coming soon" restored; gamepad can put a tool away; hotbar tooltips;
+      rebirth cost rounds to the dollar ($920K, was $919,999)
 - [ ] **Owner play test in Studio** (PC + Test → Device → a phone): every
       screen, prompts, hotbar, a two-player steal
 
