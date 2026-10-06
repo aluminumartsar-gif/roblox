@@ -9,9 +9,6 @@
       "Shared": {
         "$path": "src/shared",
         "$ignoreUnknownInstances": true
-      },
-      "UIKit": {
-        "$path": "vendor/stud/STUD.rbxm"
       }
     },
 

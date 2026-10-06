@@ -3,8 +3,8 @@
 	Window
 	StarterPlayerScripts/Client/Components/Window
 
-	Popup screens in the "campfire field kit" look (replaces the STUD kit's
-	Kit.Popup). One window is open at a time; opening one closes the rest.
+	Popup screens in the "campfire field kit" look. One window is open at a
+	time; opening one closes the rest.
 
 	  local window = Window.new({
 	      Name = "Store",               -- ScreenGui name
