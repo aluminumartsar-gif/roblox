@@ -783,9 +783,14 @@ local function pump()
 	showing = true
 	task.spawn(function()
 		while #queue > 0 do
-			-- The reveal's ScreenGui goes into PlayerGui now, even if the
-			-- reveal has to wait for a carry: CodexController holds its
-			-- polaroid while a "HatchReveal" is there.
+			-- Hold the reveal while the player carries something home (a thief
+			-- or the Brood Mother may be on them); the nest burst already
+			-- played, and the reveal opens once they've dropped it off.
+			while localPlayer:GetAttribute("Carrying") == true do
+				localPlayer:GetAttributeChangedSignal("Carrying"):Wait()
+			end
+			local data = table.remove(queue, 1) :: Reveal
+			-- CodexController holds its polaroid while a "HatchReveal" is here.
 			local gui = UI.new("ScreenGui", {
 				Name = "HatchReveal",
 				ResetOnSpawn = false,
@@ -795,13 +800,6 @@ local function pump()
 				Enabled = false,
 				Parent = playerGui,
 			}) :: ScreenGui
-			-- Hold the reveal while the player carries something home (a thief
-			-- or the Brood Mother may be on them); the nest burst already
-			-- played, and the reveal opens once they've dropped it off.
-			while localPlayer:GetAttribute("Carrying") == true do
-				localPlayer:GetAttributeChangedSignal("Carrying"):Wait()
-			end
-			local data = table.remove(queue, 1) :: Reveal
 			local connections: { RBXScriptConnection } = {}
 			local ok, err = pcall(runReveal, data, gui, connections)
 			if not ok then

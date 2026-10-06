@@ -209,14 +209,21 @@ local function layout(view: View)
 	view.object.Visible = hasObject
 	view.object.AutoLocalize = prompt.AutoLocalize
 
+	-- TextBounds are on-screen pixels, after the plate's UIScale (screen
+	-- size, pop and punch tweens); turn them back into design units.
+	local measureScale = view.scale.Scale
+	if measureScale <= 0 then
+		measureScale = 1
+	end
 	local textWidth = 0
 	if hasAction then
-		textWidth = math.max(textWidth, view.action.TextBounds.X)
+		textWidth = math.max(textWidth, view.action.TextBounds.X / measureScale)
 	end
 	if hasObject then
-		textWidth = math.max(textWidth, view.object.TextBounds.X)
+		textWidth = math.max(textWidth, view.object.TextBounds.X / measureScale)
 	end
-	textWidth = math.min(math.ceil(textWidth), P.MaxTextWidth)
+	-- +1: the engine rounds the scaled text size.
+	textWidth = math.min(math.ceil(textWidth) + 1, P.MaxTextWidth)
 
 	-- A prompt with no text is just the key cap on a square plate.
 	local width = height

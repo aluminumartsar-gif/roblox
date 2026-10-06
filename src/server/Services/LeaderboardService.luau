@@ -61,8 +61,6 @@ local MAX_SCORE = 2 ^ 53
 local THEME_COLORS = Config.UI.Theme.Colors
 local FONT_BOLD = Font.fromName(Config.UI.Theme.Fonts.Heading, Enum.FontWeight.Bold)
 local FONT_SEMI = Font.fromName(Config.UI.Theme.Fonts.Heading, Enum.FontWeight.SemiBold)
-local EDGE_PX = 2                  -- podium row edge and avatar ring (px at the board's PixelsPerStud)
-local MEDAL_EDGE_TRANSPARENCY = 0.35
 
 type BoardSpec = { Title: string, Subtitle: string, Store: string, Prefix: string }
 type Entry = { UserId: number, Value: number }
@@ -305,8 +303,8 @@ local function renderBoard(screen: Instance)
 			local edge = Instance.new("UIStroke")
 			edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 			edge.Color = medal
-			edge.Thickness = EDGE_PX
-			edge.Transparency = MEDAL_EDGE_TRANSPARENCY
+			edge.Thickness = labels.BoardEdgeThickness
+			edge.Transparency = labels.BoardMedalEdgeTransparency
 			edge.Parent = row
 		end
 
@@ -331,7 +329,7 @@ local function renderBoard(screen: Instance)
 		local ring = Instance.new("UIStroke")
 		ring.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		ring.Color = medal or THEME_COLORS.Edge
-		ring.Thickness = EDGE_PX
+		ring.Thickness = labels.BoardEdgeThickness
 		ring.Parent = head
 
 		local name = nameCache[entry.UserId] or ("Camper " .. tostring(entry.UserId))

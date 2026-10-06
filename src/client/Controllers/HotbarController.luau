@@ -78,6 +78,7 @@ type Slot = {
 	fill: UIGradient,
 	scale: UIScale,
 	number: TextLabel,
+	tooltip: Frame,
 	equipped: boolean,
 	hovering: boolean,
 	connections: { RBXScriptConnection },
@@ -135,7 +136,8 @@ local function toggleIndex(index: number)
 	end
 end
 
---- Gamepad: equip the next / previous slot (wrapping round).
+--- Gamepad: equip the next / previous slot; stepping past either end puts
+--- the tool away.
 local function cycle(direction: number)
 	local count = #order
 	if count == 0 then
@@ -152,7 +154,15 @@ local function cycle(direction: number)
 	if current == 0 then
 		nextIndex = if direction > 0 then 1 else count
 	else
-		nextIndex = (current - 1 + direction) % count + 1
+		nextIndex = current + direction
+		if nextIndex < 1 or nextIndex > count then
+			-- Past either end: empty hands, like Roblox's own backpack.
+			local h = humanoid
+			if h and alive() then
+				h:UnequipTools()
+			end
+			return
+		end
 	end
 	local tool = order[nextIndex]
 	if tool and tool.Parent ~= character then
@@ -264,6 +274,39 @@ local function buildSlot(tool: Tool, parent: Instance): Slot
 		Parent = button,
 	})
 
+	-- Mouse hover: the tool's ToolTip on a small plate above the slot
+	-- (Roblox's backpack did the same).
+	local tooltip = UI.new("Frame", {
+		Name = "Tooltip",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 0, -H.TooltipGap),
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
+		BackgroundColor3 = C.Panel,
+		BackgroundTransparency = 0.08,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 5,
+		Parent = button,
+	}, {
+		UI.Corner(T.CornerSmall),
+		UI.Stroke({ Color = C.Edge }),
+		UI.Padding({ Top = 4, Bottom = 4, Left = 8, Right = 8 }),
+	}) :: Frame
+	local tooltipText = UI.Text({
+		Name = "Label",
+		Role = "Body",
+		RichText = false,
+		Text = tool.ToolTip,
+		TextSize = H.TooltipTextSize,
+		TextWrapped = true,
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
+		ZIndex = 6,
+		Parent = tooltip,
+	})
+	UI.new("UISizeConstraint", { MaxSize = Vector2.new(H.TooltipMaxWidth, math.huge), Parent = tooltipText })
+
 	local slot: Slot = {
 		tool = tool,
 		button = button,
@@ -271,6 +314,7 @@ local function buildSlot(tool: Tool, parent: Instance): Slot
 		fill = fill,
 		scale = scale,
 		number = number,
+		tooltip = tooltip,
 		equipped = false,
 		hovering = false,
 		connections = {},
@@ -279,10 +323,12 @@ local function buildSlot(tool: Tool, parent: Instance): Slot
 	-- Hover / press feel (same timings as UI.Button).
 	table.insert(slot.connections, button.MouseEnter:Connect(function()
 		slot.hovering = true
+		tooltip.Visible = tool.ToolTip ~= ""
 		paint(slot)
 	end))
 	table.insert(slot.connections, button.MouseLeave:Connect(function()
 		slot.hovering = false
+		tooltip.Visible = false
 		paint(slot)
 		UI.Tween(scale, T.HoverTime, { Scale = restScale(slot) })
 	end))
@@ -298,6 +344,12 @@ local function buildSlot(tool: Tool, parent: Instance): Slot
 	end))
 	table.insert(slot.connections, button.Activated:Connect(function()
 		toggle(tool)
+	end))
+	table.insert(slot.connections, tool:GetPropertyChangedSignal("ToolTip"):Connect(function()
+		tooltipText.Text = tool.ToolTip
+		if tool.ToolTip == "" then
+			tooltip.Visible = false
+		end
 	end))
 
 	paint(slot)

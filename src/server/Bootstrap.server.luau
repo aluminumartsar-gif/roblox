@@ -146,14 +146,29 @@ local function validateConfig(): (boolean, { string })
 			table.insert(problems, string.format("%s uses unknown icon '%s'", where, tostring(name)))
 		end
 	end
-	for id, up in pairs(Config.Upgrades) do
-		checkIcon("Upgrades." .. id, up.Icon)
+	-- The rest of Config names icons too (UI tunables, rewards, banners):
+	-- any string under a key ending in "Icon", and every string in a table
+	-- whose key ends in "Icons".
+	local visited: { [any]: boolean } = {}
+	local function walkIcons(node: any, path: string, inIconTable: boolean)
+		if visited[node] then
+			return
+		end
+		visited[node] = true
+		for key, value in pairs(node) do
+			local name = tostring(key)
+			local where = path .. "." .. name
+			if type(value) == "string" then
+				if inIconTable or string.sub(name, -4) == "Icon" then
+					checkIcon(where, value)
+				end
+			elseif type(value) == "table" and value ~= Config.Icons then
+				walkIcons(value, where, string.sub(name, -5) == "Icons")
+			end
+		end
 	end
-	for id, pass in pairs(Config.GamePasses) do
-		checkIcon("GamePasses." .. id, pass.Icon)
-	end
+	walkIcons(Config, "Config", false)
 	for id, product in pairs(Config.DevProducts) do
-		checkIcon("DevProducts." .. id, product.Icon)
 		if product.Kind == "Instant" and product.Effect == "GrantEggs" and not Config.Eggs[product.EggId] then
 			table.insert(problems, string.format("DevProducts.%s grants unknown egg '%s'", id, tostring(product.EggId)))
 		end

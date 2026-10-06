@@ -30,9 +30,10 @@
 	drive their "!" (SetAlert) and caption (SetCaption).
 
 	Contract: the ScreenGui is named "HUD" and has no direct child called
-	"Container" (that marks a popup window; DailyRewardsController's popup
-	check skips the HUD by name). The cash label is HudController.CashLabel()
-	(also "CashText" under the HUD) for effects that fly cash into it.
+	"Container" (that marks a Components/Window popup: SoundController plays
+	the open sound when such a gui is enabled). The cash label is
+	HudController.CashLabel() (also "CashText" under the HUD) for effects
+	that fly cash into it.
 ]]
 
 local GuiService = game:GetService("GuiService")

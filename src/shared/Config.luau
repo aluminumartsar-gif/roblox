@@ -750,7 +750,6 @@ Config.Codex = {
 	EvidenceTint = Color3.fromRGB(255, 240, 214),     -- warm "old photo" tint
 	EvidenceAmbient = Color3.fromRGB(140, 130, 118),
 	EvidenceLight = Color3.fromRGB(255, 236, 205),
-	EvidenceBorder = Color3.fromRGB(236, 226, 204),
 	ScanlineTransparency = 0.82, -- 1 = no scanlines
 	SecretGlitchInterval = 0.12, -- how often the Secret's photo flickers
 
@@ -848,7 +847,7 @@ local dailyRewards: { RetentionReward } = {
 	} },
 }
 
--- One prize per slot on the kit's wheel (it has 6), clockwise from the top.
+-- The prize wheel draws one segment per prize, clockwise from the top.
 local spinPrizes: { RetentionReward } = {
 	{ Weight = 30, Items = { { Kind = "Cash", Base = 300, Minutes = 2 } } },
 	{ Weight = 16, Items = { { Kind = "Egg", EggId = "mountain", Count = 1 } } },
@@ -893,7 +892,7 @@ Config.Retention = {
 		-- day after your last claim to keep the streak; miss a day and it
 		-- starts again at day 1. After day 7 it goes round again.
 		DayLength = 86400,
-		Rewards = dailyRewards,     -- exactly 7 (the kit screen has 7 cards)
+		Rewards = dailyRewards,     -- 7, one per day of the streak
 		AutoOpenDelay = 3,          -- seconds after joining before the screen pops up
 		ClaimCooldown = 1,
 	},
@@ -908,12 +907,9 @@ Config.Retention = {
 		Cooldown = 4,
 		SpinTime = 4,               -- how long the wheel turns (the server tells you the prize after this)
 		ExtraTurns = 5,             -- client: full turns before it settles
-		-- Client: where the wheel's pointer is, in degrees clockwise from the
-		-- top. Change this if the prize lands next to the pointer, not under it.
+		-- Client: where the wheel's pointer sits, in degrees clockwise from the
+		-- top. The wheel lands the prize under it wherever it is.
 		PointerAngle = 0,
-		-- Client: which of the kit's wheel colours to show
-		-- ("SpinWheelPink", "SpinWheelOrange" or "SpinWheelRainbow").
-		WheelStyle = "SpinWheelOrange",
 	},
 
 	Playtime = {
@@ -970,7 +966,6 @@ Config.Leaderboards = {
 		Color3.fromRGB(214, 220, 232), -- 2nd
 		Color3.fromRGB(222, 150, 96),  -- 3rd
 	},
-	RowColor = Color3.fromRGB(255, 236, 206),
 }
 
 -- =========================================================================
@@ -2311,6 +2306,8 @@ Config.UI = {
 		OwnerTagLift = 4,              -- studs above the camp sign
 		OwnerTagMaxDistance = 220,     -- studs
 		BoardRowTransparency = 0.45,   -- leaderboard row backing (odd rows)
+		BoardEdgeThickness = 2,        -- px (at the board's PixelsPerStud): podium row edge and avatar ring
+		BoardMedalEdgeTransparency = 0.35,
 		BoardRowAltTransparency = 0.65, -- even rows
 	},
 
@@ -2371,7 +2368,12 @@ Config.UI = {
 			[Config.Bat.Name] = "BaseballBat",
 			[Config.Codex.CameraToolName] = "Camera",
 		},
-		-- Gamepad: cycle through the slots (Roblox's backpack is turned off).
+		-- Hovering a slot with the mouse shows the tool's ToolTip above it.
+		TooltipTextSize = 15,
+		TooltipGap = 8,           -- px between the slot and its tooltip
+		TooltipMaxWidth = 260,    -- px; longer tips wrap
+		-- Gamepad: cycle through the slots (Roblox's backpack is turned off);
+		-- past the last slot (or before the first) puts the tool away.
 		GamepadPrevious = Enum.KeyCode.ButtonL1,
 		GamepadNext = Enum.KeyCode.ButtonR1,
 		-- Turning Roblox's backpack off can fail in the first moments of a

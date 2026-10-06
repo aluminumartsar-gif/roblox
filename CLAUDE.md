@@ -303,9 +303,9 @@ LocalScript, plain `.luau` = ModuleScript.
   (`ImageColor3`, default `Theme.Colors.Text`), so they all match. Upload
   flow: `tools/serve-icons.ps1` + the MCP `upload_image` tool; ids go in
   `Config.Icons`. Use them via `Components/Icon` (`Icon.new`, `Icon.addLeft`)
-  or the `Icon =` prop of the UI builders. Bootstrap rejects icon names
-  missing from `Config.Icons` in Config tables; `Icon.new` warns on unknown
-  names.
+  or the `Icon =` prop of the UI builders. Bootstrap checks every icon name
+  in Config (any key ending in `Icon`, any table whose key ends in `Icons`)
+  against `Config.Icons`; `Icon.new` warns on unknown names at runtime.
 
 ### Test data
 Studio play tests use their own DataStore scope (`Config.Data.StudioStoreScope`),

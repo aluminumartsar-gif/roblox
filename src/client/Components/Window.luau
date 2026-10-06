@@ -27,8 +27,8 @@
 
 	Contract other code relies on: the ScreenGui is Enabled only while the
 	window shows, and its direct child is a frame named "Container" (the
-	open sound in SoundController and the auto-open checks in
-	DailyRewardsController look for exactly that).
+	open sound in SoundController looks for exactly that). To ask whether a
+	popup is open, use Window.AnyOpen.
 ]]
 
 local Players = game:GetService("Players")
