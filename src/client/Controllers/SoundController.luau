@@ -24,10 +24,9 @@
 	effect and the ambience; "Music" OFF mutes the music. SettingsController
 	calls SetSoundsEnabled / SetMusicEnabled.
 
-	Every button click plays UIClick and every kit popup opening plays
-	UIOpen, hooked here once for the whole UI. Kit buttons (tagged
-	"UIButton") keep the kit's own click instead; any button can opt out
-	with the attribute SAC_NoClick = true.
+	Every button click plays UIClick and every popup window opening plays
+	UIOpen, hooked here once for the whole UI. Any button can opt out of
+	the click with the attribute SAC_NoClick = true.
 
 	Safe to call before Start(): Play/PlayAt set themselves up on first use.
 ]]
@@ -65,9 +64,6 @@ export type PlayOpts = {
 
 local FX = Config.Feedback
 local localPlayer = Players.LocalPlayer
-
--- The STUD kit's tag for buttons it animates (and gives its own click).
-local KIT_BUTTON_TAG = "UIButton"
 
 -- Set up lazily by ensureSetup().
 local effectsGroup: SoundGroup? = nil
@@ -380,16 +376,15 @@ end
 
 local function hookButton(button: GuiButton)
 	button.Activated:Connect(function()
-		-- Kit buttons already click (the kit's UIAnimations plays its own
-		-- sound for anything tagged UIButton).
-		if button:GetAttribute("SAC_NoClick") ~= true and not CollectionService:HasTag(button, KIT_BUTTON_TAG) then
+		if button:GetAttribute("SAC_NoClick") ~= true then
 			SoundController.Play("UIClick")
 		end
 	end)
 end
 
 local function hookScreen(gui: ScreenGui)
-	-- Kit popups have a Container and are shown by enabling the ScreenGui.
+	-- Popup windows (Components/Window) have a direct child "Container"
+	-- and are shown by enabling their ScreenGui.
 	gui:GetPropertyChangedSignal("Enabled"):Connect(function()
 		if gui.Enabled and gui:FindFirstChild("Container") and os.clock() - startedAt > 2 then
 			SoundController.Play("UIOpen")
