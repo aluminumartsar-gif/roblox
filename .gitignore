@@ -22,3 +22,6 @@ sourcemap.json
 
 # luau-lsp cache (type definitions, sourcemap)
 /tools/.luau/
+
+# Smoke harness cache (Lune binary, Roblox API dump, run output)
+/tools/.lune/

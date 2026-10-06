@@ -1,0 +1,19 @@
+# Substrings that must each appear in some FAILURE of
+#   bash tools/smoke/run.sh --fixture validation
+# (one deliberate mistake per line; see Mistakes.luau)
+BackgroundColour is not a valid member of Frame
+Nope is not a valid member of "Enum.Font"
+Unable to assign property Size. UDim2 expected, got string
+Unable to create an Instance of type "Nope"
+Unable to create an Instance of type "Players"
+Unable to assign property AbsoluteSize. Property is read only
+'NopeService' is not a valid Service name
+Instance is not a supported attribute type
+Nope is not a valid property name
+EnumItem of type TextXAlignment expected
+Unable to assign property Text. string expected, got nil
+cannot be tweened
+WaitForChild never resolved: ReplicatedStorage.DoesNotExist
+attempt to index nil with 'y'
+Require cycles
+BrokenModule.luau errored while loading

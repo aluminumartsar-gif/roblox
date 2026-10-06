@@ -1,0 +1,2 @@
+# Real client folders this fixture uses
+Components
