@@ -15,6 +15,12 @@
 
 	API (unchanged): NotificationController.Show(text, kind?, color?)
 	  kind: "Info" | "Success" | "Warning" | "Error" | "Announce"
+
+	Top-centre stacking: banners (sightings, the Hunt) and the tutorial
+	panel call ReserveTop(key, bottomPx | nil); toasts sit below the lowest
+	one. ReservedBottom(except?) gives the lowest reserved edge (in screen
+	pixels) ignoring one key, and ReservationsChanged fires on any change,
+	so a panel can place itself under the banners.
 ]]
 
 local Players = game:GetService("Players")
@@ -22,11 +28,15 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Signal = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("Signal"))
 local Components = script.Parent.Parent:WaitForChild("Components")
 local ScreenScale = require(Components:WaitForChild("ScreenScale"))
 local Icon = require(Components:WaitForChild("Icon"))
 
 local NotificationController = {}
+
+--- Fires after any ReserveTop call (banners and panels moved or hid).
+NotificationController.ReservationsChanged = Signal.new()
 
 local KIND_COLORS: { [string]: Color3 } = {
 	Info = Color3.fromRGB(40, 44, 58),
@@ -203,8 +213,24 @@ end
 --- is its bottom edge in screen pixels (AbsolutePosition.Y + AbsoluteSize.Y),
 --- or nil when the banner hides.
 function NotificationController.ReserveTop(key: string, bottom: number?)
+	if reservations[key] == bottom then
+		return
+	end
 	reservations[key] = bottom
 	placeStack()
+	NotificationController.ReservationsChanged:Fire()
+end
+
+--- The lowest reserved bottom edge (screen pixels) of every reservation
+--- except `except`, or nil if there are none.
+function NotificationController.ReservedBottom(except: string?): number?
+	local lowest: number? = nil
+	for key, bottom in pairs(reservations) do
+		if key ~= except and (not lowest or bottom > lowest) then
+			lowest = bottom
+		end
+	end
+	return lowest
 end
 
 function NotificationController.Start()

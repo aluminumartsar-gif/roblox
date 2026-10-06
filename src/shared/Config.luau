@@ -1908,6 +1908,46 @@ Config.UI = {
 	-- to fall back to Roblox's default look instantly.
 	CustomPrompts = true,
 	CustomHotbar = true,
+
+	-- HUD tiles, cash block, buff chips, travel buttons, camp panel (HudController, PlotController).
+	Hud = {
+	},
+
+	-- Store, Upgrades and Rebirth screens (RobuxShopController, UpgradeShopController, RebirthController).
+	Shops = {
+	},
+
+	-- Codex screen, field camera viewfinder, new-entry polaroid (CodexController).
+	Codex = {
+	},
+
+	-- Daily Rewards, Spin Wheel, Playtime Gifts, Offline Earnings and Settings screens.
+	Retention = {
+	},
+
+	-- Toasts, hatch reveal, cash popups and celebrations (NotificationController, FeedbackController).
+	Toasts = {
+	},
+
+	-- Tutorial panel and steal alerts (TutorialController, StealController).
+	Tutorial = {
+	},
+
+	-- Sighting and Hunt banners, markers and overlays (SightingController, HuntController).
+	Banners = {
+	},
+
+	-- Nest labels, belt egg labels and in-world signs (NestVisualsController, EggBeltController, server signs).
+	Labels = {
+	},
+
+	-- Themed "hold E" ProximityPrompts (PromptController).
+	Prompts = {
+	},
+
+	-- Themed tool hotbar (HotbarController).
+	Hotbar = {
+	},
 }
 
 -- =========================================================================
