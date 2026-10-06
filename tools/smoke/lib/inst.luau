@@ -368,8 +368,23 @@ local EXTRA_DEFAULTS = {
 	BrickColor = roblox.BrickColor.new("Medium stone grey"),
 }
 
+-- Per-class defaults that differ from EXTRA_DEFAULTS (UIGridLayout and
+-- UIPageLayout fill horizontally; UIListLayout fills vertically).
+local CLASS_DEFAULTS: { [string]: { [string]: any } } = {
+	UIGridLayout = {
+		FillDirection = roblox.Enum.FillDirection.Horizontal,
+		CellSize = roblox.UDim2.new(0, 100, 0, 100),
+		CellPadding = roblox.UDim2.new(0, 5, 0, 5),
+	},
+	UIPageLayout = { FillDirection = roblox.Enum.FillDirection.Horizontal },
+}
+
 local function defaultValue(st, key: string, p)
 	local v = st.info.rec.defaults[key]
+	if v == nil then
+		local perClass = CLASS_DEFAULTS[st.className]
+		v = perClass and perClass[key]
+	end
 	if v == nil then
 		v = EXTRA_DEFAULTS[key]
 		if v == nil then
