@@ -48,6 +48,7 @@ local Components = script.Parent.Parent:WaitForChild("Components")
 local Theme = require(Components:WaitForChild("Theme"))
 local UI = require(Components:WaitForChild("UI"))
 local HudLayout = require(Components:WaitForChild("HudLayout"))
+local Window = require(Components:WaitForChild("Window"))
 local SoundController = require(script.Parent:WaitForChild("SoundController"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
@@ -246,6 +247,16 @@ end
 local function fitText(label: TextLabel, maxSize: number)
 	label.TextScaled = true
 	UI.new("UITextSizeConstraint", { MaxTextSize = maxSize, Parent = label })
+end
+
+--- Banners sit over the HUD, but drop behind an open window so they never
+--- cover its title or close button (the dread, sounds and toasts still warn).
+local function bannerLayer(gui: ScreenGui?)
+	if gui then
+		gui.DisplayOrder = if Window.AnyOpen()
+			then Config.UI.Layers.BannerUnderWindow
+			else Config.UI.Layers.Sighting
+	end
 end
 
 --- Where the top banners start, in px from the very top of the screen
@@ -576,6 +587,7 @@ local function update(dt: number)
 
 	-- Banner
 	local scale = bannerScale.Scale
+	bannerLayer(banner:FindFirstAncestorWhichIsA("ScreenGui"))
 	banner.Position = UDim2.new(0.5, 0, 0, bannerTop(scale, Config.UI.Banners.HuntSize.X * scale))
 	banner.Visible = true
 	reserveBanner(true)

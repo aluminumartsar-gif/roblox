@@ -33,8 +33,9 @@
 	    "REBIRTH N!" stamp).
 	  * Dropping what you carry plays a sound.
 
-	Layers (Config.UI.Layers): the reveal on Reveal, the rebirth flash on
-	Flash, the rebirth stamp and confetti on Celebration.
+	Layers (Config.UI.Layers): the reveal on Reveal; the rebirth flash,
+	confetti and stamp together on Flash (one ScreenGui, so the stamp draws
+	over its own flash).
 	Tunables: Config.Feedback (timings, amounts), Config.UI.Toasts (look).
 	Sounds: Config.Sounds via SoundController.
 ]]
@@ -101,8 +102,7 @@ type Fade = { Target: Instance, Property: string, Shown: number }
 local queue: { Reveal } = {}
 local showing = false
 local playerGui: PlayerGui
-local fxGui: ScreenGui -- persistent full-screen layer for flashes
-local celebrationGui: ScreenGui -- persistent layer for the rebirth stamp and confetti
+local fxGui: ScreenGui -- persistent full-screen layer: flashes, and the rebirth confetti + stamp over its flash
 
 --------------------------------------------------------------------------
 -- Small helpers
@@ -944,7 +944,9 @@ local function rebirthFx(rebirths: number)
 	local stampColor = themeColor(LOOK.RebirthStampColor, C.EmberBright)
 	SoundController.Play("Rebirth")
 	flash(themeColor(LOOK.RebirthFlashColor, C.Text), 0.9)
-	confetti(celebrationGui, stampColor)
+	-- Same ScreenGui as the flash, so ZIndex puts the confetti (40) and the
+	-- stamp (41) over the flash (30).
+	confetti(fxGui, stampColor)
 	shake(FX.ShakeDuration, FX.ShakeStrength * 0.6)
 
 	-- Holder carries the phone scaling; the label inside does the punch
@@ -956,7 +958,7 @@ local function rebirthFx(rebirths: number)
 		Size = UDim2.fromOffset(REBIRTH_STAMP_SIZE.X, REBIRTH_STAMP_SIZE.Y),
 		BackgroundTransparency = 1,
 		ZIndex = 41,
-		Parent = celebrationGui,
+		Parent = fxGui,
 	}) :: Frame
 	fixedScale(holder)
 	local banner, edge = displayText(string.format("REBIRTH %d!", rebirths), LOOK.RebirthStampTextSize, {
@@ -1053,13 +1055,6 @@ function FeedbackController.Start()
 		ResetOnSpawn = false,
 		IgnoreGuiInset = true,
 		DisplayOrder = LAYERS.Flash,
-		Parent = playerGui,
-	}) :: ScreenGui
-	celebrationGui = UI.new("ScreenGui", {
-		Name = "SAC_Celebration",
-		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
-		DisplayOrder = LAYERS.Celebration,
 		Parent = playerGui,
 	}) :: ScreenGui
 

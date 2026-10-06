@@ -66,8 +66,6 @@ local ALMOST_GLOW = C.BloodBright
 -- sizes themselves are Config.Feedback.*LabelSize).
 local ROW_GAP = 0.03
 local BAR_WIDTH = 0.85
-local BAR_FADE = 0.7 -- an egg bar's glowing edge pulses down to this transparency
-local VAULT_FADE = 0.6 -- a full vault's fill pulses down to this transparency
 
 --- The shading UI.ProgressBar gives its fill (light top, deep bottom).
 local function fillSequence(color: Color3): ColorSequence
@@ -402,7 +400,7 @@ local function setupEgg(instance: Instance)
 				edge.Color = C.EmberBright
 				edge.Thickness = L.BarGlowThickness
 				edge.Transparency = 0
-				edgePulse = pulse(edge, L.EggAlmostPulseTime, { Transparency = BAR_FADE })
+				edgePulse = pulse(edge, L.EggAlmostPulseTime, { Transparency = L.EggAlmostPulseFade })
 			else
 				edge.Color = edgeColor
 				edge.Thickness = edgeThickness
@@ -583,7 +581,7 @@ local function setupCreature(instance: Instance)
 				end
 				vault.fill.BackgroundTransparency = 0
 				if full then
-					fullPulse = pulse(vault.fill, L.VaultFullPulseTime, { BackgroundTransparency = VAULT_FADE })
+					fullPulse = pulse(vault.fill, L.VaultFullPulseTime, { BackgroundTransparency = L.VaultFullPulseFade })
 				end
 			end
 		end

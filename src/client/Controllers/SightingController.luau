@@ -56,6 +56,7 @@ local Components = script.Parent.Parent:WaitForChild("Components")
 local Theme = require(Components:WaitForChild("Theme"))
 local UI = require(Components:WaitForChild("UI"))
 local HudLayout = require(Components:WaitForChild("HudLayout"))
+local Window = require(Components:WaitForChild("Window"))
 local Icon = require(Components:WaitForChild("Icon"))
 local NotificationController = require(script.Parent:WaitForChild("NotificationController"))
 
@@ -238,6 +239,16 @@ local function shadowEdge(label: TextLabel)
 		Transparency = 0.2,
 		Parent = label,
 	})
+end
+
+--- Banners sit over the HUD, but drop behind an open window so they never
+--- cover its title or close button (the dread, sounds and toasts still warn).
+local function bannerLayer(gui: ScreenGui?)
+	if gui then
+		gui.DisplayOrder = if Window.AnyOpen()
+			then Config.UI.Layers.BannerUnderWindow
+			else Config.UI.Layers.Sighting
+	end
 end
 
 --- Where the top banners start, in px from the very top of the screen
@@ -577,6 +588,7 @@ local function renderBanner()
 	local now = serverNow()
 	local icons = Config.UI.Banners.SightingIcons
 	-- Sit just under the Hunt banner while she's out, so neither hides the other.
+	bannerLayer(banner:FindFirstAncestorWhichIsA("ScreenGui"))
 	placeBanner()
 	local mine = myCapture()
 	local sighting = current

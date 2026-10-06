@@ -1903,6 +1903,7 @@ Config.UI = {
 		World = 0,         -- full-screen tints (Hunt vignette sits on its own layer below)
 		Hud = 1,
 		Tutorial = 2,
+		BannerUnderWindow = 4, -- sighting / Hunt banners while a window is open (so they don't cover it)
 		Window = 5,        -- popup screens (one open at a time)
 		HuntDread = 5,
 		Sighting = 7,
@@ -2293,7 +2294,9 @@ Config.UI = {
 		-- Floating labels (nest items, belt eggs, the camp owner tag)
 		TextStroke = 0.35,             -- transparency of the dark outline round floating label text (0 = solid)
 		EggAlmostPulseTime = 0.5,      -- seconds per beat of the glow round an egg's bar when it's about to hatch
+		EggAlmostPulseFade = 0.7,      -- ...down to this transparency (the bar's glowing edge)
 		VaultFullPulseTime = 0.45,     -- seconds per beat of a full vault bar
+		VaultFullPulseFade = 0.6,      -- ...down to this transparency (the full vault's fill)
 		BarGlowThickness = 2,          -- px, the glowing edge of an egg bar about to hatch
 
 		-- Belt egg label (EggBeltService builds it; EggBeltController sets the price / "Rebirth N" line)

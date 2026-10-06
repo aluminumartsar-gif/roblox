@@ -620,6 +620,11 @@ local function show(prompt: ProximityPrompt, inputType: Enum.ProximityPromptInpu
 			hide(view)
 		end
 	end))
+	-- A prompt destroyed while shown (an egg hatching, a carry claimed) may
+	-- not get a PromptHidden: clean its plate up straight away.
+	table.insert(connections, prompt.Destroying:Connect(function()
+		hide(view, true)
+	end))
 
 	-- Pop in.
 	view.scale.Scale = view.baseScale * P.ShowFromScale
