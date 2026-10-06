@@ -2309,12 +2309,70 @@ Config.UI = {
 		BoardRowAltTransparency = 0.65, -- even rows
 	},
 
-	-- Themed "hold E" ProximityPrompts (PromptController).
+	-- Themed "hold E" ProximityPrompts (PromptController). Sizes are px at
+	-- the reference screen height (they scale with the screen like the HUD).
+	-- Only the look changes: hold times, reach and line of sight stay in
+	-- Config.Prompts and on the prompts themselves.
 	Prompts = {
+		Height = 58,              -- charred plate
+		KeySize = 40,             -- ember key cap (E / gamepad button / tap)
+		Padding = 9,              -- plate edge to key cap and text
+		Gap = 10,                 -- key cap to text
+		MaxTextWidth = 240,       -- longer action/object text is cut off with "..."
+		ActionTextSize = 21,      -- "Steal", "Buy $1.2K" (Heading)
+		ObjectTextSize = 14,      -- "Forest Egg" (Body, dim)
+		KeyTextSize = 24,         -- single-letter key on the cap
+		KeyTextSizeLong = 15,     -- longer key names ("Shift", "Tab")
+		UppercaseAction = true,
+		BarHeight = 4,            -- hold-progress bar along the plate's bottom
+		BarInset = 3,             -- px from the plate's bottom edge to the bar
+		PlateTransparency = 0.06,
+		TouchIcon = "Hand",       -- Config.Icons name on the key cap for touch screens
+		-- Accent (a UI button variant: Primary = ember, Danger = blood, Cash
+		-- = moss, Moon = moonlight) by the prompt's Name, as the server names
+		-- it. Rule: StealService names every steal prompt "StealPrompt", so
+		-- steals get the blood key cap and bar; everything else is ember.
+		DefaultAccent = "Primary",
+		AccentByName = {
+			StealPrompt = "Danger",
+		},
+		ShowFromScale = 0.8,      -- pops in from this size...
+		HideToScale = 0.7,        -- ...and shrinks to this one as it goes
+		ShowTime = 0.16,          -- seconds
+		HideTime = 0.1,
+		HoldResetTime = 0.12,     -- bar drains this fast when a hold is let go
+		TriggerPunch = 1.1,       -- plate pops to this size when the prompt fires
+		TriggerPunchTime = 0.2,
+		KeyPressScale = 0.9,      -- key cap squashes while held
 	},
 
-	-- Themed tool hotbar (HotbarController).
+	-- Themed tool hotbar (HotbarController), bottom centre. Slot size and
+	-- distance from the bottom edge: Config.UI.Layout.HotbarSlot / HotbarBottom.
 	Hotbar = {
+		Gap = 6,                  -- px between slots
+		MaxSlots = 9,             -- keys 1..9
+		IconSize = 30,            -- glyph inside a slot
+		KeyTextSize = 14,         -- slot number (top left)
+		InitialsTextSize = 20,    -- tools with no icon show their initials
+		EquippedScale = 1.06,     -- the equipped slot sits slightly larger...
+		EquippedEdge = 2.5,       -- ...with a thicker ember edge (px; other slots EdgeThickness)
+		EdgeThickness = 1.5,
+		EquippedGlow = 0.25,      -- how much ember warms the equipped slot's wood (0..1)
+		-- Order: these tool names first, in this order, then the rest by name.
+		ToolOrder = { Config.Bat.Name, Config.Codex.CameraToolName },
+		-- Config.Icons name per tool name. Other tools use their own TextureId,
+		-- then their initials.
+		ToolIcons = {
+			[Config.Bat.Name] = "BaseballBat",
+			[Config.Codex.CameraToolName] = "Camera",
+		},
+		-- Gamepad: cycle through the slots (Roblox's backpack is turned off).
+		GamepadPrevious = Enum.KeyCode.ButtonL1,
+		GamepadNext = Enum.KeyCode.ButtonR1,
+		-- Turning Roblox's backpack off can fail in the first moments of a
+		-- session; keep trying this many times, this many seconds apart.
+		CoreGuiRetries = 20,
+		CoreGuiRetryDelay = 0.5,
 	},
 }
 

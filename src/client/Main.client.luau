@@ -26,6 +26,8 @@ local CONTROLLER_ORDER: { string } = {
 	"ProfileController",
 	"NotificationController",
 	"SoundController",            -- early, so everything after can play sounds
+	"PromptController",           -- themed ProximityPrompts, before any prompt can show
+	"HotbarController",           -- themed tool hotbar (turns Roblox's backpack off)
 	-- Screens the HUD opens start before the HUD itself.
 	"RobuxShopController",
 	"RebirthController",
