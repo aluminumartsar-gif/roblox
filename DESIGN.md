@@ -305,7 +305,7 @@ All decided on the server (`RetentionService`, `Config.Retention`).
 fixed amount and N minutes of your creature income, capped), eggs (into a free
 nest, else saved), Luck Potion / Hatch Boost time, and Instant Hatch.
 
-- **Daily Rewards** (HUD Daily, bottom right; pops up once on joining when
+- **Daily Rewards** (HUD Daily, right side; pops up once on joining when
   claimable): one claim per UTC day, streak resets if you miss a day, 7-day
   cycle with a big day 7.
 - **Spin Wheel** (HUD Spin): one free spin every 4 hours (a new player has one
@@ -360,22 +360,31 @@ nest, else saved), Luck Potion / Hatch Boost time, and Instant Hatch.
 
 ## 12. UI
 
-Must work on a phone. Everything hold-to-interact is a ProximityPrompt. The
-look comes from the owner's purchased STUD UI kit; our code fills its
-screens (the kit's own shop scripts are not used).
+Must work on a phone. Everything hold-to-interact is a ProximityPrompt. One
+look across every screen, the **"campfire field kit"**: charred-wood panels
+with nail-head corners, bone-white text, ember orange for the main action,
+cold moonlight blue for info and Robux, blood red for danger and the Hunt,
+moss green for cash, and field-journal paper for the Codex. Creepster for big
+titles, Oswald for buttons and numbers, a typewriter face for field notes.
+Icons are single-colour glyphs tinted to match. All colours and fonts live in
+`Config.UI.Theme`.
 
-- **HUD:** cash and rebirth bonus (bottom left, "+" opens the Store); side
-  buttons Store, Codex, Gifts, Spin, Rebirth ("!" when ready), Invite,
-  Settings; Daily (bottom right); **Base** and **Eggs** fast travel at the top
-  (8s cooldown, not while carrying or stunned); quick-buys for the Luck
-  Potion and 3-Egg Bundle; buff timers above the cash.
-- **Screens:** Store, Rebirth (+ confirm), Upgrades, Settings (sounds and
-  music), Codex, Daily Rewards, Spin Wheel, Playtime Gifts, Offline popup.
-  One open at a time; shop screens close when you walk away.
-- **Plot panel:** one row, top left — protection timer, nests used, Lock.
-- **Banners:** sightings and the Hunt, top centre; toasts slide in below them.
-
----
+- **HUD:** Base and Eggs fast travel in the top bar (8s cooldown, not while
+  carrying or stunned); the camp panel top left (protection timer, nests
+  used, Lock); side tiles left (Store, Codex, Gifts with its countdown, Spin,
+  Rebirth, Invite, Settings — "!" when something's ready); Daily and
+  quick-buys for the Luck Potion and 3-Egg Bundle on the right; buff timers,
+  cash (counts up, "+" opens the Store) and rebirth bonus bottom centre; our
+  own tool hotbar at the very bottom (keys 1–9 or tap).
+- **Screens** (popup windows, one open at a time, shop screens close when
+  you walk away): Store, Upgrades, Rebirth (with an in-window "are you sure"),
+  Codex, Daily Rewards, Prize Wheel, Gifts, Offline earnings, Settings.
+- **Top of the screen:** sighting and Hunt banners, then steal alerts, then
+  the tutorial card, then toasts — stacked so they never cover each other.
+- **Prompts:** every "hold E" prompt is drawn in the theme (steal prompts in
+  blood red), with a hold bar; on a phone you tap or hold the prompt itself.
+- **World labels:** nest labels, belt egg labels, camp signs, the odds board
+  and leaderboards use the same fonts and colours.
 
 ## 13. Data and anti-exploit
 

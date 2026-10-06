@@ -267,7 +267,7 @@ capture loose.
 
 ---
 
-## Step 6.5 — STUD UI kit swap `[x]` (owner request, before Step 7)
+## Step 6.5 — STUD UI kit swap `[x]` (owner request, before Step 7; superseded by Step 10)
 
 Owner supplied "Livvy's Orchard STUD UI Pack V3" (`.rbxm`, purchased).
 Audited: 20 scripts, no remote code, no HTTP, no obfuscation; the kit's own
@@ -398,6 +398,40 @@ before and restored after.
 
 ---
 
+## Step 10 — UI revamp: the "campfire field kit" `[~]` (owner request)
+
+Owner: the UI should look like it belongs in this game. Every screen moves off
+the purchased STUD kit onto our own components, in one theme.
+
+- [x] Theme in `Config.UI.Theme` (palette, fonts, sizes), shared layout plan
+      (`Config.UI.Layout`) and draw order (`Config.UI.Layers`); switches for
+      themed prompts and hotbar (`CustomPrompts`, `CustomHotbar`)
+- [x] 79 single-colour glyph icons uploaded and wired into `Config.Icons`
+      (old names kept), tinted in code
+- [x] Building blocks: `Components/Theme`, `UI` (text, panels, cards, paper,
+      buttons, tiles, badges, tabs, inputs, bars, pills, lists) and `Window`
+      (popups that shrink to fit phones)
+- [x] Rebuilt: HUD + camp panel; Store, Upgrades, Rebirth (in-window
+      confirm); Codex; Daily, Spin, Gifts, Offline, Settings; toasts + hatch
+      reveal; tutorial + steal alerts; Hunt + sighting banners; nest labels,
+      belt labels, signs and leaderboards
+- [x] New: themed "hold E" prompts (`PromptController`, steal prompts in
+      blood red) and our own tool hotbar (`HotbarController`)
+- [x] `Components/Kit` and the `UIKit` Rojo entry removed
+- [x] Cloud-session tooling: `tools/smoke` (headless client run that checks
+      every class/property/enum against Roblox's API dump — 0 failures on
+      PC and phone profiles), `tools/preview` (approximate screenshots)
+- [ ] Review findings fixed (behaviour parity against the old screens, phone
+      fit, contracts between files)
+- [ ] **Owner play test in Studio** (PC + Test → Device → a phone): every
+      screen, prompts, hotbar, a two-player steal
+
+**Not tested in Studio yet** — built in a cloud session with no Studio. The
+type check, the smoke run and the preview renders are clean; a real play
+test is the next step.
+
+---
+
 ## Owner action queue
 
 Things only the owner can do. Ticked when done.
@@ -420,6 +454,11 @@ Things only the owner can do. Ticked when done.
 - [ ] **Two-player test** (Test → Clients and Servers → 2 players): stealing
       an egg, contested sighting capture, the Brood Mother chasing a thief,
       buying belt eggs from anywhere round the belt
+- [ ] **Play-test the UI revamp** (Step 10) on PC and a phone emulator, then
+      re-run `tools/place-settings.luau` in Edit (the sign styling changed in
+      MapBuilder) and **Save** the place
+- [ ] **Optional:** delete `ReplicatedStorage.UIKit` from the place in
+      Studio — nothing uses it any more (Rojo no longer syncs it)
 - [ ] **Publish** when happy (File → Publish to Roblox)
 
 ---
@@ -473,7 +512,14 @@ Things only the owner can do. Ticked when done.
   the next egg if you have none); Emergency Lock locks now ignoring the
   cooldown (stacks; works while carrying); paid items that can't apply yet
   are saved and applied automatically; buffs stack by extending.
-- **UI kit:** the owner's STUD UI Pack; our code fills its screens.
+- ~~**UI kit:** the owner's STUD UI Pack; our code fills its screens.~~
+  (superseded by Step 10)
+- **UI revamp (owner, Step 10):** one "campfire field kit" theme on our own
+  components; the STUD kit is no longer used. Claude's calls: Robux buttons
+  are moonlight blue, in-game cash buttons moss green, the main action ember;
+  the rebirth "are you sure" sits inside the Rebirth window (Cancel goes back
+  to it); side tiles in a 2-column grid so they fit a phone; Daily moved to
+  the right-hand cluster; steal prompts blood red.
 - **Retention features** (owner): Daily Rewards, Spin Wheel, Playtime Gifts,
   Offline Earnings.
 - **Icons:** owner's RhosGFX pack, chosen by file name; raw PNGs never in the

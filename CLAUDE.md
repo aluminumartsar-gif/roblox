@@ -79,7 +79,6 @@ Update them as part of the step they change, not later.
 | `ReplicatedStorage/Shared`                        | `src/shared/`              |
 | `ReplicatedStorage/Shared/Config` (ModuleScript)  | `src/shared/Config.luau`   |
 | `ReplicatedStorage/Shared/Util/*`                 | `src/shared/Util/`         |
-| `ReplicatedStorage/UIKit` (UI kit templates)         | `vendor/stud/STUD.rbxm` (git-ignored) |
 | `ReplicatedStorage/Remotes`                       | created at runtime by the server |
 | `ServerScriptService/Server/Services/*`           | `src/server/Services/`     |
 | `ServerScriptService/Server/Modules/*`            | `src/server/Modules/`      |
@@ -217,7 +216,7 @@ LocalScript, plain `.luau` = ModuleScript.
   must check `carry.Source` — e.g. locking is only refused for stolen items.
 
 ### Shops, upgrades, rebirth
-- Screens are built on the STUD UI kit — see "UI kit" below.
+- Screens are popup Windows built from our UI components — see "UI" below.
 - Buying anything at a hub shop checks `ShopUtil.IsAtShop(player, shopId)`.
 - After changing upgrade levels (purchase, rebirth, restore), call
   `UpgradeService.ApplyEffects(player)` so nests and walk speed update.
@@ -235,32 +234,62 @@ LocalScript, plain `.luau` = ModuleScript.
 - Test without real ids via `SAC_Debug` `receipt` (fake purchase through the
   real code) and `pass` (fake ownership, this session only).
 
-### UI kit (STUD UI Pack V3)
-- The owner's purchased kit. Lives in `vendor/stud/STUD.rbxm`, which is
-  **git-ignored** (third-party, no redistribution). A fresh clone needs the
-  owner to drop the file back there. `imports/` holds audit copies, also
-  ignored.
-- Rojo syncs it to `ReplicatedStorage.UIKit` as templates. Its scripts
-  don't run there. We use only its visual modules (`UIAnimations`,
-  `UIEffects`, `UIScroller`) and **never its shop script** (it prompts
-  purchases client-side and has a bug).
-- `Components/Kit` is the bridge: `Kit.Mount(name)` clones a kit screen into
-  PlayerGui; `Kit.Popup(gui)` gives open/close tweens, one-open-at-a-time,
-  close button and walk-away close; `Kit.FitCanvas(list)` sizes a kit list
-  to its real contents; plus small helpers (`Deep`, `ChildrenNamed`,
-  `SetText`, `SetButtonText`, `SetButtonEnabled`, `Hide`).
-- Controllers find kit parts by name and, where the kit reuses names, by
-  content (a card's sample text, a child it has). If the owner swaps in a
-  newer kit version, re-run a play test and check every screen.
-- Kit sections are fixed-height boxes sized for its sample cards. Adding
-  cards means growing the box (`fitRows` in RobuxShopController) and the
-  list canvas (`Kit.FitCanvas`).
-- Kit screens not yet used stay as templates (Index → Codex in Step 7;
-  Daily, SpinWheel, Rewards, OfflineRewards → Step 7.5).
+### UI (the "campfire field kit")
+- Every screen is built from our own components in
+  `StarterPlayerScripts/Client/Components/` — the purchased STUD kit and its
+  `Components/Kit` bridge are gone (Step 10). The look: charred-wood panels,
+  bone text, ember orange for the main action, moonlight blue for info and
+  Robux, blood red for danger, moss green for cash, field-journal paper for
+  notes; Creepster titles, Oswald for buttons/labels/numbers, SpecialElite
+  for flavour text.
+- **Never hard-code a colour or font in a screen.** Colours come from
+  `Theme.Colors` (`Config.UI.Theme.Colors`) or `Theme.RarityColor(r)` (the
+  Secret rarity's near-black is swapped for a readable colour); fonts from
+  `UI.Text({ Role, Weight })` / `Theme.Fonts`. The Display (horror) font is
+  only for text 28 px and up. Server code (signs, belt labels, leaderboards)
+  reads `Config.UI.Theme` directly and sets `FontFace = Font.fromName(...)`.
+- `Components/UI` builds everything: text, panels, cards, paper, buttons
+  (variants: Primary = the one main action, Cash = in-game $, Moon = Robux
+  and info, Danger = risky confirms, Secondary = neutral, Ghost = minor),
+  HUD tiles, "!" badges, tabs, inputs, progress bars, pills, scroll lists.
+  Its header lists every builder. `UI.new(class, props)` returns `any`, so
+  **property names in props tables are not type-checked** — the smoke
+  harness catches them (see "Testing without Studio").
+- `Components/Window` is every popup: `Window.new({ Name, Title, Icon, Size,
+  Info })`, `window.Body`, `:Open(counter?)` (walking away from `counter`
+  closes it), `:Close()`, `Window.CloseAll/AnyOpen/Get`. One open at a time.
+  Contract: the ScreenGui is Enabled only while it shows and has a direct
+  child `Container` (SoundController's open sound and the auto-open checks
+  rely on it). Windows shrink themselves to fit phones.
+- Layout and draw order are shared so screens never overlap:
+  `Config.UI.Layout` (HUD clusters in px at the 650 px reference height —
+  travel buttons in the top-bar row, camp panel top left, side tiles left
+  middle, Daily + quick-buys right middle, buffs/cash/hotbar bottom centre;
+  bottom corners stay clear for the phone thumbstick and jump) and
+  `Config.UI.Layers` (every `ScreenGui.DisplayOrder` — never a literal).
+  Pixel-sized HUD pieces call `UI.Scale(frame)` (ScreenScale: screen height
+  / 650, clamped `Config.UI.ScreenScale`).
+- Top centre is a stack: sighting/Hunt banners, then steal banners, then the
+  tutorial panel, then toasts. Each panel calls
+  `NotificationController.ReserveTop(key, bottomPx | nil)`; a panel that sits
+  under others uses `ReservedBottom(exceptKey)` and re-places on
+  `ReservationsChanged` (StealController also fires `BannersChanged`).
+- HUD buttons other screens own: `HudController.Bind(name, fn, caption?,
+  icon?)` for "IndexBtn" (Codex), "GiftBtn", "SpinBtn", "DailyBtn"; then
+  `SetAlert(name, on)` / `SetCaption(name, text)`. Tiles stay hidden until
+  bound. The HUD ScreenGui is named "HUD".
+- Each screen area keeps its own tunables in `Config.UI.<Area>` (Hud, Shops,
+  Codex, Retention, Toasts, Tutorial, Banners, Labels, Prompts, Hotbar).
+- **Prompts and hotbar are ours too.** `PromptController` draws every
+  ProximityPrompt in the theme (client-side `Style = Custom`; touch/click
+  calls `InputHoldBegin/End`; steal prompts are blood red via
+  `Config.UI.Prompts.AccentByName`). It never changes reach, hold time, line
+  of sight, Enabled or parent. `HotbarController` replaces Roblox's backpack
+  bar (keys 1–9, tap, gamepad shoulders). `Config.UI.CustomPrompts` /
+  `CustomHotbar = false` puts Roblox's defaults back instantly.
 - Fast travel (HUD Base/Eggs) is server-side in `TravelService`.
-- Our own screens (not from the kit) are sized in pixels: call
-  `ScreenScale.Apply(frame)` on their top frame so they shrink on phones
-  like the kit does. Test new UI in Test → Device → a phone.
+- Test new UI at a phone size too (Studio: Test → Device → a phone; here:
+  `tools/preview/shoot.sh` renders 749x368).
 
 ### Icons
 - The owner's RhosGFX vector icon pack (`../vector-icon-pack.zip`). Its
@@ -268,10 +297,15 @@ LocalScript, plain `.luau` = ModuleScript.
   using them as input to AI systems**. So: pick icons by file name, never
   open the PNGs, keep extracted files in the scratchpad (never in the repo),
   and verify uploads by load status. The owner OK'd screenshots of the
-  finished UI.
-- Upload flow: `tools/serve-icons.ps1` + the MCP `upload_image` tool; ids go
-  in `Config.Icons`. Use them via `Components/Icon` (`Icon.new`,
-  `Icon.addLeft`). Bootstrap rejects icon names missing from `Config.Icons`.
+  finished UI. (The preview renderer draws placeholders and never fetches
+  icon images.)
+- Every icon is the pack's single-colour "Flat White" glyph, tinted in code
+  (`ImageColor3`, default `Theme.Colors.Text`), so they all match. Upload
+  flow: `tools/serve-icons.ps1` + the MCP `upload_image` tool; ids go in
+  `Config.Icons`. Use them via `Components/Icon` (`Icon.new`, `Icon.addLeft`)
+  or the `Icon =` prop of the UI builders. Bootstrap rejects icon names
+  missing from `Config.Icons` in Config tables; `Icon.new` warns on unknown
+  names.
 
 ### Test data
 Studio play tests use their own DataStore scope (`Config.Data.StudioStoreScope`),
@@ -369,6 +403,22 @@ dozen classic-solver nits that are harmless ("Key 'X' not found in external
 type 'Instance'", guarded "could be nil", Signal "Expected this to be",
 pcall "Function only returns 1 value"); anything else in a file you touched
 is a real bug.
+
+### Testing without Studio (cloud sessions)
+A cloud session has no Studio. Before pushing client changes from one, run:
+- `bash tools/analyze-summary.sh` — the type check above (works on Linux too;
+  needs `rojo`, `luau-lsp` and the type definitions).
+- `bash tools/smoke/run.sh` — loads the real `src/client` + `src/shared` in a
+  mock Roblox engine (Lune), validates every class, property, enum and value
+  type against Roblox's API dump, drives a scenario (server events, every
+  button, prompts, tools, resizes, respawn) on PC and phone profiles, and
+  reports what would error in Studio. 0 failures expected. `--list` prints
+  the GUI tree. It has no physics, layout or real server; see its README.
+- `bash tools/preview/shoot.sh` — approximate "screenshots" of every screen
+  at 1920x1080 and 749x368 (smoke `--snapshots` + a Chromium renderer with
+  the real fonts; icons are placeholders). Good for layout, colours and
+  wording; the final look is still checked in Studio.
+These never replace a Studio play test: say so when reporting.
 
 ### Content rules (legal)
 - Common through Legendary are **real folklore cryptids** — public domain.
