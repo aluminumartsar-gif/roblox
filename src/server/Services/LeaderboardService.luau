@@ -24,7 +24,10 @@
 	  * Reads: the top TopCount of each board every RefreshInterval, then
 	    redraws the boards: rank, avatar headshot, name, value. Names come
 	    from players in the server, else UserService / Players lookups,
-	    cached for the server's lifetime.
+	    cached for the server's lifetime. Rows use the campfire field kit
+	    look (Config.UI.Theme): Oswald text on dark wells, the top three
+	    edged in Config.Leaderboards.RankColors (gold, silver, bronze),
+	    cash in moss green.
 	  * Storage: one OrderedDataStore per board, named
 	    Config.Data.StoreName .. "_" .. Store, with the same scope as
 	    DataService (Config.Data.StudioStoreScope in Studio, StoreScope live).
@@ -52,6 +55,14 @@ local LeaderboardService = {}
 
 -- OrderedDataStore values are 64-bit integers; stay well inside them.
 local MAX_SCORE = 2 ^ 53
+
+-- Row look: the campfire field kit (server code can't use the client's
+-- Theme component, so read the same Config.UI.Theme it does).
+local THEME_COLORS = Config.UI.Theme.Colors
+local FONT_BOLD = Font.fromName(Config.UI.Theme.Fonts.Heading, Enum.FontWeight.Bold)
+local FONT_SEMI = Font.fromName(Config.UI.Theme.Fonts.Heading, Enum.FontWeight.SemiBold)
+local EDGE_PX = 2                  -- podium row edge and avatar ring (px at the board's PixelsPerStud)
+local MEDAL_EDGE_TRANSPARENCY = 0.35
 
 type BoardSpec = { Title: string, Subtitle: string, Store: string, Prefix: string }
 type Entry = { UserId: number, Value: number }
@@ -225,13 +236,13 @@ end
 --------------------------------------------------------------------------
 
 local function label(parent: Instance, name: string, x: number, width: number, text: string,
-	color: Color3, align: Enum.TextXAlignment): TextLabel
+	color: Color3, align: Enum.TextXAlignment, font: Font): TextLabel
 	local l = Instance.new("TextLabel")
 	l.Name = name
 	l.Position = UDim2.fromScale(x, 0.1)
 	l.Size = UDim2.fromScale(width, 0.8)
 	l.BackgroundTransparency = 1
-	l.Font = Enum.Font.GothamBold
+	l.FontFace = font
 	l.TextScaled = true
 	l.TextColor3 = color
 	l.TextXAlignment = align
@@ -272,27 +283,40 @@ local function renderBoard(screen: Instance)
 		return
 	end
 
+	local labels = Config.UI.Labels
+	local prefix = if spec then spec.Prefix else ""
+	-- Cash boards show their numbers in the game's cash colour.
+	local valueColor = if prefix == "$" then THEME_COLORS.Moss else THEME_COLORS.Text
 	for rank, entry in ipairs(board.Entries) do
+		-- Gold, silver, bronze for the podium (game data); the rest plain.
+		local medal: Color3? = lb.RankColors[rank]
 		local row = Instance.new("Frame")
 		row.Name = "Row"
 		row.LayoutOrder = rank
 		row.Size = UDim2.fromScale(1, 0.094)
-		row.BackgroundColor3 = Color3.new(0, 0, 0)
-		row.BackgroundTransparency = if rank % 2 == 1 then 0.72 else 0.84
+		row.BackgroundColor3 = THEME_COLORS.Inset
+		row.BackgroundTransparency = if rank % 2 == 1 then labels.BoardRowTransparency else labels.BoardRowAltTransparency
 		row.BorderSizePixel = 0
 		row.Parent = list
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0.2, 0)
 		corner.Parent = row
+		if medal then
+			local edge = Instance.new("UIStroke")
+			edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			edge.Color = medal
+			edge.Thickness = EDGE_PX
+			edge.Transparency = MEDAL_EDGE_TRANSPARENCY
+			edge.Parent = row
+		end
 
-		local color = lb.RankColors[rank] or lb.RowColor
-		label(row, "Rank", 0.01, 0.1, tostring(rank), color, Enum.TextXAlignment.Center)
+		label(row, "Rank", 0.01, 0.1, tostring(rank), medal or THEME_COLORS.TextDim, Enum.TextXAlignment.Center, FONT_BOLD)
 
 		local head = Instance.new("ImageLabel")
 		head.Name = "Avatar"
 		head.Position = UDim2.fromScale(0.12, 0.06)
 		head.Size = UDim2.fromScale(0.1, 0.88)
-		head.BackgroundColor3 = Color3.fromRGB(40, 34, 30)
+		head.BackgroundColor3 = THEME_COLORS.Raised
 		head.BackgroundTransparency = 0.3
 		if entry.UserId > 0 then
 			head.Image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=48&h=48", entry.UserId)
@@ -304,11 +328,16 @@ local function renderBoard(screen: Instance)
 		local round = Instance.new("UICorner")
 		round.CornerRadius = UDim.new(0.5, 0)
 		round.Parent = head
+		local ring = Instance.new("UIStroke")
+		ring.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		ring.Color = medal or THEME_COLORS.Edge
+		ring.Thickness = EDGE_PX
+		ring.Parent = head
 
 		local name = nameCache[entry.UserId] or ("Camper " .. tostring(entry.UserId))
-		label(row, "Name", 0.24, 0.46, name, lb.RowColor, Enum.TextXAlignment.Left)
-		local prefix = if spec then spec.Prefix else ""
-		label(row, "Value", 0.71, 0.27, prefix .. Config.FormatNumber(entry.Value), color, Enum.TextXAlignment.Right)
+		label(row, "Name", 0.24, 0.46, name, THEME_COLORS.Text, Enum.TextXAlignment.Left, FONT_SEMI)
+		label(row, "Value", 0.71, 0.27, prefix .. Config.FormatNumber(entry.Value), medal or valueColor,
+			Enum.TextXAlignment.Right, FONT_BOLD)
 	end
 end
 

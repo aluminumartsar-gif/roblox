@@ -2284,7 +2284,29 @@ Config.UI = {
 	},
 
 	-- Nest labels, belt egg labels and in-world signs (NestVisualsController, EggBeltController, server signs).
+	-- Colours and fonts come from Theme above; the nest label sizes (studs)
+	-- stay in Config.Feedback (NestLabel*, EggLabelSize, CreatureLabel*).
 	Labels = {
+		-- Floating labels (nest items, belt eggs, the camp owner tag)
+		TextStroke = 0.35,             -- transparency of the dark outline round floating label text (0 = solid)
+		EggAlmostPulseTime = 0.5,      -- seconds per beat of the glow round an egg's bar when it's about to hatch
+		VaultFullPulseTime = 0.45,     -- seconds per beat of a full vault bar
+		BarGlowThickness = 2,          -- px, the glowing edge of an egg bar about to hatch
+
+		-- Belt egg label (EggBeltService builds it; EggBeltController sets the price / "Rebirth N" line)
+		BeltLabelSize = Vector2.new(3.8, 1.15), -- width, height in studs (shrinks with distance)
+		BeltLabelLift = 1.1,           -- studs between the top of the egg and the label
+		BeltLabelMaxDistance = 90,     -- studs; hidden further away
+
+		-- Signs and boards (MapBuilder, LeaderboardService)
+		SignEdgeThickness = 3,         -- px (at the sign's PixelsPerStud) of the burnt edge round sign titles
+		SignEdgeTransparency = 0.15,
+		VacantSignTransparency = 0.4,  -- "Vacant Campsite" text is faded this much
+		OwnerTagSize = Vector2.new(190, 30), -- px; the floating "Name's Camp" over each claimed camp
+		OwnerTagLift = 4,              -- studs above the camp sign
+		OwnerTagMaxDistance = 220,     -- studs
+		BoardRowTransparency = 0.45,   -- leaderboard row backing (odd rows)
+		BoardRowAltTransparency = 0.65, -- even rows
 	},
 
 	-- Themed "hold E" ProximityPrompts (PromptController).

@@ -9,14 +9,20 @@
 	  * Labels are sized in STUDS (BillboardGui Size in scale), so they
 	    shrink with distance instead of crowding a phone screen, sit just
 	    above the model's real height (generated meshes vary in size), and
-	    hide beyond Config.Feedback.NestLabelMaxDistance.
-	      Eggs:      name + a countdown bar to hatching. Everyone sees it —
-	                 an egg that's nearly done is a target, which is the point.
-	      Creatures: name in its rarity colour + "$X/s". On YOUR creatures
-	                 only, a vault bar with "$X" ("FULL" pulses).
+	    hide beyond Config.Feedback.NestLabelMaxDistance. They use the
+	    campfire field kit look (Components/Theme, UI): Oswald text with a
+	    dark outline, bars in a sunken well like the screens' progress bars.
+	      Eggs:      name + an ember countdown bar to hatching. Everyone sees
+	                 it — an egg that's nearly done is a target, which is the
+	                 point. In the last stretch (Config.Incubation.
+	                 AlmostReadyFraction) the bar brightens, its edge glows
+	                 and pulses, and it reads "HATCHING m:ss".
+	      Creatures: name in its rarity colour (Secret: SecretText, scrambled)
+	                 + "$X/s" in moss green. On YOUR creatures only, a moss
+	                 vault bar with "$X" ("FULL" turns ember and pulses).
 	    Eggs glow brighter as they get closer to hatching, and in the last
-	    stretch (Config.Incubation.AlmostReadyFraction) they throw a light
-	    pillar into the sky that the whole map can see.
+	    stretch they throw a light pillar into the sky that the whole map
+	    can see.
 	  * Prompts: owners see Sell on their cryptids (with the price); others
 	    see Steal on eggs unless the camp is locked/protected or they're
 	    carrying (display only; the server re-checks everything).
@@ -40,18 +46,40 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
+local Components = script.Parent.Parent:WaitForChild("Components")
+local Theme = require(Components:WaitForChild("Theme"))
+local UI = require(Components:WaitForChild("UI"))
+
 local NestVisualsController = {}
 
 local FX = Config.Feedback
+local L = Config.UI.Labels
+local C = Theme.Colors
 local localPlayer = Players.LocalPlayer
 
-local WHITE = Color3.new(1, 1, 1)
-local BAR_BACK = Color3.fromRGB(20, 20, 26)
-local HATCH_COLOR = Color3.fromRGB(255, 190, 80)
-local ALMOST_COLOR = Color3.fromRGB(255, 80, 60)
-local VAULT_COLOR = Color3.fromRGB(110, 220, 120)
-local VAULT_FULL_COLOR = Color3.fromRGB(255, 170, 60)
-local INCOME_COLOR = Color3.fromRGB(150, 255, 160)
+local WHITE = Color3.new(1, 1, 1) -- maths only: aura sparks fade toward white
+-- World light / pillar colours for an incubating egg and one about to hatch.
+local HATCH_GLOW = C.EmberBright
+local ALMOST_GLOW = C.BloodBright
+
+-- Label layout, as fractions of the label (not designer tunables: the label
+-- sizes themselves are Config.Feedback.*LabelSize).
+local ROW_GAP = 0.03
+local BAR_WIDTH = 0.85
+local BAR_FADE = 0.7 -- an egg bar's glowing edge pulses down to this transparency
+local VAULT_FADE = 0.6 -- a full vault's fill pulses down to this transparency
+
+--- The shading UI.ProgressBar gives its fill (light top, deep bottom).
+local function fillSequence(color: Color3): ColorSequence
+	return Theme.Sequence(color:Lerp(WHITE, 0.35), color:Lerp(C.Shadow, 0.35), color)
+end
+
+-- Built once: bars swap between these when their state changes, so the
+-- per-second redraws never allocate a new sequence.
+local EGG_FILL = fillSequence(C.Ember)
+local EGG_ALMOST_FILL = fillSequence(C.EmberBright)
+local VAULT_FILL = fillSequence(C.Moss)
+local VAULT_FULL_FILL = fillSequence(C.Ember)
 
 -- Secret creatures currently on this client -> their name label, for the
 -- flicker loop.
@@ -74,69 +102,86 @@ local function makeBillboard(model: Model, adornee: BasePart, size: Vector2): (B
 	billboard.Adornee = adornee
 	billboard.Parent = adornee
 
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.fromScale(1, 1)
-	frame.BackgroundTransparency = 1
-	frame.Parent = billboard
-	local layout = Instance.new("UIListLayout")
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0.03, 0)
-	layout.Parent = frame
+	local frame = UI.new("Frame", {
+		Name = "Rows",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Parent = billboard,
+	})
+	UI.List({
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		Padding = UDim.new(ROW_GAP, 0),
+		Parent = frame,
+	})
 	return billboard, frame
 end
 
---- A text row taking `height` (0..1) of the label.
-local function textLine(parent: Instance, order: number, height: number): TextLabel
-	local l = Instance.new("TextLabel")
-	l.LayoutOrder = order
-	l.Size = UDim2.fromScale(1, height)
-	l.BackgroundTransparency = 1
-	l.Font = Enum.Font.GothamBold
-	l.TextScaled = true
-	l.TextColor3 = WHITE
-	l.TextStrokeTransparency = 0.35
-	l.Parent = parent
-	local limit = Instance.new("UITextSizeConstraint")
-	limit.MaxTextSize = FX.NestLabelMaxTextSize
-	limit.Parent = l
+--- Caps scaled text so a label isn't enormous right next to you.
+local function capText(label: TextLabel)
+	UI.new("UITextSizeConstraint", { MaxTextSize = FX.NestLabelMaxTextSize, Parent = label })
+end
+
+--- A text row taking `height` (0..1) of the label: Oswald with a dark
+--- outline so it reads against the night woods.
+local function textLine(parent: Instance, name: string, order: number, height: number, weight: string): TextLabel
+	local l = UI.Text({
+		Name = name,
+		Role = "Heading",
+		Weight = weight,
+		LayoutOrder = order,
+		Size = UDim2.fromScale(1, height),
+		TextScaled = true,
+		RichText = false, -- Secret names scramble into symbols like "&"
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = L.TextStroke,
+		Parent = parent,
+	})
+	capText(l)
 	return l
 end
 
---- A rounded bar taking `height` of the label, with a text label on top.
-local function bar(parent: Instance, order: number, height: number, color: Color3): (Frame, TextLabel)
-	local back = Instance.new("Frame")
-	back.LayoutOrder = order
-	back.Size = UDim2.fromScale(0.85, height)
-	back.BackgroundColor3 = BAR_BACK
-	back.BackgroundTransparency = 0.2
-	back.Parent = parent
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0.5, 0)
-	corner.Parent = back
-	local fill = Instance.new("Frame")
-	fill.Name = "Fill"
-	fill.Size = UDim2.fromScale(0, 1)
-	fill.BackgroundColor3 = color
-	fill.Parent = back
-	local fillCorner = Instance.new("UICorner")
-	fillCorner.CornerRadius = UDim.new(0.5, 0)
-	fillCorner.Parent = fill
-	local text = Instance.new("TextLabel")
-	text.Name = "Text"
-	text.Size = UDim2.fromScale(1, 1)
-	text.BackgroundTransparency = 1
-	text.Font = Enum.Font.GothamBlack
+type Bar = {
+	frame: Frame,
+	fill: Frame,
+	gradient: UIGradient?,
+	text: TextLabel,
+	edge: UIStroke?, -- the well's border; an egg about to hatch makes it glow
+}
+
+--- A progress bar (UI.ProgressBar: sunken well, shaded fill, centred
+--- caption) taking `height` of the label.
+local function bar(parent: Instance, order: number, height: number, sequence: ColorSequence): Bar
+	local frame = UI.ProgressBar({
+		LayoutOrder = order,
+		Size = UDim2.fromScale(BAR_WIDTH, height),
+		Text = "",
+		Parent = parent,
+	}) :: Frame
+	local fill = frame:FindFirstChild("Fill") :: Frame
+	local gradient = fill:FindFirstChildOfClass("UIGradient")
+	if gradient then
+		gradient.Color = sequence
+	end
+	local text = frame:FindFirstChild("Label") :: TextLabel
 	text.TextScaled = true
-	text.TextColor3 = WHITE
-	text.TextStrokeTransparency = 0.3
-	text.ZIndex = 2
-	text.Parent = back
-	local limit = Instance.new("UITextSizeConstraint")
-	limit.MaxTextSize = FX.NestLabelMaxTextSize
-	limit.Parent = text
-	return fill, text
+	text.RichText = false
+	capText(text)
+	return {
+		frame = frame,
+		fill = fill,
+		gradient = gradient,
+		text = text,
+		edge = frame:FindFirstChildOfClass("UIStroke"),
+	}
+end
+
+--- Starts a looping fade on `instance` (the caller cancels it).
+local function pulse(instance: Instance, seconds: number, goal: { [string]: any }): Tween
+	local tween = TweenService:Create(instance,
+		TweenInfo.new(seconds, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), goal)
+	tween:Play()
+	return tween
 end
 
 local function isMine(model: Instance): boolean
@@ -296,12 +341,19 @@ local function setupEgg(instance: Instance)
 
 	local size: Vector2 = FX.EggLabelSize
 	local _, frame = makeBillboard(model, shell, size)
-	local name = textLine(frame, 1, 0.5)
+	local name = textLine(frame, "Title", 1, 0.5, "Bold")
 	name.Text = egg.Name
-	name.TextColor3 = egg.Color:Lerp(WHITE, 0.5)
-	local hatchFill, hatchText = bar(frame, 2, 0.42, HATCH_COLOR)
+	name.TextColor3 = egg.Color:Lerp(C.Text, 0.5)
+	local hatch = bar(frame, 2, 0.42, EGG_FILL)
+	local edge = hatch.edge
+	-- The well's own border, put back when an egg stops being "almost".
+	local edgeColor = if edge then edge.Color else C.Edge
+	local edgeThickness = if edge then edge.Thickness else 1
+	local edgeTransparency = if edge then edge.Transparency else 0
 	local glow = shell:FindFirstChild("HatchGlow") :: PointLight?
 	local pillar: BasePart? = nil
+	local edgePulse: Tween? = nil
+	local wasAlmost: boolean? = nil
 
 	-- The last stretch: a light pillar into the night sky over the egg, so
 	-- everyone on the map knows something good is about to hatch here.
@@ -316,7 +368,7 @@ local function setupEgg(instance: Instance)
 			p.CanTouch = false
 			p.CastShadow = false
 			p.Material = Enum.Material.Neon
-			p.Color = egg.Color:Lerp(ALMOST_COLOR, 0.5)
+			p.Color = egg.Color:Lerp(ALMOST_GLOW, 0.5)
 			p.Transparency = 0.7
 			local height = 70
 			p.Size = Vector3.new(height, 1.6, 1.6)
@@ -325,36 +377,80 @@ local function setupEgg(instance: Instance)
 			-- when the egg does (hatched, stolen, streamed out).
 			p.Parent = Workspace
 			pillar = p
-			model.AncestryChanged:Connect(function()
-				if not model:IsDescendantOf(game) and pillar then
-					pillar:Destroy()
-					pillar = nil
-				end
-			end)
 		elseif not on and pillar then
 			pillar:Destroy()
 			pillar = nil
 		end
 	end
 
+	-- Only on a change of state: brighter fill, a pulsing ember edge on the
+	-- bar, and the pillar.
+	local function setAlmost(almost: boolean)
+		if almost == wasAlmost then
+			return
+		end
+		wasAlmost = almost
+		if hatch.gradient then
+			hatch.gradient.Color = if almost then EGG_ALMOST_FILL else EGG_FILL
+		end
+		if edgePulse then
+			edgePulse:Cancel()
+			edgePulse = nil
+		end
+		if edge then
+			if almost then
+				edge.Color = C.EmberBright
+				edge.Thickness = L.BarGlowThickness
+				edge.Transparency = 0
+				edgePulse = pulse(edge, L.EggAlmostPulseTime, { Transparency = BAR_FADE })
+			else
+				edge.Color = edgeColor
+				edge.Thickness = edgeThickness
+				edge.Transparency = edgeTransparency
+			end
+		end
+		setPillar(almost)
+	end
+
 	local function render()
+		if not model:IsDescendantOf(game) then
+			return -- streamed out / gone: never leave a pillar behind (redrawn on return)
+		end
 		local progress = math.clamp(tonumber(model:GetAttribute("Progress")) or 0, 0, 1)
-		local remaining = math.max(0, tonumber(model:GetAttribute("Remaining")) or 0)
+		local remaining = math.max(0, math.floor(tonumber(model:GetAttribute("Remaining")) or 0))
 		local almost = progress >= Config.Incubation.AlmostReadyFraction
 		local clock = string.format("%d:%02d", remaining // 60, remaining % 60)
-		hatchText.Text = if almost then "HATCHING " .. clock else clock
-		hatchFill.Size = UDim2.fromScale(progress, 1)
-		hatchFill.BackgroundColor3 = if almost then ALMOST_COLOR else HATCH_COLOR
+		hatch.text.Text = if almost then "HATCHING " .. clock else clock
+		UI.SetProgress(hatch.frame, progress)
 		if glow then
 			glow.Brightness = progress * 2.5
 			glow.Range = 6 + progress * 8
-			glow.Color = if almost then ALMOST_COLOR else HATCH_COLOR
+			glow.Color = if almost then ALMOST_GLOW else HATCH_GLOW
 		end
-		setPillar(almost)
+		setAlmost(almost)
 	end
 	render()
 	model:GetAttributeChangedSignal("Progress"):Connect(render)
 	model:GetAttributeChangedSignal("Remaining"):Connect(render)
+
+	-- Hatched, stolen or streamed out: the pillar lives outside the model,
+	-- and the pulse would keep running on a dead label. Forget the state so
+	-- a model that streams back in gets its pillar and glow again.
+	model.AncestryChanged:Connect(function()
+		if model:IsDescendantOf(game) then
+			render()
+			return
+		end
+		if edgePulse then
+			edgePulse:Cancel()
+			edgePulse = nil
+		end
+		if pillar then
+			pillar:Destroy()
+			pillar = nil
+		end
+		wasAlmost = nil
+	end)
 
 	addLife(model, true)
 end
@@ -438,9 +534,9 @@ local function setupCreature(instance: Instance)
 	if existing then
 		-- Already dressed (seen twice): just keep it moving and flickering.
 		addLife(model, false)
-		local frame = existing:FindFirstChildOfClass("Frame")
-		local nameLabel = frame and frame:FindFirstChildOfClass("TextLabel")
-		if secret and nameLabel then
+		local rows = existing:FindFirstChild("Rows")
+		local nameLabel = rows and rows:FindFirstChild("Title")
+		if secret and nameLabel and nameLabel:IsA("TextLabel") then
 			secrets[model] = nameLabel
 		end
 		return
@@ -453,49 +549,62 @@ local function setupCreature(instance: Instance)
 	-- Rows as fractions of the label height.
 	local nameHeight = if mine then 0.36 else 0.55
 	local incomeHeight = if mine then 0.28 else 0.4
-	local name = textLine(frame, 1, nameHeight)
+	local name = textLine(frame, "Title", 1, nameHeight, "Bold")
 	name.Text = def.Name -- Secret's label is scrambled by flickerSecrets()
-	name.TextColor3 = if secret then FX.SecretAccent else rarity.Color
-	local incomeLine = textLine(frame, 2, incomeHeight)
-	incomeLine.TextColor3 = INCOME_COLOR
+	name.TextColor3 = Theme.RarityColor(def.Rarity) -- Secret: SecretText, readable at night
+	local incomeLine = textLine(frame, "Income", 2, incomeHeight, "SemiBold")
+	incomeLine.TextColor3 = C.MossBright
 
-	local vaultFill: Frame? = nil
-	local vaultText: TextLabel? = nil
-	if mine then
-		local fill, text = bar(frame, 3, 0.28, VAULT_COLOR)
-		vaultFill = fill
-		vaultText = text
-	end
-	local pulse: Tween? = nil
+	local vault: Bar? = if mine then bar(frame, 3, 0.28, VAULT_FILL) else nil
+	local fullPulse: Tween? = nil
+	local wasFull: boolean? = nil
 
 	local function render()
+		if not model:IsDescendantOf(game) then
+			return -- streamed out / sold: redrawn if it comes back
+		end
 		local income = tonumber(model:GetAttribute("IncomePerSecond")) or rarity.IncomePerSecond
 		incomeLine.Text = "$" .. Config.FormatNumber(income) .. "/s"
-		if vaultFill and vaultText then
-			local vault = tonumber(model:GetAttribute("Vault")) or 0
+		if vault then
+			local amount = tonumber(model:GetAttribute("Vault")) or 0
 			local cap = tonumber(model:GetAttribute("VaultCap")) or 1
-			local fraction = if cap > 0 then math.clamp(vault / cap, 0, 1) else 0
+			local fraction = if cap > 0 then math.clamp(amount / cap, 0, 1) else 0
 			local full = fraction >= 1
-			vaultFill.Size = UDim2.fromScale(fraction, 1)
-			vaultText.Text = if full then "FULL" else "$" .. Config.FormatNumber(vault)
-			if full and not pulse then
-				vaultFill.BackgroundColor3 = VAULT_FULL_COLOR
-				local tween = TweenService:Create(vaultFill,
-					TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-					{ BackgroundTransparency = 0.6 })
-				tween:Play()
-				pulse = tween
-			elseif not full and pulse then
-				pulse:Cancel()
-				pulse = nil
-				vaultFill.BackgroundTransparency = 0
-				vaultFill.BackgroundColor3 = VAULT_COLOR
+			UI.SetProgress(vault.frame, fraction)
+			vault.text.Text = if full then "FULL" else "$" .. Config.FormatNumber(amount)
+			if full ~= wasFull then
+				wasFull = full
+				if vault.gradient then
+					vault.gradient.Color = if full then VAULT_FULL_FILL else VAULT_FILL
+				end
+				if fullPulse then
+					fullPulse:Cancel()
+					fullPulse = nil
+				end
+				vault.fill.BackgroundTransparency = 0
+				if full then
+					fullPulse = pulse(vault.fill, L.VaultFullPulseTime, { BackgroundTransparency = VAULT_FADE })
+				end
 			end
 		end
 	end
 	render()
 	for _, attr in ipairs({ "Vault", "VaultCap", "IncomePerSecond" }) do
 		model:GetAttributeChangedSignal(attr):Connect(render)
+	end
+	if vault then
+		-- Sold or streamed out: stop the pulse; redraw if it streams back in.
+		model.AncestryChanged:Connect(function()
+			if model:IsDescendantOf(game) then
+				render()
+				return
+			end
+			if fullPulse then
+				fullPulse:Cancel()
+				fullPulse = nil
+			end
+			wasFull = nil
+		end)
 	end
 
 	if secret then

@@ -19,6 +19,12 @@
 	Roblox rejects a prompt trigger if the server thinks the prompt is out of
 	reach. The server's own reach check uses the exact path maths.
 
+	Each egg carries a floating label (BillboardGui "Label", stud-sized so
+	it shrinks with distance): the egg's name in its Config.Belt.LabelColors
+	colour over a "Price" line that EggBeltController rewrites per player
+	("$X", or "Rebirth N" while locked). Fonts and colours come from
+	Config.UI.Theme, sizes from Config.UI.Labels.
+
 	A purchase is checked in order: egg still for sale and riding, hold
 	really lasted, save loaded, rebirth requirement, hands free, not
 	stunned, has a camp and a free nest, within reach of where the egg is
@@ -68,6 +74,11 @@ local lastAttempt: { [Player]: number } = {}
 
 local EGG_CENTRE_HEIGHT = ItemVisuals.EggSize.Y / 2
 
+-- Label look: the campfire field kit (server code can't use the client's
+-- Theme component, so read the same Config.UI.Theme it does).
+local THEME_COLORS = Config.UI.Theme.Colors
+local LABEL_FONT = Font.fromName(Config.UI.Theme.Fonts.Heading, Enum.FontWeight.Bold)
+
 local function serverNow(): number
 	return Workspace:GetServerTimeNow()
 end
@@ -109,10 +120,11 @@ local function label(parent: Instance, name: string, text: string, color: Color3
 	l.BackgroundTransparency = 1
 	l.Position = UDim2.fromScale(0, yScale)
 	l.Size = UDim2.fromScale(1, heightScale)
-	l.Font = Enum.Font.GothamBlack
+	l.FontFace = LABEL_FONT
 	l.TextScaled = true
 	l.TextColor3 = color
-	l.TextStrokeTransparency = 0.35
+	l.TextStrokeColor3 = THEME_COLORS.Shadow
+	l.TextStrokeTransparency = Config.UI.Labels.TextStroke
 	l.Text = text
 	l.Parent = parent
 end
@@ -252,15 +264,17 @@ local function spawnEgg(eggId: string, spawnTime: number): BeltEgg
 	anchor.CFrame = BeltPath.EggCFrame(math.max(0, serverNow() - spawnTime)) * CFrame.new(0, EGG_CENTRE_HEIGHT, 0)
 	anchor.Parent = model
 
+	local labels = Config.UI.Labels
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Label"
-	billboard.Size = UDim2.fromScale(3.8, 1.15) -- studs: shrinks with distance
-	billboard.StudsOffset = Vector3.new(0, ItemVisuals.EggSize.Y / 2 + 1.1, 0)
+	billboard.Size = UDim2.fromScale(labels.BeltLabelSize.X, labels.BeltLabelSize.Y) -- studs: shrinks with distance
+	billboard.StudsOffset = Vector3.new(0, ItemVisuals.EggSize.Y / 2 + labels.BeltLabelLift, 0)
 	billboard.LightInfluence = 0
-	billboard.MaxDistance = 90
+	billboard.MaxDistance = labels.BeltLabelMaxDistance
 	billboard.Parent = shell
-	label(billboard, "EggName", def.Name, Config.Belt.LabelColors[eggId] or Color3.new(1, 1, 1), 0, 0.55)
-	label(billboard, "Price", "$" .. Config.FormatNumber(def.Price), Color3.fromRGB(120, 255, 140), 0.55, 0.45)
+	label(billboard, "EggName", def.Name, Config.Belt.LabelColors[eggId] or THEME_COLORS.Text, 0, 0.55)
+	-- EggBeltController rewrites this line for each player (price or "Rebirth N").
+	label(billboard, "Price", "$" .. Config.FormatNumber(def.Price), THEME_COLORS.Moss, 0.55, 0.45)
 
 	if Config.Belt.AnnounceEggs[eggId] then
 		local sparkle = Instance.new("ParticleEmitter")

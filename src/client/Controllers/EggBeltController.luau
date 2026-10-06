@@ -14,6 +14,9 @@
 	  * Buy prompts only show while an egg is riding, while your hands are
 	    free, and for eggs you've unlocked; locked eggs say which rebirth
 	    unlocks them
+	  * the second line of each egg's floating label (built by
+	    EggBeltService): its price in moss green, or "Rebirth N" in ash grey
+	    while you haven't unlocked it (Theme colours)
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -27,13 +30,15 @@ local Config = require(Shared:WaitForChild("Config"))
 local BeltPath = require(Shared:WaitForChild("BeltPath"))
 
 local ProfileController = require(script.Parent:WaitForChild("ProfileController"))
+local Theme = require(script.Parent.Parent:WaitForChild("Components"):WaitForChild("Theme"))
 
 local EggBeltController = {}
 
 local localPlayer = Players.LocalPlayer
 
 local SPIN_SPEED = 0.6 -- radians per second, purely for looks
-local LOCKED_COLOR = Color3.fromRGB(170, 170, 170)
+local PRICE_COLOR = Theme.Colors.Moss -- cash (matches EggBeltService's label)
+local LOCKED_COLOR = Theme.Colors.TextDim
 
 type EggView = {
 	model: Model,
@@ -75,7 +80,7 @@ local function refreshView(view: EggView)
 			view.price.TextColor3 = LOCKED_COLOR
 		else
 			view.price.Text = "$" .. Config.FormatNumber(def.Price)
-			view.price.TextColor3 = Color3.fromRGB(120, 255, 140)
+			view.price.TextColor3 = PRICE_COLOR
 		end
 	end
 	if view.prompt then

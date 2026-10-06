@@ -15,6 +15,14 @@
 	Everything random uses Random.new(Config.Map.Seed) (plots use Seed +
 	plot index), so the world is the same on every boot and every server.
 
+	Signs and boards (camp signs and the floating owner name, the Upgrades
+	cabin, the belt arch and odds board, the welcome arch, the home pad,
+	the leaderboards) use the campfire field kit look from Config.UI.Theme:
+	Creepster titles with a burnt ember edge, Oswald for labels, the
+	typewriter face for captions, bone-white text; tunables in
+	Config.UI.Labels. After changing this file, re-run
+	tools/place-settings.luau in Edit to refresh the saved preview.
+
 	Art: props (trees, rocks, tents, lanterns, nests...) are cloned from the
 	generated-mesh templates in ReplicatedStorage.ArtTemplates.Props (built
 	by ArtService before WorldService runs) via prop(). When a template is
@@ -121,6 +129,29 @@ local COLORS = {
 	TotemPaint = { Color3.fromRGB(150, 70, 52), Color3.fromRGB(70, 104, 120), Color3.fromRGB(176, 140, 72) },
 	Ember = Color3.fromRGB(255, 160, 80),
 }
+
+-- Sign and board text: the campfire field kit. Server code can't use the
+-- client's Theme component, so read the same Config.UI.Theme it does.
+local THEME_COLORS = Config.UI.Theme.Colors
+local SIGN_FONTS: { [string]: Font } = {
+	Display = Font.fromName(Config.UI.Theme.Fonts.Display, Enum.FontWeight.Regular), -- big titles only
+	Heading = Font.fromName(Config.UI.Theme.Fonts.Heading, Enum.FontWeight.Bold),
+	Body = Font.fromName(Config.UI.Theme.Fonts.Body, Enum.FontWeight.Regular),
+	Notes = Font.fromName(Config.UI.Theme.Fonts.Notes, Enum.FontWeight.Regular),
+}
+
+--- The burnt ember edge round a sign title (like UI.Title on screens).
+--- Named "Edge" so SetPlotSign can fade it with a vacant camp's text.
+local function burntEdge(label: TextLabel)
+	local edge = Instance.new("UIStroke")
+	edge.Name = "Edge"
+	edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	edge.Color = THEME_COLORS.EmberDeep
+	edge.Thickness = Config.UI.Labels.SignEdgeThickness
+	edge.Transparency = Config.UI.Labels.SignEdgeTransparency
+	edge.LineJoinMode = Enum.LineJoinMode.Round
+	edge.Parent = label
+end
 
 -- Per-build counters (reset by Build).
 local lightCount = 0
@@ -888,11 +919,12 @@ local function buildCabin(name: string, cf: CFrame, signText: string, shopId: st
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
 	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.Fantasy
+	label.FontFace = SIGN_FONTS.Display
 	label.TextScaled = true
-	label.TextColor3 = COLORS.SignText
+	label.TextColor3 = THEME_COLORS.Text
 	label.Text = signText
 	label.Parent = gui
+	burntEdge(label)
 
 	lantern(cf * CFrame.new(width / 2 + 2, 0, -depth / 2), 7, cabin)
 	lantern(cf * CFrame.new(-width / 2 - 2, 0, -depth / 2), 7, cabin)
@@ -902,7 +934,9 @@ end
 -- Egg belt (circles the campfire; see Shared/BeltPath for the motion)
 --------------------------------------------------------------------------
 
-local function signLabel(part: BasePart, face: Enum.NormalId, text: string, font: Enum.Font?)
+--- Painted sign text filling one face of `part`. `role` is a
+--- Config.UI.Theme.Fonts role (default "Display", the horror title face).
+local function signLabel(part: BasePart, face: Enum.NormalId, text: string, role: string?)
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = face
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
@@ -911,11 +945,12 @@ local function signLabel(part: BasePart, face: Enum.NormalId, text: string, font
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
 	label.BackgroundTransparency = 1
-	label.Font = font or Enum.Font.Fantasy
+	label.FontFace = SIGN_FONTS[role or "Display"] or SIGN_FONTS.Display
 	label.TextScaled = true
-	label.TextColor3 = COLORS.SignText
+	label.TextColor3 = THEME_COLORS.Text
 	label.Text = text
 	label.Parent = gui
+	burntEdge(label)
 end
 
 --- One burrow: a mossy stone mound, flush with the belt, with a glowing
@@ -1006,24 +1041,26 @@ local function buildOddsBoard(cf: CFrame, parent: Instance)
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.Parent = list
 	local rows = #Config.EggOrder + 1
-	local function row(order: number, text: string, color: Color3, font: Enum.Font)
+	local function row(order: number, text: string, color: Color3, font: Font): TextLabel
 		local label = Instance.new("TextLabel")
 		label.LayoutOrder = order
 		label.Size = UDim2.fromScale(0.9, 1 / rows)
 		label.BackgroundTransparency = 1
-		label.Font = font
+		label.FontFace = font
 		label.TextScaled = true
 		label.TextColor3 = color
 		label.Text = text
 		label.Parent = list
+		return label
 	end
-	row(0, "EGG BELT ODDS", COLORS.SignText, Enum.Font.Fantasy)
+	burntEdge(row(0, "EGG BELT ODDS", THEME_COLORS.Text, SIGN_FONTS.Display))
 	for i, eggId in ipairs(Config.EggOrder) do
 		local weight = Config.Belt.EggWeights[eggId] or 0
 		local pct = if total > 0 then weight / total * 100 else 0
 		local pctText = if pct >= 1 then string.format("%.0f%%", pct) else string.format("%.1f%%", pct)
+		-- Each egg in its own label colour (game data, same as its belt label).
 		row(i, string.format("%s  %s", Config.Eggs[eggId].Name, pctText),
-			Config.Belt.LabelColors[eggId] or COLORS.SignText, Enum.Font.GothamBold)
+			Config.Belt.LabelColors[eggId] or THEME_COLORS.Text, SIGN_FONTS.Heading)
 	end
 end
 
@@ -1166,20 +1203,21 @@ local function buildLeaderboard(key: string, cf: CFrame, parent: Instance)
 	title.Position = UDim2.fromScale(0.04, 0.02)
 	title.Size = UDim2.fromScale(0.92, 0.1)
 	title.BackgroundTransparency = 1
-	title.Font = Enum.Font.Fantasy
+	title.FontFace = SIGN_FONTS.Display
 	title.TextScaled = true
-	title.TextColor3 = COLORS.SignText
+	title.TextColor3 = THEME_COLORS.Text
 	title.Text = if spec then spec.Title else key
 	title.Parent = gui
+	burntEdge(title)
 
 	local subtitle = Instance.new("TextLabel")
 	subtitle.Name = "Subtitle"
 	subtitle.Position = UDim2.fromScale(0.04, 0.12)
 	subtitle.Size = UDim2.fromScale(0.92, 0.05)
 	subtitle.BackgroundTransparency = 1
-	subtitle.Font = Enum.Font.GothamMedium
+	subtitle.FontFace = SIGN_FONTS.Notes -- a field-note caption under the title
 	subtitle.TextScaled = true
-	subtitle.TextColor3 = Color3.fromRGB(220, 198, 164)
+	subtitle.TextColor3 = THEME_COLORS.TextDim
 	subtitle.Text = if spec then spec.Subtitle else ""
 	subtitle.Parent = gui
 
@@ -1200,10 +1238,10 @@ local function buildLeaderboard(key: string, cf: CFrame, parent: Instance)
 	status.Position = UDim2.fromScale(0.08, 0.4)
 	status.Size = UDim2.fromScale(0.84, 0.16)
 	status.BackgroundTransparency = 1
-	status.Font = Enum.Font.GothamMedium
+	status.FontFace = SIGN_FONTS.Body
 	status.TextScaled = true
 	status.TextWrapped = true
-	status.TextColor3 = Color3.fromRGB(220, 198, 164)
+	status.TextColor3 = THEME_COLORS.TextDim
 	status.Text = "Gathering the top campers..."
 	status.Parent = gui
 end
@@ -1600,17 +1638,19 @@ local function buildPlot(index: number, plotsFolder: Folder)
 	ownerLabel.Name = "Label"
 	ownerLabel.Size = UDim2.fromScale(1, 1)
 	ownerLabel.BackgroundTransparency = 1
-	ownerLabel.Font = Enum.Font.Fantasy
+	ownerLabel.FontFace = SIGN_FONTS.Display
 	ownerLabel.TextScaled = true
-	ownerLabel.TextColor3 = COLORS.SignText
+	ownerLabel.TextColor3 = THEME_COLORS.Text
 	ownerLabel.Parent = surface
+	burntEdge(ownerLabel)
 	-- Floating name so you can spot a camp from across the map. Hidden on
 	-- vacant plots (SetPlotSign), and kept small so it doesn't crowd the HUD.
+	local tag = Config.UI.Labels
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "OwnerBillboard"
-	billboard.Size = UDim2.fromOffset(190, 30)
-	billboard.StudsOffsetWorldSpace = Vector3.new(0, 4, 0)
-	billboard.MaxDistance = 220
+	billboard.Size = UDim2.fromOffset(tag.OwnerTagSize.X, tag.OwnerTagSize.Y)
+	billboard.StudsOffsetWorldSpace = Vector3.new(0, tag.OwnerTagLift, 0)
+	billboard.MaxDistance = tag.OwnerTagMaxDistance
 	billboard.LightInfluence = 0
 	billboard.Enabled = false
 	billboard.Parent = sign
@@ -1618,10 +1658,11 @@ local function buildPlot(index: number, plotsFolder: Folder)
 	billboardLabel.Name = "Label"
 	billboardLabel.Size = UDim2.fromScale(1, 1)
 	billboardLabel.BackgroundTransparency = 1
-	billboardLabel.Font = Enum.Font.GothamBold
+	billboardLabel.FontFace = SIGN_FONTS.Heading
 	billboardLabel.TextScaled = true
-	billboardLabel.TextStrokeTransparency = 0.4
-	billboardLabel.TextColor3 = COLORS.SignText
+	billboardLabel.TextStrokeColor3 = THEME_COLORS.Shadow
+	billboardLabel.TextStrokeTransparency = tag.TextStroke
+	billboardLabel.TextColor3 = THEME_COLORS.Text
 	billboardLabel.Parent = billboard
 
 	-- Home pad just inside the door: a glowing circle in a ring of stones.
@@ -1655,7 +1696,7 @@ local function buildPlot(index: number, plotsFolder: Folder)
 		Name = "HomeSign", Size = Vector3.new(4.4, 1.5, 0.25), CFrame = stakeCf * CFrame.new(0, 2.7, -0.3),
 		Material = Enum.Material.WoodPlanks, Color = COLORS.Wall, CanCollide = false, Parent = plot,
 	})
-	signLabel(homeSign, Enum.NormalId.Front, "HOME PAD")
+	signLabel(homeSign, Enum.NormalId.Front, "HOME PAD", "Heading")
 
 	-- Lock button: a big red button on a stump, inside the door on the left.
 	local stumpCf = cf * CFrame.new(-16, floorTop, -depthHalf + 8)
@@ -1745,12 +1786,20 @@ function MapBuilder.SetPlotSign(plot: Model, ownerName: string?)
 		return
 	end
 	local text = if ownerName then (ownerName .. "'s Camp") else "Vacant Campsite"
+	local labels = Config.UI.Labels
 	for _, guiName in ipairs({ "SignGui", "OwnerBillboard" }) do
 		local gui = sign:FindFirstChild(guiName)
 		local label = gui and gui:FindFirstChild("Label") :: TextLabel?
 		if label then
 			label.Text = text
-			label.TextTransparency = if ownerName then 0 else 0.4
+			label.TextTransparency = if ownerName then 0 else labels.VacantSignTransparency
+			-- The burnt edge fades with the text on a vacant sign.
+			local edge = label:FindFirstChild("Edge") :: UIStroke?
+			if edge then
+				edge.Transparency = if ownerName
+					then labels.SignEdgeTransparency
+					else math.max(labels.SignEdgeTransparency, labels.VacantSignTransparency)
+			end
 		end
 	end
 	local billboard = sign:FindFirstChild("OwnerBillboard") :: BillboardGui?
