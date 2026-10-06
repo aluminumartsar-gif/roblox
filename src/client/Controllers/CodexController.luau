@@ -1178,9 +1178,28 @@ local function showPolaroid(creatureId: string)
 	})
 
 	holder.Parent = parent
-	UI.Scale(holder)
+	local holderScale = UI.Scale(holder)
 
-	UI.Tween(holder, tuning.PolaroidInTime, { Position = UDim2.fromScale(0.5, tuning.PolaroidY) },
+	-- Centre the whole stack (header, paper, rarity pill) in the free band
+	-- between the top banners / camp panel and the HUD's cash cluster,
+	-- shrinking it a little on short screens so it covers neither.
+	local headerReach, pillReach = 48, 38 -- px above / below the paper
+	local stackHeight = headerReach + size.Y + pillReach
+	local screenScale = holderScale.Scale
+	local camera = workspace.CurrentCamera
+	local settleY: UDim2 = UDim2.fromScale(0.5, 0.5)
+	if camera then
+		local gap = tuning.PolaroidGap * screenScale
+		local bandTop = HudLayout.TopCentreTop(parent, screenScale, 380 * screenScale)
+		local bandBottom = camera.ViewportSize.Y - HudLayout.BottomReserve() - gap
+		local fit = math.clamp((bandBottom - bandTop) / (stackHeight * screenScale), 0.5, 1)
+		local finalScale = screenScale * fit
+		holderScale.Scale = finalScale
+		local centre = (bandTop + bandBottom) / 2 + (headerReach - pillReach) / 2 * finalScale
+		settleY = UDim2.new(0.5, 0, 0, centre)
+	end
+
+	UI.Tween(holder, tuning.PolaroidInTime, { Position = settleY },
 		Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	task.wait(codexConfig.NewEntryBannerTime)
 	local out = UI.Tween(holder, tuning.SlideOutTime, { Position = UDim2.fromScale(0.5, 1.6) },

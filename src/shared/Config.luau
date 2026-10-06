@@ -2050,7 +2050,7 @@ Config.UI = {
 
 		-- Celebrations (layer Config.UI.Layers.Celebration).
 		PolaroidSize = Vector2.new(220, 270),  -- the "NEW CODEX ENTRY" polaroid
-		PolaroidY = 0.62,                      -- its centre, as a fraction of the screen height
+		PolaroidGap = 10,                      -- px kept clear above the HUD's cash (it sits in the free band)
 		                                       -- (low enough to clear the page banner on a phone)
 		PolaroidInTime = 0.55,                 -- s, slide in (out: SlideOutTime)
 		PageBannerSize = Vector2.new(560, 56), -- "<Rarity> page complete!" banner
