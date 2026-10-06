@@ -3,21 +3,27 @@
 	SpinWheelController
 	StarterPlayerScripts/Client/Controllers/SpinWheelController
 
-	The prize wheel, on the STUD kit's SpinWheel popup, opened from the HUD's
-	Spin button (a copy of the Gift button HudController makes for us).
+	The prize wheel ("campfire field kit" Window "SpinWheel"), opened from
+	the HUD's Spin tile.
 
-	  wheel     the kit's 6 prize slots, filled clockwise from the top with
-	            Config.Retention.Spin.Prizes (icon + amount). Which of the
-	            kit's three wheel colours is shown: Spin.WheelStyle.
-	  SPIN      asks the server to spin. The SERVER picks the prize, gives it
-	            and says which slot it was; we then turn the wheel to land on
-	            that slot (a tick sound per slot passed, a fanfare at the
-	            end) and show what you won.
-	  +3 SPINS  buys the Extra Spins product (Robux; the server prompts).
-	  top line  spins left, or the countdown to the next free spin.
+	  wheel       one coloured segment per Config.Retention.Spin.Prizes entry,
+	              clockwise from the top, each with the prize's icon and short
+	              label; dark spokes between them, a hub, and the ember pointer
+	              at Spin.PointerAngle (the top).
+	  status      spins left, the countdown to the next free spin, "Round and
+	              round..." while it turns, then what you won.
+	  SPIN        asks the server to spin. The SERVER picks the prize, gives it
+	              and says which segment it was; we then turn the wheel to land
+	              on that segment (a tick sound per segment passed, a fanfare
+	              at the end) and show what you won. Shows how many spins you
+	              have; under it, whether the free spin is ready (or when it
+	              is) and how many extra (bought) spins you have.
+	  +3 SPINS    buys the Extra Spins product (Robux; the server prompts).
 
-	HUD: red "!" while a spin is ready; otherwise the button counts down to
-	the next free one.
+	HUD: red "!" while a spin is ready ("Spin!"); otherwise the tile counts
+	down to the next free one.
+
+	Display only: RetentionService rolls the prize.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -27,27 +33,34 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 local Components = script.Parent.Parent:WaitForChild("Components")
-local Kit = require(Components:WaitForChild("Kit"))
+local Theme = require(Components:WaitForChild("Theme"))
+local UI = require(Components:WaitForChild("UI"))
+local Icon = require(Components:WaitForChild("Icon"))
+local Window = require(Components:WaitForChild("Window"))
 local HudController = require(script.Parent:WaitForChild("HudController"))
 local Retention = require(script.Parent:WaitForChild("DailyRewardsController"))
 
 local SpinWheelController = {}
 
+local C = Theme.Colors
 local SPIN = Config.Retention.Spin
-local WHEEL_STYLES = { "SpinWheelPink", "SpinWheelOrange", "SpinWheelRainbow" }
+local TUNING = Config.UI.Retention.Spin
 local TICK_MIN_GAP = 0.04 -- seconds; stops the tick sound machine-gunning at full speed
 
-type Slot = { item: ImageLabel, label: TextLabel?, angle: number }
+type Slot = { icon: ImageLabel, label: TextLabel, angle: number }
 
-local popup: Kit.Popup
+local window: Window.Window? = nil
 local wheel: GuiObject? = nil
 local slots: { Slot } = {}
-local spinButton: GuiButton? = nil
-local buyButton: GuiButton? = nil
+local spinButton: TextButton? = nil
+local buyButton: TextButton? = nil
 local statusLabel: TextLabel? = nil
+local statusPunch: UIScale? = nil
+local freeLabel: TextLabel? = nil
+local extraLabel: TextLabel? = nil
 local spinning = false
 local buying = false
-local resultText: string? = nil -- shown on the top line after a spin, until the next one
+local resultText: string? = nil -- shown on the status line after a spin, until the next one
 
 local function spinState(): { [string]: any }?
 	local s = Retention.GetState()
@@ -64,6 +77,21 @@ local function spinsNow(spin: { [string]: any }?): number
 	return (tonumber(spin.Extra) or 0) + (if freeReady then 1 else 0)
 end
 
+local function themeColor(name: string, fallback: Color3): Color3
+	local color = (C :: any)[name]
+	return if typeof(color) == "Color3" then color else fallback
+end
+
+--- "4 hours", "1 hour", "90 minutes".
+local function durationText(seconds: number): string
+	if seconds >= 3600 and seconds % 3600 == 0 then
+		local hours = seconds // 3600
+		return if hours == 1 then "hour" else string.format("%d hours", hours)
+	end
+	local minutes = math.max(1, seconds // 60)
+	return if minutes == 1 then "minute" else string.format("%d minutes", minutes)
+end
+
 --------------------------------------------------------------------------
 -- Rendering
 --------------------------------------------------------------------------
@@ -73,10 +101,11 @@ local function renderSlots()
 	local prizes = spin and spin.Prizes or {}
 	for i, slot in ipairs(slots) do
 		local prize = prizes[i]
-		slot.item.Visible = prize ~= nil
+		slot.icon.Visible = prize ~= nil
+		slot.label.Text = if prize then tostring(prize.Short or "") else ""
 		if prize then
-			slot.item.Image = Config.Icons[prize.Icon] or ""
-			Kit.SetText(slot.label, tostring(prize.Short or ""))
+			local name = prize.Icon
+			Icon.set(slot.icon, if typeof(name) == "string" and Config.Icons[name] then name else "Star")
 		end
 	end
 end
@@ -99,16 +128,33 @@ local function renderStatus()
 		local remaining = (tonumber(spin.NextFreeAt) or 0) - Retention.ServerNow()
 		text = "Free spin in " .. Retention.FormatClock(remaining)
 	end
-	Kit.SetText(statusLabel, text)
+	if statusLabel then
+		statusLabel.Text = text
+	end
+
+	-- Free / extra spin lines under SPIN.
+	if freeLabel then
+		if not spin or not spin.Enabled then
+			freeLabel.Text = "Free spin: -"
+		else
+			local remaining = (tonumber(spin.NextFreeAt) or 0) - Retention.ServerNow()
+			freeLabel.Text = if remaining <= 0 then "Free spin: READY"
+				else "Next free spin in " .. Retention.FormatClock(remaining)
+			freeLabel.TextColor3 = if remaining <= 0 then C.MossBright else C.TextDim
+		end
+	end
+	if extraLabel then
+		extraLabel.Text = "Extra spins: " .. tostring(if spin then tonumber(spin.Extra) or 0 else 0)
+	end
 
 	if spinButton then
 		local label = if spinning then "..." elseif spins > 0 then string.format("SPIN (%d)", spins) else "NO SPINS"
-		Kit.SetButtonText(spinButton, label)
-		Kit.SetButtonEnabled(spinButton, spins > 0 and not spinning)
+		UI.SetButtonText(spinButton, label)
+		UI.SetButtonEnabled(spinButton, spins > 0 and not spinning)
 	end
 	if buyButton then
 		local product = Config.DevProducts.ExtraSpins
-		Kit.SetButtonText(buyButton, string.format("+%d  %s", product.Count, Retention.PriceText("ExtraSpins")))
+		UI.SetButtonText(buyButton, string.format("+%d SPINS  %s", product.Count, Retention.PriceText("ExtraSpins")))
 	end
 end
 
@@ -169,6 +215,15 @@ local function animateTo(index: number)
 	w.Rotation = target % 360
 end
 
+--- The status line pops when you win.
+local function punchStatus()
+	local punch = statusPunch
+	if punch then
+		punch.Scale = TUNING.WinPunchScale
+		UI.Tween(punch, 0.35, { Scale = 1 }, Enum.EasingStyle.Back)
+	end
+end
+
 local function spin()
 	local s = spinState()
 	if spinning or not s or spinsNow(s) <= 0 then
@@ -186,6 +241,10 @@ local function spin()
 		animateTo(result.Index)
 		resultText = tostring(result.Text or "a prize")
 		Retention.Play("SpinWin")
+		spinning = false
+		renderStatus()
+		punchStatus()
+		return
 	end
 	spinning = false
 	renderStatus()
@@ -205,140 +264,345 @@ end
 -- Building
 --------------------------------------------------------------------------
 
---- Angle of a slot, in degrees clockwise from the top of the wheel.
-local function slotAngle(item: GuiObject, wheelAspect: number): number
-	local dx = (item.Position.X.Scale - 0.5) * wheelAspect
-	local dy = item.Position.Y.Scale - 0.5
-	return math.deg(math.atan2(dx, -dy)) % 360
+--- A thin bar from the wheel's centre out to `length` px at `angle`
+--- (degrees clockwise from the top). The holder is centred on the wheel and
+--- rotates about it; only its top half is painted.
+local function radialBar(parent: Instance, angle: number, width: number, length: number, color: Color3, zIndex: number, name: string): Frame
+	local holder = UI.new("Frame", {
+		Name = name,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(width, length * 2),
+		Rotation = angle,
+		BackgroundTransparency = 1,
+		ZIndex = zIndex,
+		Parent = parent,
+	})
+	UI.new("Frame", {
+		Name = "Paint",
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 0.5),
+		ZIndex = zIndex,
+		Parent = holder,
+	})
+	return holder
+end
+
+--- The wheel, centred in `area`. Returns the rotating frame.
+local function buildWheel(area: Frame): GuiObject
+	local radius = TUNING.WheelRadius
+	local rim = TUNING.RimWidth
+	local count = math.max(1, #SPIN.Prizes)
+	local segment = 360 / count
+
+	-- Back plate and rim (don't turn).
+	UI.new("Frame", {
+		Name = "Plate",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset((radius + rim) * 2, (radius + rim) * 2),
+		BackgroundColor3 = C.Inset,
+		BorderSizePixel = 0,
+		ZIndex = 1,
+		Parent = area,
+	}, {
+		UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		UI.Stroke({ Color = C.Shadow, Thickness = 2, Transparency = 0.3 }),
+	})
+
+	local turning = UI.new("Frame", {
+		Name = "Wheel",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(radius * 2, radius * 2),
+		BackgroundTransparency = 1,
+		ZIndex = 2,
+		Parent = area,
+	}) :: Frame
+
+	-- Segments: a fan of thin bars each (GUI frames can't be wedge-shaped).
+	-- Segment i is centred on (i-1) * segment degrees, so prize 1 starts
+	-- under a pointer at the top.
+	local bars = math.max(1, math.ceil(segment / TUNING.FanStep))
+	local step = segment / bars
+	local barWidth = math.ceil(2 * math.pi * radius * step / 360) + 1
+	local palette = TUNING.Segments
+	for i = 1, count do
+		local style = palette[((i - 1) % #palette) + 1]
+		local fill = themeColor(style.Fill, C.Raised)
+		local centre = (i - 1) * segment
+		local first = centre - segment / 2
+		for k = 1, bars do
+			radialBar(turning, first + (k - 0.5) * step, barWidth, radius, fill, 1 + i, "Seg" .. i)
+		end
+	end
+
+	-- Spokes between segments, drawn over the fans' soft edges.
+	for i = 1, count do
+		radialBar(turning, (i - 1) * segment - segment / 2, TUNING.SpokeWidth, radius, C.Inset, count + 3, "Spoke")
+	end
+
+	-- Prize icon + short label, near the rim of each segment.
+	for i = 1, count do
+		local style = palette[((i - 1) % #palette) + 1]
+		local textColor = themeColor(style.Text, C.Text)
+		local angle = (i - 1) * segment
+		local holder = UI.new("Frame", {
+			Name = "Prize" .. i,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(radius * 2, radius * 2),
+			Rotation = angle,
+			BackgroundTransparency = 1,
+			ZIndex = count + 4,
+			Parent = turning,
+		})
+		local icon = UI.Icon("Star", math.floor(radius * 0.24), {
+			Name = "Icon",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0, math.floor(radius * 0.26)),
+			ImageColor3 = textColor,
+			Visible = false,
+			ZIndex = count + 4,
+			Parent = holder,
+		})
+		local label = UI.Text({
+			Name = "Label",
+			Role = "Heading",
+			Weight = "Bold",
+			Text = "",
+			RichText = false,
+			TextScaled = true,
+			TextWrapped = true,
+			TextColor3 = textColor,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0, math.floor(radius * 0.5)),
+			Size = UDim2.fromOffset(math.floor(radius * 0.46), math.floor(radius * 0.22)),
+			ZIndex = count + 4,
+			Parent = holder,
+		})
+		UI.new("UITextSizeConstraint", { MaxTextSize = 17, MinTextSize = 9, Parent = label })
+		table.insert(slots, { icon = icon, label = label, angle = angle })
+	end
+
+	-- Rim ring over the segments' outer ends (doesn't turn).
+	UI.new("Frame", {
+		Name = "Rim",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(radius * 2, radius * 2),
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = area,
+	}, {
+		UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		UI.Stroke({ Color = C.Edge, Thickness = rim }),
+	})
+
+	-- Hub (doesn't turn).
+	local hub = TUNING.HubRadius
+	UI.new("Frame", {
+		Name = "Hub",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(hub * 2, hub * 2),
+		BackgroundColor3 = C.Raised,
+		BorderSizePixel = 0,
+		ZIndex = 4,
+		Parent = area,
+	}, {
+		UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+		UI.Stroke({ Color = C.EdgeBright, Thickness = 2 }),
+		UI.Icon("Spinner", math.floor(hub * 1.2), {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			ImageColor3 = C.Ember,
+			ZIndex = 4,
+		}),
+	})
+
+	-- Pointer: an ember diamond over the rim at PointerAngle, tip inward.
+	local pointerAngle = math.rad(SPIN.PointerAngle)
+	local size = TUNING.PointerSize
+	local out = radius + rim - size * 0.1
+	UI.new("Frame", {
+		Name = "Pointer",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, math.floor(math.sin(pointerAngle) * out), 0.5, -math.floor(math.cos(pointerAngle) * out)),
+		Size = UDim2.fromOffset(size, size),
+		Rotation = 45 + SPIN.PointerAngle,
+		BackgroundColor3 = C.Ember,
+		BorderSizePixel = 0,
+		ZIndex = 5,
+		Parent = area,
+	}, {
+		UI.new("UICorner", { CornerRadius = UDim.new(0, 3) }),
+		UI.Stroke({ Color = C.EmberDeep, Thickness = 2 }),
+		UI.new("Frame", {
+			Name = "Nail",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(math.floor(size * 0.3), math.floor(size * 0.3)),
+			BackgroundColor3 = C.EmberBright,
+			BorderSizePixel = 0,
+			ZIndex = 5,
+		}, { UI.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) }),
+	})
+
+	return turning
 end
 
 local function build()
-	local gui = Kit.Mount("SpinWheel")
-	-- The kit ships this screen at DisplayOrder 0, under the HUD and the
-	-- tutorial panel. Layer it like the other kit popups (the Daily screen's).
-	local dailyTemplate = ReplicatedStorage:WaitForChild("UIKit"):WaitForChild("StarterGui"):WaitForChild("DailyRewards") :: ScreenGui
-	gui.DisplayOrder = dailyTemplate.DisplayOrder
-	local container = gui:WaitForChild("Container") :: GuiObject
-	local content = Kit.Deep(container, "Content")
-	if not content then
-		warn("[SAC/Spin] the kit's SpinWheel screen has no Content frame")
-		popup = Kit.Popup(gui)
-		return
-	end
-
-	-- One wheel colour.
-	local chosen: Instance? = nil
-	for _, name in ipairs(WHEEL_STYLES) do
-		local frame = content:FindFirstChild(name)
-		if frame and frame:IsA("GuiObject") then
-			local use = name == SPIN.WheelStyle
-			frame.Visible = use
-			if use then
-				chosen = frame
-			end
-		end
-	end
-	if not chosen then
-		chosen = content:FindFirstChild(WHEEL_STYLES[1])
-		if chosen and chosen:IsA("GuiObject") then
-			chosen.Visible = true
-		end
-	end
-
-	-- The kit's wheel screen has no close button: borrow the Daily screen's.
-	local closeTemplate = Kit.Deep(dailyTemplate, "CloseBtn")
-	if closeTemplate then
-		local close = closeTemplate:Clone()
-		close.AnchorPoint = Vector2.new(1, 0)
-		close.Position = UDim2.fromScale(0.97, 0.03)
-		close.Size = UDim2.fromScale(0.07, 0.07)
-		close.SizeConstraint = Enum.SizeConstraint.RelativeXX
-		close.ZIndex = 10
-		close.Parent = container
-	end
-	popup = Kit.Popup(gui)
-	popup.OnOpen = function()
+	local w = Window.new({
+		Name = "SpinWheel",
+		Title = "Prize Wheel",
+		Icon = "Spinner",
+		Size = TUNING.WindowSize,
+	})
+	window = w
+	w.OnOpen = function()
 		resultText = nil
 		renderSlots()
 		renderStatus()
 	end
+	local body = w.Body
 
-	if not chosen then
-		warn("[SAC/Spin] the kit's SpinWheel screen has no wheel")
-		return
-	end
-
-	local bottom = chosen:FindFirstChild("BottomWheel")
-	if bottom and bottom:IsA("GuiObject") then
-		wheel = bottom
-		local aspect = bottom:FindFirstChildOfClass("UIAspectRatioConstraint")
-		local wheelAspect = if aspect then aspect.AspectRatio else 1
-		for _, child in ipairs(bottom:GetChildren()) do
-			if child.Name == "Item" and child:IsA("ImageLabel") then
-				table.insert(slots, {
-					item = child,
-					label = child:FindFirstChildWhichIsA("TextLabel"),
-					angle = slotAngle(child, wheelAspect),
-				})
-			end
-		end
-		-- Prize 1 is the slot nearest the top, then clockwise.
-		table.sort(slots, function(a, b)
-			return a.angle < b.angle
-		end)
-	end
+	-- Left: the wheel (with room for the pointer), full body height.
+	local wheelSpace = TUNING.WheelRadius * 2 + TUNING.RimWidth * 2 + TUNING.PointerSize
+	local area = UI.new("Frame", {
+		Name = "WheelArea",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(0, wheelSpace, 1, 0),
+		Parent = body,
+	}) :: Frame
+	wheel = buildWheel(area)
 	if #slots ~= #SPIN.Prizes then
 		warn(string.format("[SAC/Spin] the wheel has %d slots but Config has %d prizes", #slots, #SPIN.Prizes))
 	end
 
-	-- Status line above the wheel.
-	local status = Instance.new("TextLabel")
-	status.Name = "Status"
-	status.BackgroundTransparency = 1
-	status.AnchorPoint = Vector2.new(0.5, 1)
-	status.Position = UDim2.fromScale(0.5, 0.02)
-	status.Size = UDim2.fromScale(0.9, 0.09)
-	status.FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json")
-	status.TextScaled = true
-	status.TextColor3 = Color3.new(1, 1, 1)
-	status.ZIndex = 5
-	status.Text = ""
-	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 2
-	stroke.Color = Color3.fromRGB(30, 24, 40)
-	stroke.Parent = status
-	status.Parent = chosen
-	statusLabel = status
+	-- Right: status, free/extra spins, SPIN and buy.
+	local column = UI.new("Frame", {
+		Name = "Controls",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.fromScale(1, 0),
+		Size = UDim2.new(1, -wheelSpace, 1, 0),
+		Parent = body,
+	}, {
+		UI.List({ Padding = 8, HorizontalAlignment = Enum.HorizontalAlignment.Center }),
+	})
 
-	-- SPIN on the left, +3 SPINS (Robux) on the right.
-	local kitSpin = chosen:FindFirstChild("SpinBtn")
-	if kitSpin and kitSpin:IsA("GuiButton") then
-		local buy = kitSpin:Clone()
-		buy.Name = "BuySpinsBtn"
-		buy.Position = UDim2.new(0.75, 0, kitSpin.Position.Y.Scale, kitSpin.Position.Y.Offset)
-		buy.Size = UDim2.new(kitSpin.Size.X.Scale * 0.85, 0, kitSpin.Size.Y.Scale * 0.85, 0)
-		buy.Parent = chosen
-		kitSpin.Position = UDim2.new(0.27, 0, kitSpin.Position.Y.Scale, kitSpin.Position.Y.Offset)
-		spinButton = kitSpin
-		buyButton = buy
-		kitSpin.Activated:Connect(function()
+	-- The status text sits centred in a holder so its win "punch" grows
+	-- from the middle.
+	local statusHolder = UI.new("Frame", {
+		Name = "StatusHolder",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 62),
+		LayoutOrder = 1,
+		Parent = column,
+	})
+	local status = UI.Text({
+		Name = "Status",
+		Role = "Heading",
+		Weight = "Bold",
+		Text = "Loading...",
+		RichText = false,
+		TextSize = 24,
+		TextScaled = true,
+		TextWrapped = true,
+		TextColor3 = C.Text,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(1, 1),
+		Parent = statusHolder,
+	})
+	UI.new("UITextSizeConstraint", { MaxTextSize = 24, MinTextSize = 12, Parent = status })
+	statusLabel = status
+	statusPunch = UI.new("UIScale", { Name = "Punch", Parent = status }) :: UIScale
+
+	UI.Text({
+		Name = "Note",
+		Role = "Notes",
+		Text = string.format("One free spin every %s. The woods pick the prize.", durationText(SPIN.FreeEvery)),
+		TextSize = 15,
+		TextWrapped = true,
+		TextColor3 = C.TextDim,
+		Size = UDim2.new(1, 0, 0, 40),
+		LayoutOrder = 2,
+		Parent = column,
+	})
+
+	freeLabel = UI.Text({
+		Name = "Free",
+		Role = "Heading",
+		Weight = "SemiBold",
+		Text = "",
+		RichText = false,
+		TextSize = 17,
+		TextColor3 = C.TextDim,
+		Size = UDim2.new(1, 0, 0, 22),
+		LayoutOrder = 3,
+		Parent = column,
+	})
+	extraLabel = UI.Text({
+		Name = "Extra",
+		Role = "Heading",
+		Weight = "SemiBold",
+		Text = "",
+		RichText = false,
+		TextSize = 17,
+		TextColor3 = C.TextDim,
+		Size = UDim2.new(1, 0, 0, 22),
+		LayoutOrder = 4,
+		Parent = column,
+	})
+
+	local spinBtn = UI.Button({
+		Name = "SpinBtn",
+		Text = "Spin",
+		Variant = "Primary",
+		Icon = "Spinner",
+		TextSize = 26,
+		Size = UDim2.new(1, 0, 0, 60),
+		LayoutOrder = 5,
+		Parent = column,
+		OnClick = function()
 			task.spawn(spin)
-		end)
-		buy.Activated:Connect(function()
+		end,
+	})
+	-- spin() plays its own click (only when a spin actually starts; an
+	-- error sound instead when there's none left).
+	spinBtn:SetAttribute("SAC_NoClick", true)
+	spinButton = spinBtn
+
+	local buyBtn = UI.Button({
+		Name = "BuySpinsBtn",
+		Text = "+3 Spins",
+		Variant = "Moon",
+		Icon = "Robux",
+		TextSize = 19,
+		Size = UDim2.new(1, 0, 0, 48),
+		LayoutOrder = 6,
+		Parent = column,
+		OnClick = function()
 			task.spawn(buySpins)
-		end)
-	end
+		end,
+	})
+	buyBtn:SetAttribute("SAC_NoClick", true) -- buySpins() plays the click
+	buyButton = buyBtn
 end
 
 function SpinWheelController.Open()
-	if popup then
-		popup:Open()
+	local w = window
+	if w then
+		w:Open()
 	end
 end
 
 function SpinWheelController.Start()
 	build()
-	HudController.Bind("SpinBtn", SpinWheelController.Open, "Spin", "Luck")
+	HudController.Bind("SpinBtn", SpinWheelController.Open, "Spin", "Spinner")
 	HudController.SetAlert("SpinBtn", false)
 
 	Retention.StateChanged:Connect(function()
@@ -356,7 +620,8 @@ function SpinWheelController.Start()
 		while true do
 			task.wait(1)
 			renderHud()
-			if popup and popup:IsOpen() and not spinning then
+			local w = window
+			if w and w:IsOpen() and not spinning then
 				renderStatus()
 			end
 		end

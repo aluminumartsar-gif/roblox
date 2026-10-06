@@ -2073,7 +2073,55 @@ Config.UI = {
 	},
 
 	-- Daily Rewards, Spin Wheel, Playtime Gifts, Offline Earnings and Settings screens.
+	-- (Reward data and the wheel's spin timing live in Config.Retention.)
+	-- Sizes are px at the reference screen height; windows shrink to fit phones.
 	Retention = {
+		Daily = {
+			WindowSize = Vector2.new(720, 400),
+			CardWidth = 82,          -- days 1-6
+			BigCardWidth = 140,      -- day 7, the big one
+			CardHeight = 170,
+			CardGap = 8,
+			PulseScale = 1.05,       -- today's card gently grows to this and back
+			PulseTime = 0.6,         -- seconds per half-breath
+			-- The join-time auto-open waits for a clear screen (offline popup
+			-- dealt with, nothing else open) for at most this many seconds.
+			AutoOpenGiveUp = 120,
+		},
+		Spin = {
+			WindowSize = Vector2.new(680, 430),
+			WheelRadius = 150,
+			RimWidth = 6,
+			HubRadius = 26,
+			SpokeWidth = 5,          -- dark dividers between prizes
+			PointerSize = 28,
+			-- Each prize segment is painted as a fan of thin bars this many
+			-- degrees apart (smaller = smoother edges, more instances).
+			FanStep = 2.5,
+			-- Segment colours, clockwise from prize 1 (Theme colour names);
+			-- Text is the colour of the prize label on that segment.
+			Segments = {
+				{ Fill = "Ember", Text = "TextOnAccent" },
+				{ Fill = "MoonDeep", Text = "Text" },
+				{ Fill = "Moss", Text = "TextOnAccent" },
+				{ Fill = "EmberDeep", Text = "Text" },
+				{ Fill = "Moon", Text = "TextOnAccent" },
+				{ Fill = "Blood", Text = "Text" },
+			},
+			WinPunchScale = 1.15,    -- the "You won" line pops to this and settles
+		},
+		Gifts = {
+			WindowSize = Vector2.new(560, 380),
+			BarMinFill = 0.03,       -- a sliver of the bar always shows while a gift is counting
+		},
+		Offline = {
+			WindowSize = Vector2.new(580, 320),
+		},
+		Settings = {
+			WindowSize = Vector2.new(460, 280),
+			OnVariant = "Moon",      -- UI.Button variant of a switch that is ON
+			OffVariant = "Secondary",
+		},
 	},
 
 	-- Toasts, hatch reveal, cash popups and celebrations (NotificationController, FeedbackController).
