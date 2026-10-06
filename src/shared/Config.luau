@@ -2477,7 +2477,8 @@ end
 
 --- Cost of the player's next rebirth.
 function Config.GetRebirthCost(currentRebirths: number): number
-	return math.floor(Config.Rebirth.BaseCost * (Config.Rebirth.CostGrowth ^ math.max(0, currentRebirths)))
+	-- Rounded, not floored: 400,000 x 2.3 is 919,999.99... in floating point.
+	return math.floor(Config.Rebirth.BaseCost * (Config.Rebirth.CostGrowth ^ math.max(0, currentRebirths)) + 0.5)
 end
 
 --- Value of an upgrade at a given level (1-indexed, clamped).
